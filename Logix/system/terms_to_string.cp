@@ -7,9 +7,9 @@ Revised By William Silverman, 05-08-85
 Additions by Eli Biham & William Silverman, 07-03-85
 
 Last update by		$Author: bill $
-		       	$Date: 1999/11/28 12:38:51 $
+		       	$Date: 2002/05/29 08:11:05 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
     			$Source: /home/qiana/Repository/Logix/system/terms_to_string.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -636,6 +636,7 @@ infix_operator_1(  _  ,  _ ,   _ ,   _ , false^) :-
 
 infix_operator_2( ':-' ,1199^, 1200^, 1199^, true^).
 infix_operator_2( '<-' ,1189^, 1190^, 1189^, true^).
+infix_operator_2( '->' ,1189^, 1190^, 1189^, true^).
 infix_operator_2( '=>' ,1009^, 1010^, 1009^, true^).
 infix_operator_2( '@<' , 799^,  800^,  799^, true^).	 
 infix_operator_2( ':=' , 699^,  700^,  699^, true^).	 
@@ -670,6 +671,7 @@ prefix_operator( '~' ,220^, 219^, true^).
 prefix_operator( '`' ,210^, 210^, true^).
 prefix_operator( '?' ,210^, 209^, true^).
 prefix_operator( 'procedure', 100^, 99^, true^).
+/* error */
 prefix_operator( _, _, _, false^) :-
     otherwise |
 	true.
