@@ -5,8 +5,8 @@ cp -p INSTALL release
 rm -f release/BioSpi/README
 cp -p BioSpi/README release/BioSpi
 
-rm -f release/bin/*
-cp -p bin/* release/bin
+rm -f release/bin/????*
+cp -p bin/????* release/bin
 
 rm -f release/Logix/README
 cp -p Logix/README release/Logix
