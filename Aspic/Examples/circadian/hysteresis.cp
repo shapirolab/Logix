@@ -1,4 +1,4 @@
--language([evaluate,spifcp,compound,colon]).
+-language(spifcp).
 -include(rates).
 
 export(MODULE).
