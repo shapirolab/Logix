@@ -515,8 +515,8 @@ can inspect the state of a computation by entering the SPI macro command
   It's false
   @spr
   <1> suspended
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland # FF.comm(public.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland # FF.comm(b2!)
 \end{verbatim}
 
 \noindent
@@ -770,50 +770,50 @@ Following a \verb+ query -> + prompt, enter the command \verb+ trace +.
   query -> trace
   bland  RunTF :- 
           .RunTF.
-  bland  .RunTF(public.b1, public.b2, public.c) :- 
+  bland  .RunTF(b1, b2, c) :- 
           Test, AndB, TT, FF.
-  bland  Test(public.c!) :- 
-          Test.1(public.c!).
-  bland  AndB(public.b1!, public.b2!, public.c!) :- 
-          AndB.comm(public.b1!, public.b2!, public.c!).
-  bland  TT(public.b1!) :- 
-          TT.comm(public.b1!).
-  bland  FF(public.b2!) :- 
-          FF.comm(public.b2!).
-  bland  Test.1(public.c!) :- 
-          Test.1.(public.c!, Test.1.f, Test.1.t).
-  bland  Test.1.(public.c, Test.1.f, Test.1.t) :- 
-          Test.1.comm(public.c, Test.1.f, Test.1.t).
-  bland  Test.1.comm(public.c, Test.1.f, Test.1.t) :- 
+  bland  Test(c!) :- 
+          Test.1(c!).
+  bland  AndB(b1!, b2!, c!) :- 
+          AndB.comm(b1!, b2!, c!).
+  bland  TT(b1!) :- 
+          TT.comm(b1!).
+  bland  FF(b2!) :- 
+          FF.comm(b2!).
+  bland  Test.1(c!) :- 
+          Test.1.(c!, Test.1.f, Test.1.t).
+  bland  Test.1.(c, Test.1.f, Test.1.t) :- 
+          Test.1.comm(c, Test.1.f, Test.1.t).
+  bland  Test.1.comm(c, Test.1.f, Test.1.t) :- 
           Test.1.1(Test.1.f, Test.1.t).
-  bland  AndB.comm(public.b1!, public.b2!, public.c) :- 
-          AndB.1(Test.1.t, Test.1.f, public.b1!, public.b2!).
+  bland  AndB.comm(b1!, b2!, c) :- 
+          AndB.1(Test.1.t, Test.1.f, b1!, b2!).
   bland  Test.1.1(Test.1.f!, Test.1.t!) :- 
           Test.1.1.comm(Test.1.f!, Test.1.t!).
-  bland  AndB.1(Test.1.t!, Test.1.f!, public.b1!, public.b2!) :- 
-          AndB.1.(Test.1.t!, Test.1.f!, public.b1!, public.b2!,
+  bland  AndB.1(Test.1.t!, Test.1.f!, b1!, b2!) :- 
+          AndB.1.(Test.1.t!, Test.1.f!, b1!, b2!,
                    AndB.1.x).
-  bland  AndB.1.(Test.1.t!, Test.1.f!, public.b1, public.b2!,
+  bland  AndB.1.(Test.1.t!, Test.1.f!, b1, b2!,
                  AndB.1.x) :- 
-          AndB.1.comm(Test.1.t!, Test.1.f!, public.b1, public.b2!,
+          AndB.1.comm(Test.1.t!, Test.1.f!, b1, b2!,
                       AndB.1.x).
-  bland  TT.comm(public.b1) :- 
+  bland  TT.comm(b1) :- 
           TT.1(AndB.1.x).
-  bland  AndB.1.comm(Test.1.t!, Test.1.f!, public.b1, public.b2!,
+  bland  AndB.1.comm(Test.1.t!, Test.1.f!, b1, b2!,
                      AndB.1.x) :- 
-          AndB.1.1(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x).
+          AndB.1.1(Test.1.t!, Test.1.f!, b2!, AndB.1.x).
   bland  TT.1(AndB.1.x) :- 
           TT.1.comm(AndB.1.x).
-  bland  AndB.1.1(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x) :- 
-          AndB.1.1.comm(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x).
+  bland  AndB.1.1(Test.1.t!, Test.1.f!, b2!, AndB.1.x) :- 
+          AndB.1.1.comm(Test.1.t!, Test.1.f!, b2!, AndB.1.x).
   bland  TT.1.comm(AndB.1.x).
-  bland  AndB.1.1.comm(Test.1.t!, Test.1.f!, public.b2!, [AndB.1.x]) :- 
-          AndB.1.1.1(Test.1.t!, Test.1.f!, public.b2!).
-  bland  AndB.1.1.1(Test.1.t!, Test.1.f!, public.b2) :- 
-          AndB.1.1.1.comm(Test.1.t!, Test.1.f!, public.b2).
-  bland  FF.comm(public.b2) :- 
+  bland  AndB.1.1.comm(Test.1.t!, Test.1.f!, b2!, [AndB.1.x]) :- 
+          AndB.1.1.1(Test.1.t!, Test.1.f!, b2!).
+  bland  AndB.1.1.1(Test.1.t!, Test.1.f!, b2) :- 
+          AndB.1.1.1.comm(Test.1.t!, Test.1.f!, b2).
+  bland  FF.comm(b2) :- 
           FF.1(Test.1.f!).
-  bland  AndB.1.1.1.comm(Test.1.t!, Test.1.f!, public.b2).
+  bland  AndB.1.1.1.comm(Test.1.t!, Test.1.f!, b2).
   bland  FF.1(Test.1.f) :- 
           FF.1.comm(Test.1.f).
   bland  Test.1.1.comm([Test.1.f], [Test.1.t]) :- 
@@ -868,8 +868,8 @@ Following the next \verb+ query -> + prompt, press \verb+ <enter> +.
   query -> break("AndB")
   bland RunFT :- ?
   query -> 
-  bland AndB(public.b1!, public.b2!, public.c!) :- 
-         AndB.comm(public.b1!, public.b2!, public.c!).
+  bland AndB(b1!, b2!, c!) :- 
+         AndB.comm(b1!, b2!, c!).
   query -> 
 \end{verbatim}
 
@@ -894,14 +894,14 @@ mode, where pressing \verb+ <enter> + continues the computation.
   @debug? -> resolvent
   bland  Debug Reduction Suspended
   bland goal - 1 Test.1.1.comm(Test.1.f!, Test.1.t!)
-  bland goal - 2 AndB(public.b1!, public.b2!, public.c)
-  bland goal - 3 FF.comm(public.b1!)
-  bland goal - 4 TT.comm(public.b2!)
+  bland goal - 2 AndB(b1!, b2!, c)
+  bland goal - 3 FF.comm(b1!)
+  bland goal - 4 TT.comm(b2!)
   @debug? -> resume
   bland  Debug Reduction Resumed
   @debug? -> query
-  bland AndB(public.b1!, public.b2!, public.c!) :- 
-         AndB.comm(public.b1!, public.b2!, public.c!).
+  bland AndB(b1!, b2!, c!) :- 
+         AndB.comm(b1!, b2!, c!).
   query -> 
   It's false
   @debug ->
@@ -915,8 +915,8 @@ be inspected.
 \begin{verbatim}
   @debug -> resolvent
   bland  Debug Reduction Suspended
-  bland goal - 1 AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland goal - 2 TT.comm(public.b2!)
+  bland goal - 1 AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland goal - 2 TT.comm(b2!)
   @debug ->
 \end{verbatim}
 
@@ -956,24 +956,24 @@ all further construction.
   @ptree(Tree)
   begin : bland # RunFT
    | RunFT
-    | .RunFT(public.b1, public.b2!, public.c)
-     | Test(public.c)
-     | AndB(public.b1, public.b2!, public.c)
-     | FF(public.b1)
-     | TT(public.b2!)
-      ? TT.comm(public.b2!)
-      | FF.comm(public.b1)
+    | .RunFT(b1, b2, c)
+     | Test(c)
+     | AndB(b1, b2, c)
+     | FF(b1)
+     | TT(b2)
+      ? TT.comm(b2)
+      | FF.comm(b1)
        | FF.1(Test.1.f)
         | FF.1.comm(Test.1.f)
-      | AndB.comm(public.b1, public.b2!, public.c)
-       | AndB.1(Test.1.t, Test.1.f, public.b1, public.b2!)
-        | AndB.1.(Test.1.t, Test.1.f, public.b1, public.b2!, AndB.1.x!)
-         | AndB.1.comm(Test.1.t, Test.1.f, public.b1, public.b2!, AndB.1.x!)
-          | AndB.1.1(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-           ? AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-      | Test.1(public.c)
-       | Test.1.(public.c, Test.1.f, Test.1.t)
-        | Test.1.comm(public.c, Test.1.f, Test.1.t)
+      | AndB.comm(b1, b2, c)
+       | AndB.1(Test.1.t, Test.1.f, b1, b2)
+        | AndB.1.(Test.1.t, Test.1.f, b1, b2, AndB.1.x)
+         | AndB.1.comm(Test.1.t, Test.1.f, b1, b2, AndB.1.x)
+          | AndB.1.1(Test.1.t, Test.1.f, b2, AndB.1.x)
+           ? AndB.1.1.comm(Test.1.t, Test.1.f, b2, AndB.1.x)
+      | Test.1(c)
+       | Test.1.(c, Test.1.f, Test.1.t)
+        | Test.1.comm(c, Test.1.f, Test.1.t)
          | Test.1.1(Test.1.f, Test.1.t)
           | Test.1.1.comm(Test.1.f, Test.1.t)
            # screen # display(It's false)
@@ -2403,14 +2403,14 @@ Here is an example call to run (see Section \ref{bland}).
   It's true
   @spr
   <2> suspended
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland # TT.comm(public.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland # TT.comm(public.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland # TT.comm(public.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
-  bland # TT.comm(public.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland # TT.comm(b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland # TT.comm(b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland # TT.comm(b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, b2!, AndB.1.x!)
+  bland # TT.comm(b2!)
   @
 \end{verbatim}
 
