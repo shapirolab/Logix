@@ -498,29 +498,29 @@ serve_ambient(In, Events, FromSub, Done,
 			      SharedChannels, SharedChannels', Unremoved),
 	pass_unremoved;
 
-/* Obsolescent global channel declarations */
+/* Upward compatibility global channel declarations */
     In ? global_channels(List) |
 	DEBUG(global/1, scheduler),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, _, _),
 	self;
 
-    In ? global_channels(List, Ambient^) |
+    In ? global_channels(List, ReadyAmbient?^) |
 	DEBUG(global/2, scheduler),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, Ambient, ReadyAmbient),
 	self;
 
     In ? public_channels(List) |
 	DEBUG(public/1, scheduler),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, _, _),
 	self;
 
-    In ? public_channels(List, Ambient^) |
+    In ? public_channels(List, ReadyAmbient?^) |
 	DEBUG(public/2, scheduler),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, Ambient, ReadyAmbient),
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
@@ -855,43 +855,24 @@ serve_ambient(In, Events, FromSub, Done,
 	fail(ambient(AmbientId) ? Other, unknown),
 	self;
 
-    /* Obsolescent global_channels */
-    Events ? Public,
-    Public =?= event(global_channels(List)) |
-	DEBUG(delegated-Public, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
-	self;
-
-    Events ? Public,
-    Public =?= event(global_channels(List, AmbientChannel)) |
-	DEBUG(delegated-Public, scheduler),
-	unify_without_failure(AmbientChannel, Ambient),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
-	self;
-
     Events ? Public,
     Public =?= event(public_channels(List)) |
 	DEBUG(delegated-Public, scheduler),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, _, _),
 	self;
 
     Events ? Public,
     Public =?= event(public_channels(List, AmbientChannel)) |
 	DEBUG(delegated-Public, scheduler),
-	unify_without_failure(AmbientChannel, Ambient),
+	unify_without_failure(AmbientChannel, ReadyAmbient),
 	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler),
+			      Scheduler, Ambient, ReadyAmbient),
 	self;
 
     Events ? Event,
     Event =\= event(public_channels(_)),
-    Event =\= event(public_channels(_, _)),
-    /* Obsolescent global_channels */
-    Event =\= event(global_channels(_)),
-    Event =\= event(global_channels(_, _)) |
+    Event =\= event(public_channels(_, _)) |
 	serve_event;
 
     FromSub ? delegated([], CCC),
@@ -1572,13 +1553,14 @@ read_vector(SPI_CHANNEL_NAME, Channel, CId),
       FromAmbient = _.
 
 
-merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler) 
-			+ (Last = "") :-
+merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
+			Ambient, ReadyAmbient) + (Last = "") :-
 
     List =?= [] :
       Last = _,
       Scheduler = _,
-      NewPublicChannels = PublicChannels;
+      NewPublicChannels = PublicChannels,
+      ReadyAmbient = Ambient;
 
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
@@ -1737,7 +1719,8 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler)
     otherwise :
       Last = _,
       Scheduler = _,
-      NewPublicChannels = PublicChannels |
+      NewPublicChannels = PublicChannels,
+      ReadyAmbient = Ambient |
 	fail(merge_public_channels(List)).
 
 
