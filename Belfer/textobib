@@ -7,13 +7,16 @@ my @MONTHS = (January, February, March, April, May, June, July, August, Septembe
 my $BIB_VERSION = "CS-TR-v2.1";
 my $MAX_BIB_LINE = 79;
 my $BIB_AUTHORITY = "ncstrl.weizmann_il";  # default prefix
-my $BIB_ID = "CS";                         # default id
 my $Output_Entry = "";                     # Month day, Year
 my $Output_Date = "January 1, 1999";       # ???
 my $InputFile = "abstracts.tex";
 my $HtmlFile = "textohtml.html";
 my $DummyFile = "/tmp/textohtml.dummy";
 my $Dir_Path = "ncstrl";
+
+# Initial year/index for BIB_ID to become MCS.
+my $MCS_YEAR = 1999;
+my $MCS_INDEX = 10;
 
 my @Abstracts;
 my $Authors;
@@ -145,6 +148,7 @@ sub format_output
   print BIB "$line\n";
 }
 
+
 sub read_abstracts
 {
   my $lines = undef;
@@ -231,6 +235,16 @@ sub extract_authors
     my @author = extract_author();
     my $name = pop @author;
     if ($name) {
+      if ($name =~ /^\(.*\)$/) {
+	my $former = $name;
+	$name = pop @author;
+	if ($name) {
+	  push @author, $former;
+	}
+	else {
+	  $name = $1;
+	}
+      }
       $name = join ' ', $name . ',', @author;
       # Press out any double-spaces.
       $name =~ s/^ *(\S+)  (.*)$/$1 $2/g;
@@ -268,6 +282,13 @@ sub textohtml
 }
 
 
+sub compute_docname
+{
+  my ($year, $prefix, $index) = @_;
+  return $year >= $MCS_YEAR && $index >= $MCS_INDEX ?
+    "MCS$prefix-$index" : "CS$prefix-$index";
+}
+
 # main
 
 $InputFile = shift @ARGV if scalar(@ARGV);
@@ -281,15 +302,15 @@ $Output_Entry = $MONTHS[$mon] . " $mday, " . ($year +1900);
 read_abstracts();
 while (scalar @Abstracts) {
   my ($year, $index) = split /-/, next_abstract();
-  $Output_Date = "January 1, " .
-    ($year < 80 ? 2000+$year : ($year <= 99 ? 1900+$year : $year));
+  my $real_year = $year < 80 ? 2000+$year : ($year <= 99 ? 1900+$year : $year);
+  $Output_Date = "January 1, $real_year";
 
   undef @Authors;
   extract_authors();
 
   extract_title();
 
-  my $docname = "$BIB_ID$year-$index";
+  my $docname = compute_docname($real_year, $year, $index);
   mkdir "$Dir_Path/$docname", 7*64 + 7*8 +5;
   open(BIB, "> $Dir_Path/$docname/$docname.bib") or
     die "Can't open $Dir_Path/$docname/$docname.bib - $!\n";
