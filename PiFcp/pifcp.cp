@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/23 12:08:43 $
+		       	$Date: 1999/12/24 11:35:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -161,7 +161,7 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
 	instantiated_local_channels(Primes, [ChannelName], [ChannelName']),
-	message_to_channels(ProcessDefinition, true, Message, MChannels,
+	message_to_channels(Message, Name, Channels, Locals, true, MChannels,
 				Errors', Errors''?),
 	channels_to_variables(MChannels?, Variables, N),
 	make_channel_list,
@@ -173,7 +173,7 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
 	make_sender,
-	message_to_channels(ProcessDefinition, false, Message, MChannels,
+	message_to_channels(Message, Name, Channels, Locals, false, MChannels,
 				Errors', Errors''?),
 	instantiated_local_channels(Primes,
 		[ChannelName? | MChannels?], [ChannelName' | MChannels']),
@@ -197,6 +197,14 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
       Errors ! (Name - Description) |
 	self;
 
+    In ? guard_compare(Guard, ChannelList, NextChannelList, Comparer),
+    Guard =?= {Operator, C1, C2},
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+	message_to_channels({C1, C2}, Name, Channels, Locals, false, List,
+				Errors, Errors'?),
+	compare_channels_ok,
+	self;
+
     In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
     ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
       Primes = _ |
@@ -214,7 +222,7 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
     ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
-	message_to_channels(ProcessDefinition, false, Message, MChannels,
+	message_to_channels(Message, Name, Channels, Locals, false, MChannels,
 				Errors', Errors''?),
 	instantiated_local_channels(Primes,
 		[ChannelName? | MChannels?], [ChannelName' | MChannels']),
@@ -274,6 +282,66 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
       AddRef = [],
       Errors = NextErrors |
 	find_process_refs(Refs, Progeny, Out, EndOut).
+
+  compare_channels_ok(Operator, List, Comparer,
+			ChannelList, NextChannelList) :-
+
+    List =?= [C1, C2], C1 =\= "_", C2 =\= "_",
+    string_to_dlist(C1, CL1, []),
+    string_to_dlist(C2, CL2, []) :
+      Compare = {Operator, `FcpChannel1?, `FcpChannel2?} |
+	list_to_string([86 | CL1], FcpChannel1),
+	list_to_string([86 | CL2], FcpChannel2),
+	compare_channel(C1, FcpChannel1?, Extract1, ChannelList, ChannelList'),
+	compare_channel(C2, FcpChannel2?, Extract2,
+			ChannelList'?, NextChannelList),
+	make_comparer;
+
+    otherwise :
+      Operator = _,
+      List = _,
+      NextChannelList = ChannelList,
+      Comparer = true.
+
+  compare_channel(C, FC, Extract, CL, NCL) :-
+
+    CL ? Ch, C =\= Ch :
+      NCL ! Ch |
+	self;
+
+    CL ? Ch, C =?= Ch :
+      FC = _,
+      CL' = _,
+      Extract = true,
+      NCL = CL;
+
+    CL = [] :
+      Extract = (`C = {`"_", `FC, `"_"}),
+      NCL = [C].
+    
+  make_comparer(Extract1, Extract2, Compare, Comparer) :-
+
+    Extract1 =?= Extract2,
+    Extract1 =?= true :
+      Comparer = Compare;
+
+    /* Somebody wrote  a =?= a  or  a =\= a  */
+    Extract1 =?= Extract2,
+    Extract1 =\= true :
+      Comparer = (Extract1, Compare);
+
+    Extract1 =\= true,
+    Extract2 =?= true :
+      Comparer = (Extract1, Compare);
+
+    Extract1 =?= true,
+    Extract2 =\= true :
+      Comparer = (Extract2, Compare);
+
+    Extract1 =\= true,
+    Extract2 =\= true,
+    Extract1 =\= Extract2 :
+      Comparer = (Extract1, Extract2, Compare).
 
 
 /*
@@ -653,51 +721,52 @@ make_sender(Name, ChannelName, Sender) :-
 	list_to_string(NL, Sender).
 
 
-message_to_channels(ProcessDefinition, Underscore, Message, Channels,
+message_to_channels(Message, Name, Channels, Locals, Underscore, MChannels,
 			Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
-      ProcessDefinition = _,
+      Name = _,
+      Channels = _,
+      Locals = _,
       Underscore = _,
       Index = _,
-      Channels = [],
+      MChannels = [],
       Errors = NextErrors;
 
-    arg(Index, Message, Channel), string(Channel), Channel =\= "",
+    arg(Index, Message, Channel), string(Channel),
     Underscore =\= true, Index++ :
-      Channels ! Channel |
+      MChannels ! OkChannel? |
+	verify_channel(Name, Channel, Channels, Locals, OkChannel,
+			Errors, Errors'),
 	self;
 
-    arg(Index, Message, Channel), string(Channel), Channel =\= "",
+    arg(Index, Message, _),
     Underscore =?= true, Index++ :
-      Channels ! `"_" |
-	self;
-
-    arg(Index, Message, `Anonymous), Anonymous =?= "_",
-    Index++ :
-      Channels ! Anonymous |
+      MChannels ! "_" |
 	self;
 
     Index > arity(Message) :
-      ProcessDefinition = _,
-      Underscore = _,
       Message = _,
-      Channels = [],
+      Name = _,
+      Channels = _,
+      Locals = _,
+      Underscore = _,
+      MChannels = [],
       Errors = NextErrors;
 
     otherwise,
     arg(Index, Message, Channel),
-    arg(1, ProcessDefinition, Name),
     Index++ :
       Errors ! (Name - invalid_channel_in_message(Message, Channel)),
-      Channels ! [] |
+      MChannels ! [] |
 	self;
 
-    otherwise,
-    arg(1, ProcessDefinition, Name) :
+    otherwise :
+      Channels = _,
+      Locals = _,
       Underscore = _,
       Index = _,
-      Channels = [],
+      MChannels = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
 
 
@@ -723,13 +792,13 @@ verify_channel(Name, Channel, Channels, Locals, OkChannel,
       Channels = _,
       Locals = _,
       OkChannel = "_",
-      Errors = [Name - undefined_communication_channel(Channel) | NextErrors];
+      Errors = [Name - undefined_channel(Channel) | NextErrors];
 
     otherwise :
       Channels = _,
       Locals = _,
       OkChannel = "_",
-      Errors = [Name - invalid_communication_channel(Channel) | NextErrors].
+      Errors = [Name - invalid_channel(Channel) | NextErrors].
 
 
 parse_message(ProcessDefinition, Message, ChannelNames, Locals, Primes,
@@ -1063,6 +1132,8 @@ substituted_local_channels(Primes, Substitutes, Primed) :-
       SubsOut = [].
 
 
+/************************* Program Transformations ***************************/
+
 program(Source, Exports, Terms, Errors) :-
 
 	serve_empty_scope(Scope?, Exports, Errors),
@@ -1088,6 +1159,7 @@ process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
       Terms = NextTerms,
       Scope = NextScope.
 
+/************************* Process Transformations ***************************/
 
 process(Status, RHSS, Scope, Process, Nested) :-
 
@@ -1170,6 +1242,8 @@ nested_procedures(Process, Nested, Terms, NextTerms) :-
       Terms = NextTerms.
 
 
+/************************* Guard Transformations *****************************/
+
 guarded_clauses(RHS1, RHS2, Nested, Scope) +
 		(Mode = none, SendId = _, NextNested = [], NextScope = [],
 			 Index = 0, NextRHSS, RHSS = NextRHSS?,
@@ -1210,9 +1284,22 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
     Mode =?= GuardMode :
       NewMode = GuardMode;
 
-/* What about compare? */
-    Mode =\= none, GuardMode =\= none, Mode =\= GuardMode :
-      NewMode = mixed.
+    Mode =?= compare,
+    GuardMode =?= otherwise :
+      NewMode = compared;
+
+    Mode =?= send,
+    GuardMode =?= receive :
+      NewMode = mixed;
+
+    Mode =?= receive,
+    GuardMode =?= send :
+      NewMode = mixed;
+
+    otherwise :
+      Mode = _,
+      GuardMode = _,
+      NewMode = conflict.
 
 
   make_rhs2(Mode, SendId, ClauseList, Sends, RHS2,
@@ -1242,15 +1329,31 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	make_choice_atom+(Name = MixedChoices,
 			ChoiceVars = [`"Chosen", `SendId]);
 
-    /* Only receives */
-    otherwise :
-      Mode = _,
-      Sends = _,
+    /* receive, compared, none */
+    Mode =\= conflict, Mode =\= compare :
+      Sends = [],
       SendId = "_",
       RHS2 = FcpClauses?,
       Nested = NextNested,
       Scope = NextScope |
-	make_predicate_list(';', ClauseList, FcpClauses).
+	make_predicate_list(';', ClauseList, FcpClauses);
+
+    Mode =?= compare :
+      SendId = "_",
+      Sends = [],
+      RHS2 = FcpClauses?,
+      Nested = NextNested,
+      Scope = [error("missing_otherwise") | NextScope] |
+	make_predicate_list(';', ClauseList, FcpClauses);
+
+    Mode =?= conflict :
+      SendId = "_",
+      ClauseList = [],
+      Sends = [],
+      RHS2 = true,
+      Nested = NextNested,
+      Scope = [error("missing_otherwise") | NextScope].
+      
 
   sends_to_writes(Sends, Writes) +
 	(NextAsk, Asks = NextAsk?, NextTell, Tells = NextTell) :-
@@ -1303,13 +1406,13 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       ClauseList ! (`"Chosen" = Index | Body) |
 	self;
 
-    Mode = receive,
-    RHSList ? Receive :
-      ClauseList ! Receive |
-	self;
-
     Mode =?= none,
     RHSList ? _ |
+	self;
+
+    Mode =\= send, Mode =\= none,
+    RHSList ? Other :
+      ClauseList ! Other |
 	self;
 
     RHSList =?= [] :
@@ -1351,12 +1454,23 @@ transform_guard(Guard, Control, LastClause, Clauses, BodyGuard,
 		NextScope],
       Clauses = send([LastClause]);
 
-    otherwise :
+    Guard =?= otherwise :
+      Control = otherwise(_SendId, _SendIndex),
+      Clauses = otherwise([LastClause]),
+      BodyGuard = otherwise,
+      Scope = NextScope;      
+
+    Guard =\= (_ =?= _), Guard =\= (_ =\= _),
+    Guard =\= (_ & _), Guard =\= otherwise |
       BodyGuard = true,
       Clauses = none([LastClause]),
       Control = none(_, _),
-      Scope = [error(invalid_guard(Guard)) | NextScope].
+      Scope = [error(invalid_guard(Guard)) | NextScope];
 
+    otherwise :
+      Clauses = compare([LastClause]),
+      Control = compare(_SendId, _SendIndex) |
+	compare_channels + (Channels = [], NextChannels = _).
 
   receive_in_guard_iterates(SendId, Iterates, LastClause, Clauses) :-
 
@@ -1367,7 +1481,28 @@ transform_guard(Guard, Control, LastClause, Clauses, BodyGuard,
     SendId =\= "_",
     Iterates =?= {Cdr, Mixed} :
       Clauses = receive([Cdr, Mixed, LastClause]).
-      
+
+
+compare_channels(Guard, BodyGuard, Channels, NextChannels, Scope, NextScope) :-
+
+    Guard =?= (Guard' & Compares) :
+      BodyGuard = (BodyGuard'?, Comparers?) |
+	compare_channels(Guard', BodyGuard', Channels, Channels',
+				Scope, Scope'?),
+	compare_channels(Compares, Comparers, Channels'?, NextChannels,
+				Scope', NextScope);
+
+    Guard =\= (_ =?= _), Guard =\= (_ =\= _) :
+      BodyGuard = true,
+      NextChannels = Channels,
+      Scope = [error(invalid_compare_guard(Guard)) | NextScope];
+
+    otherwise :
+      Scope = [guard_compare(Guard, Channels, NextChannels, BodyGuard) |
+		NextScope].
+
+
+/************************* Body Transformations ******************************/
 
 transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
     true :
