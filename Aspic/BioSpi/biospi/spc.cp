@@ -4,9 +4,9 @@ Precompiler for Biological Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/12/15 06:37:01 $
+		       	$Date: 2003/03/04 15:43:31 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -742,7 +742,8 @@ analyze_rhss1(RHS, ChannelTable, NewChannelTable,
 	self;
 
     Goal =\= _ # _, arg(1, Goal, Name), string(Name),
-    nth_char(1, Name, C), ascii('A') =< C, C =< ascii('Z') |
+    nth_char(1, Name, C),
+    CHAR_A =< C, C =< CHAR_Z |
 	extract_spi_channels(Goal, Channels),
 	body_channel_usage2;
 
@@ -768,7 +769,7 @@ body_channel_usage1(ChannelTable, NewChannelTable, Body,
 
     Args ? (`ChannelName = `Channel),
     string(ChannelName), nth_char(1, ChannelName, C),
-    ascii(a) =< C, C =< ascii(z) |
+    CHAR_a =< C, C =< CHAR_z |
 	replace_argument(ChannelName, Channel, Channels, Channels'),
 	self;
 
@@ -1048,7 +1049,8 @@ dimerize_requests(Tell, NewTell) :-
 extract_spi_channels(Variables, Channels) :-
 
     Variables ? `Name, string(Name),
-    nth_char(1, Name, C), ascii(a) =< C, C =< ascii(z) :
+    nth_char(1, Name, C),
+    CHAR_a =< C, C =< CHAR_z :
       Channels ! Name |
 	self;
 

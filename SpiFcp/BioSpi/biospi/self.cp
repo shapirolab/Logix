@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/02/19 07:41:31 $
+		       	$Date: 2003/03/04 15:43:31 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -241,7 +241,8 @@ complete_spifcp_attributes(Exported, Defaults, PublicDescriptors, Controls) :-
 validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
 
     New ? `String,
-    nth_char(1, String, C), ascii('A') =< C, C =< ascii('Z') :
+    nth_char(1, String, C),
+    CHAR_A =< C, C =< CHAR_Z :
       Exports ! String |
 	self;
 
@@ -297,7 +298,7 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     Defaults = {DefaultWeighter, _DefaultRate},
     we(DefaultWeighter),
     string(Weighter), nth_char(1, Weighter, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       DefaultWeighter = Weighter,
       NewDefaults = Defaults,
       Errors = NextErrors;
@@ -306,7 +307,7 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     we(DefaultWeighter),
     tuple(Weighter), arg(1, Weighter, Name),
     string(Name), nth_char(1, Name, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       DefaultWeighter = NewWeighter?,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
@@ -323,27 +324,31 @@ validate_publics(PublicDescriptors, Defaults, Old, New,
 			(Head = Tail?, Tail) :-
 
     PublicDescriptors ? Public, string(Public),
-    nth_char(1, Public, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Public, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, Rate} :
       Tail ! Public(Rate) |
 	self;
 
     PublicDescriptors ? Public, string(Public),
-    nth_char(1, Public, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Public, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       Tail ! Public(Rate, Weighter) |
 	self;
 
     PublicDescriptors ? Public(Rate), string(Public),
-    nth_char(1, Public, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Public, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, _Rate} :
       Tail ! Public(Rate'?) |
 	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	self;
 
     PublicDescriptors ? Public(Rate), string(Public),
-    nth_char(1, Public, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Public, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, _Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       Tail ! Public(Rate'?, Weighter) |
@@ -351,7 +356,8 @@ validate_publics(PublicDescriptors, Defaults, Old, New,
 	self;
 
     PublicDescriptors ? Public(Rate, Weighter), string(Public),
-    nth_char(1, Public, C), ascii(a) =< C, C =< ascii(z) :
+    nth_char(1, Public, C),
+    CHAR_a =< C, C =< CHAR_z :
       Tail ! Public(Rate'?, Weighter'?) |
 	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	validate_public_channel_weighter(Weighter, Defaults, Weighter',
@@ -424,13 +430,14 @@ validate_public_channel_weighter(Weighter, Defaults, NewWeighter,
 					Errors, NextErrors) :-
 
     string(Weighter), nth_char(1, Weighter, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       Defaults = _,
       NewWeighter = Weighter,
       Errors = NextErrors;
 
     tuple(Weighter), arg(1, Weighter, Name),
-    nth_char(1, Name, C), ascii(a) =< C, C =< ascii(z) :
+    nth_char(1, Name, C),
+    CHAR_a =< C, C =< CHAR_z :
       Defaults = _ |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
 	validate_public_weighter_params,

@@ -645,8 +645,8 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(AMBIENT_ID, Ambient, AmbientId),
     AmbientId =?= AmbientName(UniqueId),
     convert_to_string(UniqueId, UIS),
-    string_to_dlist(UIS, UIL, [CHAR_RIGHT_BRACKET]),
-    string_to_dlist(AmbientName, ANL, [CHAR_LEFT_BRACKET | UIL]),
+    string_to_dlist(UIS, UIL, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(AmbientName, ANL, [CHAR_LEFT_PAREN | UIL]),
     list_to_string(ANL, AID) :
       Start' = start(Signature, Operations, Message, Chosen, AID),
       write_channel(Start', Scheduler) |
