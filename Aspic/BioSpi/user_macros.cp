@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/11/10 09:31:47 $
+		       	$Date: 2003/06/20 14:18:53 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.13 $
+			$Revision: 1.14 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -105,7 +105,7 @@ expand(Command, Cs) :-
 		" {String}           - invoke UNIX shell sh with String",
 		"",
 		"        options for sp* :",
-		" none/active        - type of messages displayed",
+		" none/note/active   - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
 		"       format options for record and trace :",
 		"           short/process/creator/full",
