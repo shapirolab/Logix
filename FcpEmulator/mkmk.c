@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.2 1999/07/01 07:22:56 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -108,6 +108,7 @@ static char *fileV = "";
 static char *freeze_termV = "";
 static char *hpux_9d05V = "";
 static char *interfaceV = "";
+static char *libsV = "";
 static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
@@ -263,6 +264,10 @@ main(argc, argv)
 	printf("mkmk: Too many foreign functions\n");
 	exit();
       }
+      continue;
+    case 'l':
+      /* libnsl */
+      libsV = "-lnsl";
       continue;
     case 'm':
       /* math */
@@ -505,6 +510,9 @@ main(argc, argv)
   }
   if (strcmp(mathV, NullS) != 0) {
     Pos = cond_print(MakeFd, "-lm", "", "", Pos);
+  }
+  if (strcmp(libsV, NullS) != 0) {
+    Pos = cond_print(MakeFd, libsV, "", "", Pos);
   }
   Pos = cond_print(MakeFd, "-lc", "", "", Pos);
 
