@@ -1,4 +1,4 @@
--monitor(serve).
+-monitor(initialize).
 -language([evaluate,compound,colon]).
 -export([get_global_channels/1, global_channels/1, global_channels/2,
 	 new_channel/3, new_channel/4,
@@ -26,29 +26,47 @@ STOPPED => Reply = _.
 ** SPIOFFSETS => {unbound, unbound, SpiOffset, SpiOffset}
 **
 ** to allow the monitor to call the C step function and the C index function,
-** and to execute the other operations with fcp code.
+** and to execute the other operations with fcp code.  Note that the
+** C index function is not implemented in fcp for non-standard weighters.
 */
 
 %SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
-SPIOFFSETS => {unbound, unbound, unbound, SpiOffset}.
+SPIOFFSETS => {unbound, SpiOffset, unbound, SpiOffset}.
 %SPIOFFSETS => {unbound, unbound, unbound, unbound}.
 
-serve(In) + (Options = []) :-
+initialize(In) :-
 
     In =?= [] :
-      Options = _;
+      true;
 
     In =\= [] :
       SpiOffset = _,
-      Ordinal = 1 |
-	server(In, Options, Scheduler),
-	processor#link(lookup(math, MathOffset), Ok),
-	processor#link(lookup(spicomm, SpiOffset), _Ok),
-	start_scheduling(Scheduler, MathOffset, Ordinal, SPIOFFSETS,
-		SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX), Ok).
+      Options = [],
+      Ordinal = 1,
+      SpiOffsets = SPIOFFSETS,
+      DefaultWeighter = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
+	processor#link(lookup(spicomm, SpiOffset), OkComm),
+	check_spicomm(OkComm, SpiOffsets, SpiOffsets'),
+	serve.
 
-server(In, Options, Scheduler) +
-	(Globals = [{0, _, -1, ""}, {[], _, -1, ""}]) :-
+  check_spicomm(Ok, DefaultSpiOffsets, SpiOffsets) :-
+
+    Ok =\= true :
+      DefaultSpiOffsets = _,
+      SpiOffsets = {unbound, unbound, unbound, unbound} |
+	computation#comment(("No spicomm" : "No non-standard weighters."));
+
+    Ok =?= true :
+      SpiOffsets = DefaultSpiOffsets.
+
+
+serve(In, Options, Ordinal, SpiOffsets, DefaultWeighter) :-
+	Globals = [{0, _, -1, ""}, {[], _, -1, ""}],
+	processor#link(lookup(math, MathOffset), OkMath),
+	server,
+	start_scheduling.
+
+server(In, Options, Scheduler, Globals) :-
 
     In ? debug(Debug) :
       Debug = Debug'?,
@@ -101,6 +119,11 @@ server(In, Options, Scheduler) +
 	self;
 
     In ? reset :
+      write_channel(state(DefaultWeighter, SpiOffsets, _Ordinal), Scheduler),
+      In'' = [reset(DefaultWeighter, SpiOffsets, 1) | In'] |
+	self;
+
+    In ? reset(DefaultWeighter, SpiOffsets, Ordinal) :
       Globals = _,
       close_channel(Scheduler) |
 	serve;
@@ -283,9 +306,18 @@ get_active_request(Requests, NextRequests, Request) :-
 
 /***************************** Scheduling ***********************************/ 
 
-start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter, Ok):-
+start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
+			OkMath):-
 
-    Ok =?= true,
+    OkMath =\= true :
+      DefaultWeighter = _,
+      MathOffset = _,
+      Ordinal = _,
+      SpiOffsets = _,
+      make_channel(Scheduler, _) |
+	fail(math_offset(OkMath));
+
+    OkMath =?= true,
     info(REALTIME, Start_real_time),
     convert_to_real(0, Zero),
     convert_to_real(MAXTIME, MaxTime) :
@@ -301,15 +333,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter, Ok
 				BasedAnchor, InstantaneousAnchor,
 				Scheduler, _Recording, _Debug,
 				Zero, false, _Wakeup,
-				DefaultWeighter, MaxTime, Start_real_time);
-
-    Ok =\= true :
-      DefaultWeighter = _,
-      Scheduler = _,
-      MathOffset = _,
-      Ordinal = _,
-      SpiOffsets = _ |
-	fail(math_offset(Ok)).
+				DefaultWeighter, MaxTime, Start_real_time).
 
 
 make_channel_anchor(Name, Anchor) :-
@@ -414,6 +438,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     /* Close channels - i.e. decrement counts and release when unreferenced. */
     Schedule ? close(Channels),
+    known(Channels),
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound :
       STOPPED |
@@ -421,20 +446,23 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     Schedule ? close(Channels),
+    known(Channels),
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound :
       execute(SpiOffset, {SPI_CLOSE, Channels, Reply}),
       STOPPED |
 	self;
 
-    Schedule ? close(Channels, Reply),
+    Schedule ? close(Channels, Reply?^),
+    known(Channels),
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound :
       STOPPED |
 	execute(MathOffset, close(Channels, Reply)),
 	self;
 
-    Schedule ? close(Channels, Reply),
+    Schedule ? close(Channels, Reply?^),
+    known(Channels),
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound :
       execute(SpiOffset, {SPI_CLOSE, Channels, Reply}),
@@ -494,6 +522,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     /* Start a transmission process. */
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     tuple(PId), arg(1, PId, PName) :
@@ -503,6 +532,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PName, OpList, Value, Chosen),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     string(PName) :
@@ -512,6 +542,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen, Prefix),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     tuple(PId), arg(1, PId, PName),
@@ -527,6 +558,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start({PName}, OpList, Value, Chosen, Prefix),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     string(PName),
@@ -541,6 +573,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound,
     tuple(PId), arg(1, PId, PName),
@@ -551,6 +584,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PName, OpList, Value, Chosen),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound,
     string(PName) :
@@ -560,6 +594,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen, Prefix),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound,
     tuple(PId), arg(1, PId, PName),
@@ -575,6 +610,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PName, OpList, Value, Chosen, Prefix),
+    known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound,
     string(PName),
@@ -631,9 +667,12 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 			 Start_real_time, Start_real_time'),
 	self;
 
+    Schedule ? state(DefaultWeighter^, SpiOffsets^, Ordinal^) |
+	self;		
+
     Schedule ? status(Status) :
       Status = [anchors([BasedAnchor, InstantaneousAnchor]),
-		cutoff(Cutoff), debug(Debug?), weighter(DefaultWeighter),
+		cutoff(Cutoff), debug(Debug?), ordinal(Ordinal),
 		now(Now), record(Record?), waiting(Waiting)] |
 	self;		
 
@@ -733,12 +772,9 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     info(REALTIME, End_real_time),
     Real_time := End_real_time - Start_real_time  :
       BasedAnchor = _,
-      DefaultWeighter = _,
       InstantaneousAnchor = _,
       NegativeExponential = _,
       MathOffset = _,
-      Ordinal = _,
-      SpiOffsets = _,
       Schedule = _,
       Scheduler = _,
       Uniform = _,
@@ -755,7 +791,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
    * Supply default replies to selected requests.
    * (Could improve (?) close(...) to actually close the channels.)
    */
-  wait_done(Schedule, SpiOffsets, Done) :-
+  wait_done(Schedule, DefaultWeighter, SpiOffsets, Ordinal, Done) :-
 
     Schedule ? new_channel(ChannelName, Channel, _BaseRate) :
       make_channel(Dummy, _) |
@@ -782,9 +818,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     unknown(Schedule),
-    known(Done) :
-      SpiOffsets = _ |
-	self#reset.
+    known(Done) |
+	self#reset(DefaultWeighter, SpiOffsets, Ordinal).
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		NegativeExponential, Uniform,
@@ -1215,7 +1250,9 @@ close_channels(Channels, N, Reply)  :-
     vector(Channel),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Refs--,
-    Refs' < 0 |
+    Refs' < 0 :
+      Reply = "Error - Problem in ReferenceCount"(Channel),
+      Reply' = _ |
 	self;
 
     N =< 0 :
