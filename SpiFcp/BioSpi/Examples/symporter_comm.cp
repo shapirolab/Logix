@@ -4,9 +4,9 @@ global(cell1, cell2, cell3, cell4).
 baserate(1).
 
 
-System::= molecule<<Molecule1>> | molecule<<Molecule2>> | 
-	  molecule<<Molecule1>> | molecule<<Molecule2>> |
-	  cell<<Symporter_In | Symporter_Out>> .
+System::= molecule(<<Molecule1>>) | molecule(<<Molecule2>>) | 
+	  molecule(<<Molecule1>>) | molecule(<<Molecule2>>) |
+	  cell(<<Symporter_In | Symporter_Out>>) .
 
 Molecule1::= s2s cell1 ? {sym} , <<enter sym , screen#display("molecule1 entered") | Molecule1 ;
 			           s2s sym ? [] , Molecule1 >> ;

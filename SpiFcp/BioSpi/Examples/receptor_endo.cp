@@ -4,7 +4,7 @@ global(bind, in, receptor_IC).
 baserate(1).
 
 
-System::= molecule<<Ligand>> | cell<<Receptor|Receptor|Pit>> .
+System::= molecule(<<Ligand>>) | cell(<<Receptor|Receptor|Pit>>) .
 
 Ligand+(lbb, lbb1, lig,lig1(infinite),lig2,lig3,lig4)::=
 
@@ -19,7 +19,7 @@ Ligand+(lbb, lbb1, lig,lig1(infinite),lig2,lig3,lig4)::=
 
 Receptor+(recbb,recbb1,recbb2) ::=
 
-  << EC | molecule<< IC >> .
+  << EC | molecule(<< IC >>) .
 
     
       EC::=
@@ -33,15 +33,15 @@ Receptor+(recbb,recbb1,recbb2) ::=
 		
       		<< 
 		  accept cross_lig2 , local cross_lig4 ! [] , 
-		  molecule <<
+		  molecule(<<
 	  	  	merge - recbb2 , merge - cross_lig3 , local in ! [] ,
 				screen#display("One_EC_in")
-		  >> ;
+		  >>) ;
 		  local cross_lig4 ? [] ,
-		  molecule<<
+		  molecule(<<
 		    merge - recbb2 , local in ! [] ,
 			screen#display("Other_EC_in")
-		  >>
+		  >>)
 		>>
 	>>.
 
@@ -59,10 +59,10 @@ Receptor+(recbb,recbb1,recbb2) ::=
   >> .
  
 Pit::=
-    membrane<<
+    membrane(<<
 	merge+ receptor_IC , local in ? [] , local in ? [] , 
 		screen#display("Pit_full")
-    >>
+    >>)
 .
 
 
