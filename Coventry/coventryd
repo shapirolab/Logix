@@ -17,31 +17,23 @@ $NICE_COVENTRY = 30;          # Must be ge $NICE_DEFAULT + 2.
 $NICE_RADIX    = 10;          # Controls the ranges for nice changes.
 $NICE_INCR     =  1;          # Set 0 to permit only one greedy process
                               # per user, outside of coventry.
-$BAN_GANGS     =  1;          # Set to 0 to spread Greedy gang processes over
-                              # an interval of non-dteriorating priorities.
+
+$BAN_GANGS     =  1;          # Minimum delay before release from coventry.
+$DELAY_GANGS   =  1;          # Set 0 to let gangs run free.
+$GANG_CLASS    = "GG";        # invented class for gangs (note caps).
 
 $MONITOR_DELAY = 60;          # Main loop iteration delay in seconds.
 $THRESHHOLD    = 60;          # Minimum elapsed seconds before changing nice.
-$GREED_BOUND   =  5;          # Minimum used time between iterations before
+$GREED_BOUND   =  5;          # Minimum used seconds between iterations before
                               # changing nice.
 $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 # see sys/schedctl.h            SGI only
-$NDPLOMAX      = 128;         # Best low Non-deteriorating priority
-$NDPLOMIN      = 254;         # Worst "   "   " " "  "  "    "  "
-
-$NDPRI_DEFAULT = $NDPLOMAX
-    - $BAN_GANGS*($NICE_COVENTRY - $NICE_DEFAULT);
-
-$NDPRI_OFFSET  = $NDPRI_DEFAULT - $NICE_DEFAULT;
-$NDPRI_OFFSET + $NICE_COVENTRY <= $NDPLOMIN or
-    die "Inconsistentcy between nice range and ndpri range."; 
-
-$LOW_PRIORITY  = 
-    - ($NICE_COVENTRY + 100); # Negative offset from $NDLOMIN
+$GANG_PRIORITY = 128;         # Priority for gangsters.
+$LOW_PRIORITY  = 139;         # Priority for collaborators.
 
 # Default exclusion hashes.
 
-%nonusers = (
+%ignore_users = (
 	     daemon => 1,
 	     ftp    => 1,
 	     lp     => 1,
@@ -50,7 +42,7 @@ $LOW_PRIORITY  =
 );
 
 # Maximum length of a command name is 30 characters (see below).
-%commands = (
+%ignore_commands = (
 	     biod => 1,
 	     csh  => 1,
 	     ftpd => 1,
@@ -82,6 +74,8 @@ undef(%current_processes);    # A hash of processes, indexed by Process Id.
 undef(%freed_processes);      # A hash of processes, indexed by user(nice).
 undef(%low_priority_users);   # A hash of Collaborators (and others?).
 
+undef(%previous_gang_delays); # A hash of counters, indexed by Process Id.
+undef(%current_gang_delays);  # A hash of counters, indexed by Process Id.
 
 if ($debug) {# debug
 
@@ -127,8 +121,8 @@ $pscomm =
         "comm=aaaaaaaaaabbbbbbbbbbcccccccccc";
 
 if ($debug) {# debug
-  print "command = ", $pscomm ,"\n";
-  print "AUXILIARY_DIR = \"$AUXILIARY_DIR\"\n";
+    print "command = ", $pscomm ,"\n";
+    print "AUXILIARY_DIR = \"$AUXILIARY_DIR\"\n";
 }# endebug
 
     exit 0 if query_processes($query);
@@ -159,6 +153,12 @@ while (not $stop) {
 
     undef(%previous_processes);
     %previous_processes = %current_processes;
+    undef(%current_processes);
+
+    undef(%previous_gang_delays);
+    %previous_gang_delays = %current_gang_delays;
+    undef(%current_gang_delays);
+
     undef(%freed_processes);
 
     sleep($MONITOR_DELAY);
@@ -175,20 +175,12 @@ sub clean_up
 {
     if ($#coventry >= 0) {
 	my $process;
-	my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
-if ($debug) {# debug
-  print "Cleaning up coventry!\n";
-}# endebug
+	if ($debug) {# debug
+	    print "Cleaning up coventry!\n";
+	}# endebug
 	foreach $process (@coventry) {
-	    ($user, $nice, $seconds, $pid, $pgid, $class, $comm) =
-		@{$process};
-	    if (!defined($low_priority_class{$user})) {
-		setnice($process,
-			($class eq "gb" || $class eq "gn") ? 0 : $nice);
-if ($debug) {# debug
-  print_refed_process("returned to society", $process);
-}# endebug
-	    }
+	    setnice(-1, $process);
+	    debug_process("returned to society", $process);
 	}
     }
     exit 0;
@@ -199,8 +191,12 @@ if ($debug) {# debug
 # parse_process extracts interesting parameters from a process status line
 # produced by ps.  The status line is in $_ on entry.
 #
-# Return the process if it is not excluded by one of the exclusion hashes.
-# Return undef otherwise.
+# Return the process if it is not excluded by one of the exclusion hashes,
+# and it is not a member of an organised gang (SGI only).  In the latter
+# case, the new gang member is added to the gangster list.
+#
+# Return undef if it is excluded or a member of an organised gang (unless
+# query is set.
 #
 # Note: This subroutine should be modified as necessary per platform.
 #       It works fine on SGI and Solaris System V platforms.
@@ -208,28 +204,22 @@ if ($debug) {# debug
 sub parse_process
 {
     my $time;
-    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
-
-    my $leader = 0;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm, $process;
 
     # Watch out for class and comm, which can be blank on Solaris.
     ($user, $nice, $time, $pid, $pgid, $class, $comm) = split;
-    $class =~ tr/A-Z/a-z/;
+    return undef if (not defined($class) or not defined($comm));
 
-    return undef if ($nonusers{$user} || $commands{$comm});
+    return undef if ($ignore_users{$user} || $ignore_commands{$comm});
 
-    if ($query eq "") {
-	# class gn and gb are used on SGI.
-	if ($class eq "gn" || $class eq "gb") {
-	    $_ = `$AUXILIARY_DIR/getndpri $pid`;
-	    return undef if !/^ndpri.* = (\d+)$/;
-	    $nice = (int $1) ? $1 - $NDPRI_OFFSET : $NICE_DEFAULT;
+    my $priority = extract_priority($pgid);
+    if (defined($low_priority_class{$user})) {
+	if ($priority == 0) {
+	  # A slight kluge - drop low priority users here.
+	  `$AUXILIARY_DIR/setndpri $LOW_PRIORITY $pid`;
+	  debug_process("*low priority user*", $process);
 	}
-	# class ts is used on both SGI and Solaris.
-	elsif ($class ne "ts" ||
-	    $NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
-	    return undef;
-	}
+	return undef;
     }
 
     $seconds = 0;
@@ -243,8 +233,48 @@ sub parse_process
     }
     $time =~ /(\d+):(\d\d)/;
     $seconds += 60*$1 + $2;
-    return [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
 
+    if ($query eq "") {
+        $class =~ tr/A-Z/a-z/;
+	my $gang;
+        # class gn and gb are used on SGI.
+        if ($class eq "gn" || $class eq "gb") {
+	    $process = [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
+	    my $current = $current_processes{$pgid};
+	    if (defined $current) {
+	        if ($current->[5] eq $GANG_CLASS) {
+		    # Already an organized gang.
+		    $gang = $current->[6];
+		    push @{$gang}, $process;
+		    # Use gang's nice value.
+		    $process->[1] = $current->[1];
+		    # cumulate time.
+		    $current->[2] += $seconds;
+		    # Compute initial delay.
+		    $current_gang_delays{$pgid} =
+		      $BAN_GANGS + scalar(@{$gang})*$DELAY_GANGS;
+		}
+		return undef;
+	    }
+	    # Create an organized gang (referenced by comm)
+	    my $previous = $previous_processes{$pgid};
+	    
+	    $nice = defined($previous) && $previous->[5] == GANG_CLASS ?
+	      $previous->[1] : $NICE_DEFAULT;
+	    $process->[1] = $nice;
+	    $comm = [$process];
+	    $pid = $pgid;
+	    $class = $GANG_CLASS;
+	    # Initial delay.
+	    $current_gang_delays{$pgid} = $BAN_GANGS + $DELAY_GANGS;
+	}
+	# class ts is used on both SGI and Solaris.
+	elsif ($class ne "ts" ||
+	       $NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
+	    return undef;
+	}
+    }
+    return [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
 }
 
 # sortrefs is called by the sort function to compare two process references.
@@ -265,37 +295,51 @@ sub sortrefs #context {$a, $b}
     return 0;
 }
 
+
+# extract_priority extracts the non-deteriorating priority of a process.
+#
+# The argument is the pid of the process.
+# Return: -1 if unable to extract non-deteriorating priority;
+#          0 if no non-deteriorating priority;
+#          non-deteriorating priority, otherwise.
+sub extract_priority #(pid)
+{
+    my $pid = shift;
+    $_ = `$AUXILIARY_DIR/getndpri $pid`;
+    /^ndpri.* = (\d+)$/;
+    return (int $1) ? $1 : -1;
+}
+
 # setnice sets the nice value for a process.
 #
-# The arguments are the process id and the nice value.
+# The process is in the current context,
+# The argument is a 0 => $nice, a nice value or -1.
 
-sub setnice #(process, nice)
+sub setnice #(nice, process)
 {
-    my $process;
-    my $user, $unnice, $seconds, $pid, $pgid, $class, $comm;
+    my $renice = shift;
+    my $process = shift;
+    my ($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
 
-    $process = shift;
-    my $nice = shift;
-
-    ($user, $unnice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
-
-    if ($nice < 0) {
-	my $reply, $result;
-	$result = setpriority($PRIO_PROCESS, $pid, $NICE_MAX), "\n";
-if ($debug) {# temp
-  print_refed_process("*low priority user*", $process);
-}
-	$nice += $NDPLOMIN;
-	$reply = `$AUXILIARY_DIR/setndpri $nice $pid`;
+    if ($class eq $GANG_CLASS) {
+        my $reply = 1;
+	foreach $process (@{$comm}) {
+	    $reply &= setnice($renice, $process);
+	}
 	return $reply;
     }
-    elsif ($class eq "ts") {
-	return setpriority($PRIO_PROCESS, $pid, $nice-$NICE_OFF);
+    $nice -= $NICE_OFF;
+    my $newnice = $renice > 0 ? $renice - $NICE_OFF: $nice;
+    
+    if ($class eq "gn" || $class eq "gb") {
+	my $priority = $renice == $NICE_COVENTRY ?
+	  $GANG_PRIORITY + $nice: 0;
+	return `$AUXILIARY_DIR/setndpri $priority $pid`;
     }
-    elsif ($class eq "gn" || $class eq "gb") {
-	$nice += $NDPRI_OFFSET if $nice;
-	return `$AUXILIARY_DIR/setndpri $nice $pid`;
+    elsif ($class ne "ts") {
+        return 0;
     }
+    return setpriority($PRIO_PROCESS, $pid, $newnice);
 }
 
 # query process conditionally displays all processes of interest, whose
@@ -332,14 +376,7 @@ sub query_processes #(query)
 		$secs = "0$secs" if $secs < 10;
 		
 		if ($seconds >= $minsecs) {
-		    # The following only applies to SGI, so far.
-		    if ($class eq "gn" || $class eq "gb" || $class eq "bt") {
-			$_ = `$AUXILIARY_DIR/getndpri $pid`;
-			/^ndpri.* = (\d+)$/;
-			$nice = (($class eq "bt") ? 'b' : 'g') . $1
-			    if (int $1);
-		    }
-		    print "    $user($nice) - $mins:$secs - $comm($pid)\n";
+		  print "    $user($nice) - $mins:$secs - $comm($pid)\n";
 		}
 	    }
 	}
@@ -393,11 +430,11 @@ sub format_time
     return sprintf("%2d:%02d:%02d", $hr, $min, $sec);
 }
 
-# print_refed_process prints a referenced process.
+# print_process prints a referenced process.
 #
 # Its arguments are a title and a process reference.
 
-sub print_refed_process #(title, reference)
+sub print_process #(title, reference)
 {
     my $title = shift;
     my $ref = shift;
@@ -409,6 +446,22 @@ sub print_refed_process #(title, reference)
     }
     print sprintf("%s - $title: %s\n",
 		  format_time(), join(", ", @list));
+}
+
+
+# debug_process prints a referenced process.
+#
+# Its arguments are a title and a process reference.
+
+
+sub debug_process #(title, reference)
+{
+    my $title = shift;
+    my $ref = shift;
+
+    if ($debug) {
+        print_process($title, $ref);
+    }
 }
 
 
@@ -463,31 +516,34 @@ sub drop_terminated_processes
 {
     my $current, $pid, $process;
 
-if ($debug) {# debug
     if ($debug && !defined(%current_processes)) {
 	print "No current processes\n";
     }
-}# endebug
 
     @_ = @coventry;
     undef(@coventry);
     foreach $process (@_) {
 	$pid = $process->[3];
 	$current = $current_processes{$pid};
+	delete $current_processes{$pid};
 	if (defined($current)) {
-	    if ($current->[1] == $NICE_COVENTRY) {
+	    if ($BAN_GANGS && $current->[5] eq $GANG_CLASS) {
+	        # $pid = $pgid (see parse_processes).
+	        if (extract_priority($pid) >= $GANG_PRIORITY) {
+		    push @coventry, $process;
+		    next;
+		}
+	    }
+	    elsif ($current->[1] == $NICE_COVENTRY) {
 		push @coventry, $process;
-		delete $current_processes{$pid};
+		next;
 	    }
 	    # otherwise, someone has altered its nice value - drop it!
-elsif ($debug) {# debug
-  print_refed_process("taken from coventry", $process);
-}# endebug
-        }
-elsif ($debug) {# debug
-  print_refed_process("stopped in coventry", $process);
-}# endebug
-
+	    debug_process("taken from coventry", $process);
+	}
+	else {
+	    debug_process("stopped in coventry", $process);
+	}
     }
 }
 
@@ -497,23 +553,14 @@ elsif ($debug) {# debug
 
 sub send_to_coventry
 {
-    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
-    my $changed, $previous, $process, $used;
-    my $bound, $freedid, $niced, $oldsecs;
+    my $process;
+    my $changed, $previous, $used;
+    my $bound, $freedid, $gangster, $niced, $oldsecs;
     my @pids;
 
     foreach $process (values(%current_processes)) {
-	($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
-	if ($BAN_GANGS && ($class eq "gn" || $class eq "gb")) {
-	    push @pids, $pid;
-	    if (!defined($low_priority_users{$user})) {
-		push @coventry, $process;
-if ($debug) {# debug
-  print_refed_process("banned gang process", $process);
-}# endebug
-		next;
-	    }
-	}
+	my ($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
+	$gangster = $BAN_GANGS && ($class eq $GANG_CLASS);
 	$previous = $previous_processes{$pid};
 	if (defined($previous)) {
 	    $used = $seconds - $previous->[2];
@@ -527,31 +574,32 @@ if ($debug) {# debug
 		$freedid = "$user($nice)";
 		$process =
 		    [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
-		if (defined($low_priority_users{$user})) {
-		    push @pids, $pid; # let's just lose it!
-		}
-		elsif (defined($freed_processes{$freedid}) || $bound) {
+		if (defined $freed_processes{$freedid} ||
+		       $bound || $gangster) {
 		    push @pids, $pid;
 		    push @coventry, $process;
-if ($debug) {# debug
-  if ($bound) {
-    print_refed_process("to coventry forever", $process);
-  }
-  else {
-    print_refed_process($changed ? "changed to coventry"
-		                 : "banned from society", $process);
-  }
-}# endebug
+		    if ($bound) {
+		        debug_process("to coventry forever", $process);
+		    }
+		    else {
+		        if ($gangster) {
+			    # Keep nice values consistent.
+			    foreach (@{$comm}) {
+			        $_->[1] = $nice;
+			    }
+			}
+		        debug_process($changed ?
+			 "changed to coventry" : "banned from society",
+				      $process);
+		    }
 		}
 		else {
 		    # Leave it in society - no other greedy process with
 		    # this nice user.
 		    $freed_processes{$freedid} = $process;
 		    if ($changed) {
-			setnice($process, $nice);
-if ($debug) {# debug
-  print_refed_process("re-niced in society", $process);
-}# endebug
+			setnice(-1, $process);
+			debug_process("re-niced in society", $process);
 		    }
 		}
 		    
@@ -560,8 +608,7 @@ if ($debug) {# debug
     }
     foreach $pid (@pids) {
 	$process = delete $current_processes{$pid};
-        setnice($process, $NICE_COVENTRY +
-		$LOW_PRIORITY*(defined($low_priority_users{$process->[0]})));
+        setnice($NICE_COVENTRY, $process);
     }
     @coventry = sort(sortrefs @coventry);
 }
@@ -572,30 +619,37 @@ if ($debug) {# debug
 
 sub free_from_coventry
 {
-    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
-    my $banned, $freedid, $social, $user;
-
     my @banned_processes = @coventry; # coventry is sorted.
 
     undef(@coventry);
     while ($#banned_processes >= 0) {
-	$banned = shift(@banned_processes);
-	($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$banned};
-	$freedid = "$user($nice)";
+	my $process = shift(@banned_processes);
+	my ($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
+	my $freedid = "$user($nice)";
+
 	if (defined($freed_processes{$freedid}) ||
-	    $nice == $NICE_COVENTRY ||
-	    ($BAN_GANGS && ($class eq "gn" || $class eq "gb"))) {
+	    $nice == $NICE_COVENTRY) {
 	    # A process of this user with the same nice value has already
 	    # been freed, or this process has been permanently relegated! 
-	    push(@coventry, $banned);
+	    push(@coventry, $process);
 	}
 	else {
-	    $current_processes{$pid} = $banned;
-	    setnice($process, $nice);
-	    $freed_processes{$freedid} = $banned;
-if ($debug) {# debug
-  print_refed_process("freed from coventry", $banned);
-}# endebug
+	    if ($BAN_GANGS && ($class eq $GANG_CLASS)) {
+	        my $delay = $previous_gang_delays{$pgid};
+		if (!defined($delay)) {
+		    $delay = $current_gang_delays{$pgid};
+		}
+		if (--$delay > 0) {
+		    # Don't free gang until delay finished.
+		    $current_gang_delays{$pgid} = $delay;
+		    push(@coventry, $process);
+		    next;
+		}
+	    }
+	    $current_processes{$pid} = $process;
+	    setnice(-1, $process);
+	    $freed_processes{$freedid} = $process;
+	    debug_process("freed from coventry", $process);
         }
     }
 }
