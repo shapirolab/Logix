@@ -4,9 +4,9 @@ Meta-Interpreter of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/31 12:57:56 $
+			$Date: 2000/04/16 08:44:36 $
 Currently locked by     $Locker:  $
-			$Revision: 1.3 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/reduce.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL

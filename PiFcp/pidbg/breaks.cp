@@ -4,9 +4,9 @@ Break-point management of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/23 11:56:33 $
+			$Date: 2000/04/16 08:44:35 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/breaks.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL

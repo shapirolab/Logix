@@ -4,9 +4,9 @@ Main control of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/25 13:43:45 $
+			$Date: 2000/04/16 08:44:36 $
 Currently locked by     $Locker:  $
-			$Revision: 1.2 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
