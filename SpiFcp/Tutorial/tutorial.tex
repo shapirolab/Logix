@@ -11,41 +11,45 @@
 {\bf $\Pi$-Calculus} is an abstract model of concurrent communication
 developed in the late 1980s to express the behavior of mobile systems
 \cite{Milner99}.  This document describes an implementation of
-{\bf $\Pi$ Calculus} and its stochastic extension in {\bf Flat
+{\bf $\Pi$-Calculus} and its stochastic extension in {\bf Flat
 Concurrent Prolog} (FCP) \cite{Shapiro87a}.  The implementation is
 embedded in {\bf The Logix System} (LOGIX)
 \cite{logix:user-man,logix:user-man-supp}. Unlike most previous
 implementations ({\em e.g.} Pict \cite{PT99}), we implement the fully
-synchronous calculus, where a send is not completed until a
-corresponding receive occurs.  We further extend it to the stochastic
+synchronous calculus, where a send and its corresponding receive
+are completed simultaneously.  We further extend it to the stochastic
 variant (\cite{Pri95},\cite{RPSS}), where communication actions are
 assigned rates, and communication events are selected on a
 probabilistic basis, rather than a nondeterministic one.  The SPI
 system is developed as part of the BioSPI project, whose goal is to
 study biomolecular systems as concurrent processes. Therefore, we
-adhere closely to the concise stochastic $\pi$-calculus, and only rarely
+adhere closely to the concise Stochastic $\Pi$-Calculus, and only rarely
 add functionalities beyond its original core.
 
 The tutorial is constructed as follows: In Chapter \ref{syntax}, we
 informally introduce the basic entities and operators of the
-$\pi$-calculus, and their appropriate representation in SPI syntax. The
-full correspondence between the SPI syntax and $\pi$-calculus is given in
-Appendix \ref{BNF}.  We follow, in Chapter \ref{simple programs}, by
+$\Pi$-Calculus, and their appropriate representation in SPI syntax. The
+full correspondence between the SPI syntax and $\Pi$-Calculus is given in
+Appendix \ref{SPIBNF}.  We follow, in Chapter \ref{simple programs}, with
 several simple programs, their compilation and execution. Chapter
 \ref{stochastic} extends these example to the stochastic variant.  We
 then describe, in Chapter \ref{debug}, the available testing,
 tracing and debugging tools. Chapter \ref{usingFCP} explains how
 LOGIX guard and goal predicates may be used to perform arithmetic
-computations and to produce other useful side-effects.
-The full set of commands for the SPI system, is in Appendix \ref{commands}.
+computations and to produce other useful side-effects.  Chapter
+\ref{aspic} describes the BIOSPI extension to Ambient Stochastic
+$\Pi$-Calculus.
 
-\chapter{Processes, Channels and Communication: The $\Pi$-calculus in
+The full set of commands for the SPI and BIOSPI systems, is in
+Appendix \ref{commands}.
+
+\chapter{Processes, Channels and Communication: The $\Pi$-Calculus in
 SPI Syntax}
 \label{syntax}
 
-$\Pi$-calculus describes system of agents which exist in
+$\Pi$-Calculus describes systems of agents which exist in
 parallel. These agents communicate with each other by sending and
-receiving messages on channels, identified by names. A message may
+receiving messages on channels identified by names. A message may
 be a simple signal or a tuple of channel names, which can be used by the
 receiving process for further communication. This behavior, which
 allows the topology of communication networks to change over time, is
@@ -61,36 +65,35 @@ containing a SPI program. We
 will omit it in the remaining examples in this chapter.
 
 \begin{verbatim}
-   -language(spifcp).
-
-   Try ::= 0 .
+  -language(spifcp).
+  Try ::= 0 .
 
 \end{verbatim}
 
 Systems are composed of multiple concurrent processes, which are
-composed in parallel. The PAR (\verb+ | +) operator is used for such
+composed in parallel. The {\em PAR} (\verb+ | +) operator is used for such
 composition. Each of the sub-processes must be declared separately.
 
 \begin{verbatim}
-   Try ::= Try_again | Try_another .
+  Try ::= Try_again | Try_another .
 
-   Try_again ::= 0 .
+  Try_again ::= 0 .
 
-   Try_another ::= 0 .
+  Try_another ::= 0 .
  
 \end{verbatim}
 
 \section{Channels and communication}
 
-\subsection{Global Channels}
+\subsection{Public Channels}
 
-What processes mostly do is communicate with each others. This is done
+What processes mostly do is communicate with each other. This is done
 on channels, on which processes may send messages to each
 other. A Channel is denoted by a name, starting with a lower-case
-letter.  There are several kinds of channels. We start with global
-channels; a global channel is common to all the processes in the system
-for which it is declared. Global channels are declared for the
-processes of a program (file) by a global attribute at the beginning
+letter.  There are several kinds of channels. We start with {\em public}
+channels; a public channel is common to all the processes in the system
+for which it is declared. Public channels are declared for the
+processes of a program (file) by a ``public'' attribute at the beginning
 of the program.
 
 Processes communicate on channels by sending and receiving
@@ -110,17 +113,17 @@ delimited from the continuation of the process by a comma.
 The \verb+ 0 + process terminates with no further action.
 
 \begin{verbatim}
-   global(x).
+  public(x).
 
-   Try ::= Try_again | Try_another .
+  Try ::= Try_again | Try_another .
 
-   Try_again ::= x ! [] , 0 .
+  Try_again ::= x ! [] , 0 .
 
-   Try_another ::= x ? [] , 0 .
+  Try_another ::= x ? [] , 0 .
  
 \end{verbatim}
  
-A signal, or nil message, is the simplest message; it can be used
+A signal, or {\em nil} message, is the simplest message; it can be used
 for synchronization. Messages with content can be sent as
 well.  This content is a tuple of one or more channels, which the
 receiver can use for further communications.  For example, in the
@@ -131,15 +134,15 @@ which  uses channel  \verb+ z + in its communication with
 it is dynamically bound by the receive action.
 
 \begin{verbatim}
-   global(x, z).
+  public(x, z).
 
-   Try ::= Try_again | Try_another | Another_try .
+  Try ::= Try_again | Try_another | Another_try .
 
-   Try_again ::= x ! {z} , 0 .
+  Try_again ::= x ! {z} , 0 .
 
-   Try_another ::= x ? {w} , w ! [] , 0 .
+  Try_another ::= x ? {w} , w ! [] , 0 .
 
-   Another_try ::= z ? [] , 0 .
+  Another_try ::= z ? [] , 0 .
  
 \end{verbatim}
 
@@ -151,11 +154,12 @@ Tuples of more than one channel can be sent as messages, {\em e.g.}
 
 A process may offer more than one communication.  We have already seen
 that several sub-processes, each with a different communication may
-be spawned concurrently, using the infix PAR (\verb+ | +) operator. A
+be spawned concurrently, using the infix {\em PAR} operator. A
 {\em normal} process may offer several mutually exclusive
-communications, by using the infix {\em choice} operator (\verb+ ; +).  When
-one communication is completed, all other offers are discarded.  A
-normal process may be constructed either by the choice operator
+communications, by using the infix {\em choice} operator (\verb+ ; +).
+When one communication is completed, all other offers of that process 
+are discarded.
+A normal process may be constructed either by the choice operator
 between sequences of communication actions, or by the {\em sum}
 operator (\verb- + -) from simple normal processes. Having the
 syntactic ability to
@@ -166,20 +170,20 @@ operator, while \verb+ Try_another + is declared with the sum operator.
 
 
 \begin{verbatim}
-   global(w, x, y, z).
+  public(w, x, y, z).
 
-   Try ::= Try_again | Try_another | Another_try .
+  Try ::= Try_again | Try_another | Another_try .
 
-   Try_again ::= x ! {z} , 0 ;
-                 y ! {w} , 0 .
+  Try_again ::= x ! {z} , 0 ;
+                y ! {w} , 0 .
 
-   Try_another ::= First_try + Second Try .
+  Try_another ::= First_try + Second Try .
 
-   First_try ::= x ? {a} , a ! [] , 0 .
+  First_try ::= x ? {a} , a ! [] , 0 .
 
-   Second_try ::= y ? {a} , a ! [] , 0 .
+  Second_try ::= y ? {a} , a ! [] , 0 .
 
-   Another_try ::= z ? [] , 0 .
+  Another_try ::= z ? [] , 0 .
  
 \end{verbatim}
 
@@ -190,29 +194,29 @@ outcomes.  In the original calculus this choice is resolved in a
 non-deterministic way.  Later we will see how it can be resolved in a
 probabilistic way in the stochastic variant.
 
-\subsection{Scopes and Local Channels}
+\subsection{Scopes and Private Channels}
 
 The scope of communication may be restricted to a particular process,
-by declaring a new channel in a process; it is {\em local} to the
-scope of the process; {\em i.e.} the local channel is known only
+by declaring a new {\em private} channel in a process; the private
+channel is known only
 within the declaring process and its declared sub-processes, and is
-distinguished from any other channel (global or local) with the same
-name.  Importantly, the scope of a local channel may be expanded by
-sending it to outside processes, an event called ``scope extrusion''. 
-New channels can be declared during process declaration, using the
-\verb- + - operator.  For example, the new channel \verb+ x + is
+distinguished from any other channel (public or private) with the same
+name.  Importantly, the scope of a private channel may be expanded by
+sending it to outside processes, an event called {\em scope extrusion}. 
+Private channels can be declared during process declaration, using the
+\verb- + - operator.  For example, the private channel \verb+ x + is
 declared in \verb+ Try_again + below. It is distinct from and cannot 
-communicate with the global channel \verb+ x + in \verb+ Another_try +.
+communicate with the public channel \verb+ x + in \verb+ Another_try +.
 
 \begin{verbatim}
-   global(w, x, y, z).
+   public(w, x, y, z).
 
    Try ::= Try_again | Try_some_more | Another_try .
 
    Try_again + x ::= y ! {x}, ( x ! {w} , 0 ;
                                 y ! {z} , 0 ) .
 
-   Another_try ::= x ? [] , 0 .
+  Another_try ::= x ? [] , 0 .
  
 \end{verbatim}
 
@@ -226,19 +230,19 @@ programs.  A process scope is delimited by the paired brackets
 following program; they cannot be referenced in the outer scope.
 
 \begin{verbatim}
-   global(x, y).
+  public(x, y, z).
 
-   Try ::= Try_another | Another_try .
+  Try ::= Try_another | Another_try .
 
-   Try_another ::= << 
-                      First_try + Second Try .
+  Try_another ::= << 
+                     First_try + Second Try .
 
-                      First_try ::= x ? {a} , a ! [] , 0 .
+                     First_try ::= x ? {a} , a ! [] , 0 .
 
-                      Second_try ::= y ? {a} , a ! [] , 0 
-                   >> .
+                     Second_try ::= y ? {a} , a ! [] , 0 
+                  >> .
 
-  Another_try ::= x ? [] , 0 .
+  Another_try ::= x ! {z} , z ? [] , 0 .
  
 \end{verbatim}
 
@@ -246,26 +250,26 @@ following program; they cannot be referenced in the outer scope.
 
 Note that the last process within the scope is delimited by \verb+ >> +,
 followed by a full stop (\verb+ . +) to end the declaration.  See
-Appendix \ref{BNF} for further details.
+Appendix \ref{SPIBNF} for further details.
 
 A delimited process scope can also be used for the declaration of
 new channels, without the need of an explicit process declaration.
 This possibility is often very convenient. In the next example, the
-``new'' predicate has been subsumed into a prefix
+{\em new} predicate has been subsumed into a prefix
 \verb+ <new_declaration_list> +
-of a \verb+ <new_scope> +, declaring the local channels \verb+ x, y +.
+of a \verb+ <new_scope> +, declaring the private channels \verb+ x, y +.
 
 \begin{verbatim}
-   Try ::= <<
-              x, y . First_try + Second Try |
-                     Another_try(x) | Another_try(y) .
+  Try ::= <<
+             x, y . First_try + Second Try |
+                    Another_try(x) | Another_try(y) .
 
-              First_try ::= x ? {a} , a ! [] , 0 .
+             First_try ::= x ? {a} , a ! [] , 0 .
 
-              Second_try ::= y ? {a} , a ! [] , 0 
-           >> .
+             Second_try ::= y ? {a} , a ! [] , 0 
+          >> .
 
-   Another_try(x) + b ::= x ! {b} , b ? [], 0 .
+  Another_try(x) + b ::= x ! {b} , b ? [], 0 .
  
 \end{verbatim}
 
@@ -278,40 +282,41 @@ actions, comparison actions can be disjuntively chosen, to yield a
 case-like construct. Note, that a full if-then else structure is
 required, so an otherwise action must be included. More than one pair
 of channels may be compared in a single comparison guard. In the following
-program, Choose receives a 2-tuple on channel \verb+ w +, and selects a the
-next step by matching it to a pair of channels from \verb+ x, y, z +.
+program, Choose receives a 2-tuple of channels (\verb+ {x1, x2} +)
+on channel \verb+ w +, and selects the continuation by matching them
+to a pair of channels from \verb+ x, y, z +.
 
 \begin{verbatim}
-   global(w, x, y, z).
+  public(w, x, y, z).
 
-   Try ::= Choose | First_choice | Second_choice | Third_choice .
+  Try ::= Choose | First_choice | Second_choice | Third_choice .
 
-   Choose ::= <<
-                 w ? {x1, x2} , <<
-                                   x1 =?= x & x2 =?= y , Choice1 ;
-                                   x1 =?= x & x2 =?= z , Choice2 ;
-                                   otherwise , Choice 3
-                                >> .
+  Choose ::= <<
+                w ? {x1, x2} , <<
+                                  x1 =?= x & x2 =?= y , Choice1 ;
+                                  x1 =?= x & x2 =?= z , Choice2 ;
+                                  otherwise , Choice3
+                               >> .
 
-                 Choice1 ::= z ! [] , 0 .
+                Choice1 ::= z ! [] , 0 .
 
-                 Choice2 ::= y ! [] , 0 . 
+                Choice2 ::= y ! [] , 0 . 
 
-                 Choice3 ::= x ! [] , 0
-              >> .
+                Choice3 ::= x ! [] , 0
+             >> .
   
-   First_choice  ::= w ! {x  y}, 0 .
+  First_choice  ::= w ! {x, y}, 0 .
           
-   Second_choice ::= w ! {x, z}, 0 .
+  Second_choice ::= w ! {x, z}, 0 .
 
-   Third_choice  ::= w ! {y, z}, 0 .  
+  Third_choice  ::= w ! {y, z}, 0 .  
  
 \end{verbatim}
 
 
 \section{Parametric and Recursive Processes}
 
-In the original $\pi$-calculus, parametric and recursive processes are
+In the original $\Pi$-Calculus, parametric and recursive processes are
 derived forms, based on a replication operator ({\bf Bang}).  This operator
 provides an unlimited number of concurrent processes, and is therefore
 inappropriate for realistic implementations. On the other hand,
@@ -320,13 +325,13 @@ are therefore primitive in the SPI syntax, in a straightforward way,
 as seen in the following example:
 
 \begin{verbatim}
-   global(x).
+  public(x).
 
-   Try ::= A(x) .
+  Try ::= A(x) .
 
-   A(a) ::= a ? {b, c} , B(b, c) .
+  A(a) ::= a ? {b, c} , B(b, c) .
 
-   B(e, f) ::= e ! {f} , A(f) 
+  B(e, f) ::= e ! {f} , A(f) 
  
 \end{verbatim}
 
@@ -344,17 +349,17 @@ For example, the process Main, in the program below will cause
 LOGIX to display the string ``Hello World'' on the screen.
 
 \begin{verbatim}
-   Main ::= screen#display("Hello World").
+  Main ::= screen#display("Hello World").
 \end{verbatim}
 
 \noindent
 
-The program declares the process. In order for it to execute,
+The program declares the process \verb+ Main +. In order for it to execute,
 it must be run.  To run this program, put it in a file,
 {\em e.g.} \verb+ hello.cp +, preceded by the LOGIX attribute:
 
 \begin{verbatim}
-   -language(spifcp).
+  -language(spifcp).
 \end{verbatim}
 
 Now enter the {\bf UNIX} command ``\verb+ logix +'',
@@ -363,19 +368,19 @@ enter the LOGIX command ``\verb+ hello#"Main" +''.  The screen will look
 something like this:
 
 \begin{verbatim}
-   % logix
+  % logix
 
-   Weizmann Institute Logix 2.2 05/10/00 - 12:56:37
-   Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
-   Welcome to LINUX Logix !
-   05/10/00 - 14:22:35
-   @hello#"Main"
-   <1> started
-   source : /home/tova/hello.cp - 20001005142355
-   interpret : export([Main / 0])
-   file : /home/tova/hello.bin - written
-   Hello World
-   <1> terminated
+  Weizmann Institute Logix 2.2 05/10/00 - 12:56:37
+  Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
+  Welcome to LINUX Logix !
+  05/10/00 - 14:22:35
+  @hello#"Main"
+  <1> started
+  source : /home/tova/hello.cp - 20001005142355
+  interpret : export([Main / 0])
+  file : /home/tova/hello.bin - written
+  Hello World
+  <1> terminated
 \end{verbatim}
 
 \noindent
@@ -390,63 +395,63 @@ A slightly more complex program is \verb+ which +. In this program we
 declare four processes (\verb+ True +, \verb+ False +, \verb+ Send +, and
 \verb+ Answer +).  The process \verb+ True +, for example, calls two
 sub-processes, \verb+ Send + and \verb+ Answer +, composed in parallel
-with the PAR (\verb+ | +) operator.  Both \verb+ Send + and
+with the {\em PAR} operator.  Both \verb+ Send + and
 \verb+ Answer + are parametric processes. Answer, for instance, is 
 called with the channels \verb+ true + and \verb+ false +.  These
-channels are local channels, declared in \verb+ True + by
+channels are private channels, declared in \verb+ True + by
 the {\em new} (\verb- + -) operator. Thus, channel true is shared only
 by the \verb+ Send + and \verb+ Answer + sub-processes spawned by
 \verb+ True +.
 
 \begin{verbatim}
-   True + (true, false) ::=
-      Send(true) | Answer(true, false) .
+  True + (true, false) ::=
+     Send(true) | Answer(true, false) .
 
-   False + (true, false) ::=
-      Send(false) | Answer(true, false) .
+  False + (true, false) ::=
+     Send(false) | Answer(true, false) .
 
-   Send(it) ::=
-      it ! [] , 0 .
+  Send(it) ::=
+     it ! [] , 0 .
 
-   Answer(yes, no) ::=
-      yes ? [] , screen#display("Too true!") ;
-      no ?  [] , screen#display("Too bad!")  .
+  Answer(yes, no) ::=
+     yes ? [] , screen#display("Too true!") ;
+     no ?  [] , screen#display("Too bad!")  .
 \end{verbatim}
 
 The calls to \verb+ True + and \verb+ False + behave differently.
-The process \verb+ Answer + receives a nil signal (\verb+ [] +) on one
+The process \verb+ Answer + receives a {\em nil} signal (\verb+ [] +) on one
 of its two channels and displays a corresponding result.
 
 \begin{verbatim}
-   @which#"True"
-   <1> started
-   Too true!
-   <1> terminated
-   @which#"False"
-   <2> started
-   Too bad!
-   <2> terminated
+  @which#"True"
+  <1> started
+  Too true!
+  <1> terminated
+  @which#"False"
+  <2> started
+  Too bad!
+  <2> terminated
 \end{verbatim}
 
 \noindent
-An alternative form of \verb+ which +, using global channels instead
-of new channels is \verb+ global_which +. In this case the
-\verb+ yes + and \verb+ no + channels are declared by the global
+An alternative form of \verb+ which +, using public channels instead
+of new channels is \verb+ public_which +. In this case the
+\verb+ yes + and \verb+ no + channels are declared by the public
 command, and are common to all the instances of \verb+ Send +
 and \verb+ Answer +.
 
 \begin{verbatim}
-   global(yes, no).
+  public(yes, no).
 
-   True ::= Send(yes) | Answer.
+  True ::= Send(yes) | Answer.
 
-   False ::= Send(no) | Answer.
+  False ::= Send(no) | Answer.
 
-   Send(it) ::= it ! [] , 0 .
+  Send(it) ::= it ! [] , 0 .
 
-   Answer ::=
-      yes ? [] , screen#display("Too true!") ;
-      no  ? [] , screen#display("Too bad!")  .
+  Answer ::=
+     yes ? [] , screen#display("Too true!") ;
+     no  ? [] , screen#display("Too bad!")  .
 \end{verbatim}
 
 \noindent
@@ -455,12 +460,12 @@ It has the same behavior as \verb+ which +.
 \section{Boolean And}
 \label{bland}
 
-A more complex program, \verb+ bland +, performs a boolean ``AND'' 
+A more complex program, \verb+ bland +, performs a boolean {\em AND}
 computation.  In this program we make use of the mobility of the
 calculus, receiving channels and using them in further
 communications. For example, The process \verb+ TT + receives two
 channels on channel \verb+ b +, and transmits a signal on the first
-of them. Three global channels, \verb+ b1, b2, c +, ensure initial
+of them. Three public channels, \verb+ b1, b2, c +, ensure initial
 communication between the constituent sub-processes of each 
 \verb+ Run +. Then, the  newly declared channels, \verb+ t, f, x +,
 are transmitted and allow additional interaction, {\em e.g.} between
@@ -469,28 +474,28 @@ which processes may be called externally (If it is omitted, all
 outer scope processes may be called.)
 
 \begin{verbatim}
-   export(RunTT, RunTF, RunFT, RunFF).
-   global(b1, b2, c).
+  export(RunTT, RunTF, RunFT, RunFF).
+  public(b1, b2, c).
 
-   TT(b) ::= b ? {t,f} , t ! [] , 0 .
+  TT(b) ::= b ? {t,f} , t ! [] , 0 .
 
-   FF(b) ::= b ? {t,f} , f ! [] , 0 .
+  FF(b) ::= b ? {t,f} , f ! [] , 0 .
 
-   Test(b) ::=
-      << t, f . b ! {t,f} , 
-                ( f ? [] , screen#display("It's false");
-                  t ? [] , screen#display("It's true") ) >> .
+  Test(b) ::=
+     << t, f . b ! {t,f} , 
+               ( f ? [] , screen#display("It's false");
+                 t ? [] , screen#display("It's true") ) >> .
 
-   AndB ::=
-      c ? {t,f} , << x . b1 ! {x,f} , x ? [] , b2 ! {t,f} , 0 >> .
+  AndB ::=
+     c ? {t,f} , << x . b1 ! {x,f} , x ? [] , b2 ! {t,f} , 0 >> .
 
-   RunTT ::= Test(c) | AndB | TT(b1) | TT(b2) .
+  RunTT ::= Test(c) | AndB | TT(b1) | TT(b2) .
 
-   RunFT ::= Test(c) | AndB | FF(b1) | TT(b2) .
+  RunFT ::= Test(c) | AndB | FF(b1) | TT(b2) .
 
-   RunTF ::= Test(c) | AndB | TT(b1) | FF(b2) .
+  RunTF ::= Test(c) | AndB | TT(b1) | FF(b2) .
 
-   RunFF ::= Test(c) | AndB | FF(b1) | FF(b2) .
+  RunFF ::= Test(c) | AndB | FF(b1) | FF(b2) .
 \end{verbatim}
 
 \noindent
@@ -505,13 +510,13 @@ can inspect the state of a computation by entering the SPI macro command
 ``spr'' following the LOGIX prompt.
 
 \begin{verbatim}
-   @bland#"RunFF"
-   <1> started
-   It's false
-   @spr
-   <1> suspended
-   bland # AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-   bland # FF.comm(global.b2!)
+  @bland#"RunFF"
+  <1> started
+  It's false
+  @spr
+  <1> suspended
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland # FF.comm(public.b2!)
 \end{verbatim}
 
 \noindent
@@ -535,47 +540,47 @@ needed by a process, we use the module name in the command, {\em e.g.}
 \begin{verbatim}
                               band.cp
 
-   -language(spifcp).
+  -language(spifcp).
 
-   global(b1,b2,c).
+  public(b1,b2,c).
 
-   AndB ::= c?{t,f} , << x . b1!{x,f} , x?[] , b2!{t,f}, 0 >> .
+  AndB ::= c?{t,f} , << x . b1!{x,f} , x?[] , b2!{t,f}, 0 >> .
 \end{verbatim}
 
 \begin{verbatim}
                               bnot.cp
 
-   -language(spifcp).
+  -language(spifcp).
 
-   global(b,c).
+  public(b,c).
 
-   NotB ::= c?{t,f} , b!{f,t} , 0 .
+  NotB ::= c?{t,f} , b!{f,t} , 0 .
 
                               boolean.cp
 \end{verbatim}
 
 \begin{verbatim}
-   -language(spifcp).
+  -language(spifcp).
 
-   TT(b) ::= b?{t,f}, t![], 0.
+  TT(b) ::= b?{t,f}, t![], 0.
 
-   FF(b) ::= b?{t,f}, f![], 0.
+  FF(b) ::= b?{t,f}, f![], 0.
 \end{verbatim}
 
 {\samepage
 \begin{verbatim}
                               btest.cp
 
-   -language(spifcp).
+  -language(spifcp).
 
-   global(c).
+  public(c).
 
-   Test+(t,f) ::= c!{t,f},
-                   <<
-                           f?[] , screen#display("It's false") ;
-                           t?[] , screen#display("It's true")
-                   >>
-   .
+  Test+(t,f) ::= c!{t,f},
+                  <<
+                     f?[] , screen#display("It's false") ;
+                     t?[] , screen#display("It's true")
+                  >>
+  .
 \end{verbatim}
 }
 
@@ -583,48 +588,48 @@ needed by a process, we use the module name in the command, {\em e.g.}
 \begin{verbatim}
                             tnot.cp
 
-   -language(spifcp).
+  -language(spifcp).
 
-   global(b).
+  public(b).
 
-   RunT ::= btest#Test | boolean#TT(b) | bnot#NotB .
+  RunT ::= btest#Test | boolean#TT(b) | bnot#NotB .
 
-   RunF ::= btest#Test | boolean#FF(b) | bnot#NotB .
+  RunF ::= btest#Test | boolean#FF(b) | bnot#NotB .
 \end{verbatim}
 }
 
 \begin{verbatim}
                              tand.cp
 
-   -language(spifcp).
+  -language(spifcp).
 
-   global(b1,b2).
+  public(b1,b2).
 
-   RunTT ::= boolean#TT(b1) | boolean#TT(b2) |
-             btest#Test | band#AndB .
+  RunTT ::= boolean#TT(b1) | boolean#TT(b2) |
+            btest#Test | band#AndB .
 
-   RunFT ::= boolean#TT(b1) | boolean#FF(b2) |
-             btest#Test | band#AndB .
+  RunFT ::= boolean#TT(b1) | boolean#FF(b2) |
+            btest#Test | band#AndB .
 
-   RunTF ::= boolean#FF(b1) | boolean#TT(b2) |
-             btest#Test | band#AndB .
+  RunTF ::= boolean#FF(b1) | boolean#TT(b2) |
+            btest#Test | band#AndB .
 
-   RunFF ::= boolean#FF(b1) | boolean#FF(b2) |
-             btest#Test | band#AndB .
+  RunFF ::= boolean#FF(b1) | boolean#FF(b2) |
+            btest#Test | band#AndB .
 \end{verbatim}
 
 \noindent
 This makes it easy to add boolean not (\verb+ blnot.cp +) and other
 boolean functions, modularly.  The modules may be compiled separately
 ({\em e.g.} by LOGIX command ``\verb+ compile(band) +'') or by calling
-an initial process, causing compilation of all modules required
-recursively by the computation 
-({\em e.g.} LOGIX command ``\verb+ bland#"RunTF" +'').
+an initial process, causing compilation of all modules recursively
+required by the computation 
+({\em e.g.} LOGIX command ``\verb+ tand#"RunTF" +'').
 
 \chapter{Stochastic Programs}
 \label{stochastic}
 
-\section{Stochastic $\Pi$-calculus}
+\section{Stochastic $\Pi$-Calculus}
 
 In all of the programs in the preceding chapters communication on
 channels was completed as soon as possible. Furthermore, the choice of
@@ -639,28 +644,32 @@ by us specifically for biochemical reactions \cite{RPSS}.
 We distinguish several channel types. Each type corresponds to a
 different kind of communication or reaction.  A {\em bimolecular}
 channel represents a chemical reaction involving two different
-molecules. Upon declaration (as global or local channel) it is
+molecules. Upon declaration (as a public or private channel) it is
 assigned a non-negative base-rate, which represent the base rate of
 the reaction. A {\em homodimerized} channel represents a chemical reaction
 involving two molecules of the same kind. It is also assigned a
 non-negative base rate. It is distinguished however by its use as both
 an input channel and an output channel in the same choice construct,
 and cannot be used in any other kind of construct. Finally
-instantaneous channels do not represent actual reactions, but are
+{\em instantaneous} channels do not represent actual reactions, but are
 rather used for encoding purposes.  They are declared with the rate
 ``\verb+infinite+''.
 
 When a stochastic program is run, an actual rate is calculated for
-each stochastic channel (reaction) based on it base rate and the
-number of processes offering to transmit on the channel.
+each stochastic channel (reaction) based on its base rate and the
+number of processes offering to transmit on the channel.  A
+communication offer may be modified optionally by an integer mutiplier,
+adjusting its weight in the calculation; the default mutiplier is 1.
 
-\newpage
+\par
 \label{default rate}
+\noindent
 For a {\em bimolecular} channel the default actual rate is:
 
 \[ \verb+baserate+ \times \sum(\verb+receive multipliers+) \times
 \sum(\verb+send multipliers+) \] 
 
+\noindent
 For a {\em homodimerized} channel the default actual rate is:
 
 \[ \frac{\verb+baserate+ \times \sum(\verb+multipliers+) \times
@@ -686,7 +695,7 @@ a remote procedure call (RPC).  We saw some examples of this in
 previous sections.  In general, an RPC has the form:
 
 \begin{verbatim}
-    LogixPath#LogixGoal
+   LogixPath#LogixGoal
 \end{verbatim}
 
 \noindent
@@ -696,30 +705,48 @@ LogixPath may be the name of a module or a transformation of a UNIX path:
 
 \noindent
 where $dir_{1}$ is a directory which is an immediate sub-directory
-of the current directory, or which contains the current directory.
+of the current directory, the current directory itself, or a directory
+which contains the current directory.
 Since LOGIX treats an alphanumeric name which begins with a lower-case
 letter as a string, such directory names need not be quoted - all
 other names, which are not the names of LOGIX variables (alphanumeric,
 beginning with an upper-case letter or underscore), should be quoted -
-{\em e.g.}
+{\em e.g.} a pathologically complicated example:
 
 \begin{verbatim}
-    tests#"Cases"#"#13"#sub_cases#Module#"TestIt"
+  tests#"Cases"#"#13"#sub_cases#Module#"TestIt"
 \end{verbatim}
 
-Where Module is a LOGIX variable which should be instantiated to a
-directory name.
+\noindent
+The terms \verb+ tests +, \verb+ "Cases" +, \verb+ "#13" + and
+\verb+ sub_cases + are the names of unix directories along the
+path to the process  \verb+ "TestIt" +;
+\verb+Module + is a LOGIX variable which should be instantiated to a
+module name.
+
 \noindent
 LogixGoal may be any atom, referring to a process which is exported by
-the target module.  Since a SPI process has a an alpha-numeric name
+the target module.  Since a SPI process (here, TestIt) has an
+alpha-numeric name
 beginning with an upper-case letter, its name must be quoted.
+
+\section{Interruption and Inspection}
+
+An SPI program may reach an impasse ({\em e.g.} \verb+ bland#"RunFF" +
+above), reach a limit (see \ref{runners} and \ref{recorders}), be interrupted
+manually (see \ref{suspend}) or terminate normally.  At an impasse,
+limit or interruption, the current state of the
+computation can be inspected by the command ``spr'' (see \ref{spr}),
+and the communicating channel set can be inspected by the command ``cta''
+(see \ref{cta}).
 
 \section{Debugging}
 \label{debugger}
+
 A computation may be run under control of a debugger.
 
 \begin{verbatim}
-    pdb(RPC)
+  pdb(RPC)
 \end{verbatim}
 
 \noindent
@@ -733,74 +760,69 @@ see Section \ref{bland}.
 Following a \verb+ query -> + prompt, enter the command \verb+ trace +.
 
 \begin{verbatim}
-
   @pdb(bland#"RunTF")
   <1> started
   bland  Debug Reduction Started
   bland  RunTF :- ?
   query -> trace
   bland  RunTF :- 
-         .RunTF.
-  bland  .RunTF(global.b1, global.b2, global.c) :- 
-         Test(global.c), AndB(global.b1, global.b2, global.c),
-         TT(global.b1), FF(global.b2).
-  bland  global_channels([b1(global.b1, infinite),
-                          b2(global.b2, infinite),
-                          c(global.c, infinite)], <CHANNEL>).
-  bland  Test(global.c!) :- 
-         Test.1(global.c!).
-  bland  AndB(global.b1!, global.b2!, global.c!) :- 
-         AndB.comm(global.b1!, global.b2!, global.c!).
-  bland  TT(global.b1!) :- 
-         TT.comm(global.b1!).
-  bland  FF(global.b2!) :- 
-         FF.comm(global.b2!).
-  bland  Test.1(global.c!) :- 
-         Test.1.(global.c!, Test.1.f, Test.1.t).
-  bland  Test.1.(global.c, Test.1.f, Test.1.t) :- 
-         Test.1.comm(global.c, Test.1.f, Test.1.t).
-  bland  Test.1.comm(global.c, Test.1.f, Test.1.t) :- 
-         Test.1.1(Test.1.f, Test.1.t).
-  bland  AndB.comm(global.b1!, global.b2!, global.c) :- 
-         AndB.1(Test.1.t, Test.1.f, global.b1!, global.b2!).
+          .RunTF.
+  bland  .RunTF(public.b1, public.b2, public.c) :- 
+          Test, AndB, TT, FF.
+  bland  Test(public.c!) :- 
+          Test.1(public.c!).
+  bland  AndB(public.b1!, public.b2!, public.c!) :- 
+          AndB.comm(public.b1!, public.b2!, public.c!).
+  bland  TT(public.b1!) :- 
+          TT.comm(public.b1!).
+  bland  FF(public.b2!) :- 
+          FF.comm(public.b2!).
+  bland  Test.1(public.c!) :- 
+          Test.1.(public.c!, Test.1.f, Test.1.t).
+  bland  Test.1.(public.c, Test.1.f, Test.1.t) :- 
+          Test.1.comm(public.c, Test.1.f, Test.1.t).
+  bland  Test.1.comm(public.c, Test.1.f, Test.1.t) :- 
+          Test.1.1(Test.1.f, Test.1.t).
+  bland  AndB.comm(public.b1!, public.b2!, public.c) :- 
+          AndB.1(Test.1.t, Test.1.f, public.b1!, public.b2!).
   bland  Test.1.1(Test.1.f!, Test.1.t!) :- 
-         Test.1.1.comm(Test.1.f!, Test.1.t!).
-  bland  AndB.1(Test.1.t!, Test.1.f!, global.b1!, global.b2!) :- 
-         AndB.1.(Test.1.t!, Test.1.f!, global.b1!, global.b2!,
+          Test.1.1.comm(Test.1.f!, Test.1.t!).
+  bland  AndB.1(Test.1.t!, Test.1.f!, public.b1!, public.b2!) :- 
+          AndB.1.(Test.1.t!, Test.1.f!, public.b1!, public.b2!,
                    AndB.1.x).
-  bland  AndB.1.(Test.1.t!, Test.1.f!, global.b1, global.b2!,
+  bland  AndB.1.(Test.1.t!, Test.1.f!, public.b1, public.b2!,
                  AndB.1.x) :- 
-         AndB.1.comm(Test.1.t!, Test.1.f!, global.b1, global.b2!,
-                     AndB.1.x).
-  bland  TT.comm(global.b1) :- 
-         TT.1(AndB.1.x).
-  bland  AndB.1.comm(Test.1.t!, Test.1.f!, global.b1, global.b2!,
+          AndB.1.comm(Test.1.t!, Test.1.f!, public.b1, public.b2!,
+                      AndB.1.x).
+  bland  TT.comm(public.b1) :- 
+          TT.1(AndB.1.x).
+  bland  AndB.1.comm(Test.1.t!, Test.1.f!, public.b1, public.b2!,
                      AndB.1.x) :- 
-         AndB.1.1(Test.1.t!, Test.1.f!, global.b2!, AndB.1.x).
+          AndB.1.1(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x).
   bland  TT.1(AndB.1.x) :- 
-         TT.1.comm(AndB.1.x).
-  bland  AndB.1.1(Test.1.t!, Test.1.f!, global.b2!, AndB.1.x) :- 
-         AndB.1.1.comm(Test.1.t!, Test.1.f!, global.b2!, AndB.1.x).
+          TT.1.comm(AndB.1.x).
+  bland  AndB.1.1(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x) :- 
+          AndB.1.1.comm(Test.1.t!, Test.1.f!, public.b2!, AndB.1.x).
   bland  TT.1.comm(AndB.1.x).
-  bland  AndB.1.1.comm(Test.1.t!, Test.1.f!, global.b2!, [AndB.1.x]) :- 
-         AndB.1.1.1(Test.1.t!, Test.1.f!, global.b2!).
-  bland  AndB.1.1.1(Test.1.t!, Test.1.f!, global.b2) :- 
-         AndB.1.1.1.comm(Test.1.t!, Test.1.f!, global.b2).
-  bland  FF.comm(global.b2) :- 
-         FF.1(Test.1.f!).
-  bland  AndB.1.1.1.comm(Test.1.t!, Test.1.f!, global.b2).
+  bland  AndB.1.1.comm(Test.1.t!, Test.1.f!, public.b2!, [AndB.1.x]) :- 
+          AndB.1.1.1(Test.1.t!, Test.1.f!, public.b2!).
+  bland  AndB.1.1.1(Test.1.t!, Test.1.f!, public.b2) :- 
+          AndB.1.1.1.comm(Test.1.t!, Test.1.f!, public.b2).
+  bland  FF.comm(public.b2) :- 
+          FF.1(Test.1.f!).
+  bland  AndB.1.1.1.comm(Test.1.t!, Test.1.f!, public.b2).
   bland  FF.1(Test.1.f) :- 
-         FF.1.comm(Test.1.f).
+          FF.1.comm(Test.1.f).
   bland  Test.1.1.comm([Test.1.f], [Test.1.t]) :- 
-         screen # display(It's false).
+          screen # display(It's false).
   bland  FF.1.comm([Test.1.f]).
   It's false
-  bland  display(It's false).
   bland  Debug Reduction Terminated
   <1> terminated
   @
 \end{verbatim}
 
+\noindent
 Each traced reduction above has the form;
 
 \begin{verbatim}
@@ -812,11 +834,13 @@ Each traced reduction above has the form;
 Channels which are annotated with a suffix exclamation are
 active at the time at which the reduction is displayed\footnote{
 The debugger displays the reductions after they have occured,
-but not synchronized with the reduction itself.}
+but not synchronized with the reduction itself.}.
 
 \noindent
 Channels which are diplayed within square brackets have been
-closed, and are no longer available for communication.
+closed, and are no longer available for communication\footnote{
+However, the channel may have been open at the time that the
+process was reduced.}.
 
 \noindent
 The suffixes following many process names, indicate a derived
@@ -841,8 +865,9 @@ Following the next \verb+ query -> + prompt, press \verb+ <enter> +.
   query -> break("AndB")
   bland RunFT :- ?
   query -> 
-  bland AndB(global.b1!, global.b2!, global.c!) :- 
-          AndB.comm(global.b1!, global.b2!, global.c!).
+  bland AndB(public.b1!, public.b2!, public.c!) :- 
+         AndB.comm(public.b1!, public.b2!, public.c!).
+  query -> 
 \end{verbatim}
 
 \noindent
@@ -866,16 +891,17 @@ mode, where pressing \verb+ <enter> + continues the computation.
   @debug? -> resolvent
   bland  Debug Reduction Suspended
   bland goal - 1 Test.1.1.comm(Test.1.f!, Test.1.t!)
-  bland goal - 2 AndB(global.b1!, global.b2!, global.c)
-  bland goal - 3 FF.comm(global.b1!)
-  bland goal - 4 TT.comm(global.b2!)
+  bland goal - 2 AndB(public.b1!, public.b2!, public.c)
+  bland goal - 3 FF.comm(public.b1!)
+  bland goal - 4 TT.comm(public.b2!)
   @debug? -> resume
   bland  Debug Reduction Resumed
   @debug? -> query
-  bland AndB(global.b1!, global.b2!, global.c!) :- 
-          AndB.comm(global.b1!, global.b2!, global.c!).
+  bland AndB(public.b1!, public.b2!, public.c!) :- 
+         AndB.comm(public.b1!, public.b2!, public.c!).
   query -> 
   It's false
+  @debug ->
 \end{verbatim}
 
 \noindent
@@ -886,8 +912,9 @@ be inspected.
 \begin{verbatim}
   @debug -> resolvent
   bland  Debug Reduction Suspended
-  bland goal - 1 AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-  bland goal - 2 TT.comm(global.b2!)
+  bland goal - 1 AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland goal - 2 TT.comm(public.b2!)
+  @debug ->
 \end{verbatim}
 
 \noindent
@@ -926,32 +953,29 @@ all further construction.
   @ptree(Tree)
   begin : bland # RunFT
    | RunFT
-    # spi_monitor # global_channels([b1(global.b1, infinite),
-                                     b2(global.b2!, infinite),
-                                     c(global.c, infinite)], <CHANNEL>)
-    | .RunFT(global.b1, global.b2!, global.c)
-     | Test(global.c)
-     | AndB(global.b1, global.b2!, global.c)
-     | FF(global.b1)
-     | TT(global.b2!)
-      ? TT.comm(global.b2!)
-      | FF.comm(global.b1)
+    | .RunFT(public.b1, public.b2!, public.c)
+     | Test(public.c)
+     | AndB(public.b1, public.b2!, public.c)
+     | FF(public.b1)
+     | TT(public.b2!)
+      ? TT.comm(public.b2!)
+      | FF.comm(public.b1)
        | FF.1(Test.1.f)
         | FF.1.comm(Test.1.f)
-      | AndB.comm(global.b1, global.b2!, global.c)
-       | AndB.1(Test.1.t, Test.1.f, global.b1, global.b2!)
-        | AndB.1.(Test.1.t, Test.1.f, global.b1, global.b2!, AndB.1.x!)
-         | AndB.1.comm(Test.1.t, Test.1.f, global.b1, global.b2!, AndB.1.x!)
-          | AndB.1.1(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-           ? AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-      | Test.1(global.c)
-       | Test.1.(global.c, Test.1.f, Test.1.t)
-        | Test.1.comm(global.c, Test.1.f, Test.1.t)
+      | AndB.comm(public.b1, public.b2!, public.c)
+       | AndB.1(Test.1.t, Test.1.f, public.b1, public.b2!)
+        | AndB.1.(Test.1.t, Test.1.f, public.b1, public.b2!, AndB.1.x!)
+         | AndB.1.comm(Test.1.t, Test.1.f, public.b1, public.b2!, AndB.1.x!)
+          | AndB.1.1(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+           ? AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+      | Test.1(public.c)
+       | Test.1.(public.c, Test.1.f, Test.1.t)
+        | Test.1.comm(public.c, Test.1.f, Test.1.t)
          | Test.1.1(Test.1.f, Test.1.t)
           | Test.1.1.comm(Test.1.f, Test.1.t)
            # screen # display(It's false)
   end : bland # RunFT
-  @abort
+  @a
   <1> aborted
   @
 \end{verbatim}
@@ -972,7 +996,7 @@ call.
 To trace tand (see Section \ref{mbland}) call, {\em e.g.}
 
 \begin{verbatim}
-    @vtree(boolean#tand,"RunFT",Tree,2)
+  @vtree(boolean#tand,"RunFT",Tree, 2)
 \end{verbatim}
 
 \chapter{Using FCP in SPI modules}
@@ -981,19 +1005,19 @@ To trace tand (see Section \ref{mbland}) call, {\em e.g.}
 This chapter describes the use of FCP guards, goals and
 variables inside SPI processes.
 
-The following process sends {\bf N} nil messages to channel {\bf c}.
+\section{LOGIX Variables as Counters and Limits}
+The following process sends {\bf N} {\em nil} messages to channel {\bf c}.
 
 \begin{verbatim}
 
-    Send(N, c) + I ::= {I = 0} | SendAndCount.
+  Send(N, c) + I ::= {I = 0} | SendAndCount.
 
-    SendAndCount(I, N, c) ::=
-        {I++ < N}, SendNil(c) | self;
-        {I >= N }, screen#display(sent - I*[])
-    .
+  SendAndCount(I, N, c) ::=
+      {I++ < N}, SendNil(c) | self;
+      {I >= N }, screen#display(sent - I*[])
+  .
 
-    SendNil(c) ::= c ! [], 0.
-    .
+  SendNil(c) ::= c ! [], 0.
 \end{verbatim}
 
 \noindent
@@ -1003,7 +1027,8 @@ tested or operated upon in a LOGIX guard or a LOGIX goal.
 
 \noindent
 Similarly, a LOGIX variable may be declared in an added argument
-list or in a declaration list - in this example, ``I'' is declared
+list or in a declaration list, or it may be sent or
+received in a message - in this example, ``I'' is declared
 as an added argument.
 
 \noindent
@@ -1017,7 +1042,7 @@ recursive call, self, to the process SendAndCount.
 The first process may be rewritten:
 
 \begin{verbatim}
-    Send(N, c) + I ::= {(true : I = 0} , SendAndCount.
+  Send(N, c) + I ::= {(true : I = 0} , SendAndCount.
 \end{verbatim}
 
 \noindent
@@ -1029,215 +1054,364 @@ until I is instantiated.
 Many other LOGIX guards and goals may be employed in SPI processes -
 see \cite{logix:user-man} Appendix 1.
 
-\appendix
-\chapter{BNF}
-\label{BNF}
-BNF for SPI
+\chapter{Ambient Stochastic Programs}
+\label{aspic}
+
+Stochastic $\Pi$-Calculus supports a flat process space.  Ambient
+Stochastic $\Pi$-Calculus (BIOSPI) supports nested process spaces,
+organized in a tree, and
+communication between nearby nodes (called {\em ambients}) of the tree.
+
+\section{Channels}
+
+In addition to a type, a channel in BIOSPI has a {\em locus} as well.  The
+locus determines whether communication is {\em local} (within the ambient)
+or {\em non-local} (between nearby ambients).  Possible non-local loci of
+communication are: Parent to Child, Child to Parent, Sibling to
+Sibling.
+
+\section{Ambient Declaration}
+
+Ambients are declared dynamically.
+An ambient is declared as a named \verb+ <new_scope> +, {\em e.g.}
 
 \begin{verbatim}
-<program>            ::= <spi_attributes> . <process_definitions> .
-                         <process_definitions> .
+  ACell ::= cell<< x, y. Cytoplasm(x,y) | Membrane(x,y) >> .
+\end{verbatim}
 
-<spi_attributes>     ::= <spi_attribute>
-                         <spi_attribute> . <spi_attributes>
+The new ambient is created as a child of the ambient which declares it.
+It inherits copies of all of the local channels known to its parent.
+When it is created the ambient is assigned a unique positive integer
+as part of its identifier ({\em e.g.} cell(17)), which may be used
+to distinguish it from other ambients with the same name.
 
-<spi_attribute>      ::= <export_declaration>
-                         <global_declaration>
-                         <default_base_rate_declaration>
-                         <default_weighter_declaration>
+Ambients are mobile. An ambient may
+exit its parent, enter a sibling (become its child) or merge with a
+sibling.
 
-<export_declaration> ::= export(<process_name_list>)
+\section{BIOSPI Processes}
 
-<global_declaration> ::= global(<global_declaration_list>)
+The first line of a BIOSPI module must be:
+
+\begin{verse}
+   -language(biospi).
+\end{verse}
+
+Any SPI module may be converted to a BIOSPI module by
+replacing the language name in the first line.
+
+\subsection{Inter-Ambient Communication}
+
+A \verb+ <send> + or \verb+ <receive> + may be prefixed by a
+\verb+ <direction> +, specifying the locus of communication.
+The communication is between ambients.  The two communicating
+processes do so on their shared channel.
+
+\begin{verbatim}
+  direction    kind of communication
+
+  local        intra-ambient (may be omitted)
+  p2c          parent to child
+  c2p          child to parent
+  s2s          sibling to sibling
+\end{verbatim}
+
+\noindent
+
+\begin{verbatim}
+  p2c a ! 3*[]
+  s2s b ? {x,y}
+\end{verbatim}
+
+\subsection{Capability Communication}
+
+A communication may be an assertion of the form \verb+ <capability> <channel>+.
+The communication is between ambients.  The two
+processes which communicate do so on the shared channel.
+
+\begin{verbatim}
+  capability   action
+
+  enter        enter a sibling which asserts
+                       accept  <channel>
+  accept       accept as a child a sibling which asserts
+                       enter   <channel>
+  exit         become a sibling of its parent which asserts
+                       expel   <channel>
+  expel        expel a child which asserts
+                       exit    <channel>
+  merge -      merge with a sibling which asserts
+                       merge + <channel>'
+  merge +      merge with a sibling which asserts
+                       merge - <channel>
+\end{verbatim}
+
+\noindent
+Examples:
+
+\begin{verbatim}
+  enter a
+  expel b
+  merge - c
+\end{verbatim}
+
+\section{Testing Ambient Programs}
+
+Unlike SPI programs, BIOSPI programs cannot be
+executed directly under LOGIX.  However, the commands ``run'' (see
+\ref{runners}) and ``record'' (see \ref{recorders})
+provide means to execute BIOSPI programs.
+
+\section{Interruption and Inspection}
+
+A BIOSPI program may reach an impasse ({\em e.g.}
+\verb+ bland#"RunFF" + above), reach a limit (see \ref{runners}
+and \ref{recorders}), be interrupted manually (see \ref{suspend})
+or terminate normally.  At an impasse, limit or interruption,
+the current state of the computation can be inspected by the command
+``rtr'' (see \ref{rtr}).
+At an impasse, limit or interruption, the tree of ambients can be inspected
+by the command ``atr''; the tree including the communicating channel
+set of each ambient can be inspected by the command ``ctr''
+(see \ref{xtr}).
+
+\appendix
+\chapter{SPIBNF}
+\label{SPIBNF}
+BNF for Stochastic Pi Calculus
+
+\begin{verbatim}
+<program>              ::= <spi_attributes> . <process_definitions> .
+                           <process_definitions> .
+
+<spi_attributes>       ::= <spi_attribute>
+                           <spi_attribute> . <spi_attributes>
+
+<spi_attribute>        ::= <export_declaration>
+                           <public_declaration>
+                           <default_baserate_declaration>
+                           <default_weighter_declaration>
+
+<export_declaration>   ::= export(<process_name_list>)
+
+<public_declaration>   ::= public(<public_declaration_list>)
 
 <default_baserate_declaration>
-                     ::= baserate(<base_rate>)
+                       ::= baserate(<base_rate>)
 
 <default_weighter_declaration>
-                     ::= weighter(<weighter_declaration>)
+                       ::= weighter(<weighter_declaration>)
 
-<process_name_list>  ::= <process_name>
-                         <process_name> , <process_name_list>
+<process_name_list>    ::= <process_name>
+                           <process_name> , <process_name_list>
 
-<weighter_declaration>
-                     ::= <weighter>
-                         <weighter>(<weighter_parameter_list>)
+<weighter_declaration> ::= <weighter>
+                           <weighter>(<weighter_parameter_list>)
 
 <weighter_parameter_list>
-                     ::= <real number>
-                         <real number> , <weighter_parameter_list>
+                       ::= <weighter_parameter>
+                           <weighter_parameter> , <weighter_parameter_list>
 
-<global_declaration_list>
-                     ::= <channel_declaration>
-                         <channel_declaration> , <global_declaration_list>
+<public_declaration_list>
+                      ::= <channel_declaration>
+                          <channel_declaration> , <public_declaration_list>
 
-<channel_declaration>
-                     ::= <channel>
-                         <channel>(<base_rate>)
-                         <channel>(<base_rate> , <weighter_declaration>)
+<channel_declaration> ::=  <channel>
+                           <channel>(<base_rate>)
+                           <channel>(<base_rate> , <weighter_declaration>)
 
-<base_rate>          ::= <number>
-                         infinite
+<base_rate>            ::= <number>
+                           infinite
 
-<process_definitions>
-                     ::= <process>
-                         <process> . <process_definitions>
+<process_definitions>  ::= <process>
+                           <process> . <process_definitions>
 
-<process>            ::= <left_hand_side> ::= <right_hand_side>
+<process>              ::= <left_hand_side> ::= <right_hand_side>
 
-<left_hand_side>     ::= <atom>
-                         <atom> + <new_declaration>
-                         <atom> + (<new_declaration_list>)
+<left_hand_side>       ::= <atom>
+                           <atom>+<new_declaration>
+                           <atom>+(<new_declaration_list>)
 
-<atom>               ::= <process_name>
-                         <process_name>(<argument_list>)
+<atom>                 ::= <process_name>
+                           <process_name>(<argument_list>)
 
-<new_declaration_list>
-                     ::= <new_declaration>
-                         <new_declaration> , <new_declaration_list>
+<new_declaration_list> ::= <new_declaration>
+                           <new_declaration> , <new_declaration_list>
 
-<new_declaration>    ::= <channel_declaration>
-                         <logix_variable>
+<new_declaration>      ::= <channel_declaration>
+                           <logix_variable>
 
-<argument_list>      ::= <argument>
-                         <argument> , <argument_list>
+<argument_list>        ::= <argument>
+                           <argument> , <argument_list>
 
-<argument>           ::= <channel>
-                         <logix_variable>
+<argument>             ::= <channel>
+                           <logix_variable>
 
-<right_hand_side>    ::= <communication_clauses>
-                         <comparison_clauses>
-                         <logix_guard_clauses>
-                         <body>
+<right_hand_side>      ::= <communication_clauses>
+                           <comparison_clauses>
+                           <logix_guard_clauses>
+                           <body>
 
-<communication_clauses>
-                     ::= <communication_clause> 
-                         <communication_clause> ; <communication_clauses>
+<communication_clauses> ::= 
+                           <communication_clause> 
+                           <communication_clause> ; <communication_clauses>
 
-<communication_clause>
-                     ::= <communication> , <right_hand_side>
+<communication_clause> ::= <communication> , <right_hand_side>
 
-<communication>      ::= <receive>
-                         <send>
+<communication>        ::= <receive>
+                           <send>
 
-<receive>            ::= <channel> ? <transmission>
+<receive>              ::= <channel> ? <transmission>
 
-<send>               ::= <channel> ! <transmission>
+<send>                 ::= <channel> ! <transmission>
 
-<transmission>       ::= <message>
-                         <multiplier> * <message>
-                         <message> * <multiplier>
+<transmission>         ::= <message>
+                           <multiplier> * <message>
+                           <message> * <multiplier>
 
-<message>            ::= []
-                         {<argument_list>}
+<message>              ::= []
+                           {<argument_list>}
 
-<multiplier>         ::= <positive_integer>
+<multiplier>           ::= <positive_integer>
 
-<comparison_clauses> ::= <comparisons>
-                         <comparisons> ; otherwise , <right_hand_side>
+<comparison_clauses>   ::= <comparisons>
+                           <comparisons> ; otherwise , <right_hand_side>
 
-<comparisons>        ::= <comparison_clause>
-                         <comparison_clause> ; <comparisons>
+<comparisons>          ::= <comparison_clause>
+                           <comparison_clause> ; <comparisons>
 
-<comparison_clause>  ::= <comparison> , <right_hand_side>
+<comparison_clause>    ::= <comparison> , <right_hand_side>
 
-<comparison>         ::= <compare>
-                         <compare> & <comparison>
+<comparison>           ::= <compare>
+                           <compare> & <comparison>
 
-<compare>            ::= <channel> =?= <channel>
-                         <channel> =\= <channel>
+<compare>              ::= <channel> =?= <channel>
+                           <channel> =\= <channel>
 
-<logix_guard_clauses>::= <logix_guard_clause> 
-                         <logix_guard_clause> ; <logix_guard_clauses>
+<logix_guard_clauses>  ::= <logix_guard_clause> 
+                           <logix_guard_clause> ; <logix_guard_clauses>
 
-<logix_guard_clause> ::= {<logix_ask_guard>} , <right_hand_side>
-                         {(<logix_guard>)} , <right_hand_side>
+<logix_guard_clause>   ::= {<logix_ask_guard>} , <right_hand_side>
+                           {(<logix_guard>)} , <right_hand_side>
 
-<logix_guard>        ::= <logix_ask_guard_list>
-                         <logix_ask_guard_list> : <logix_tell_guard_list>
+<logix_guard>          ::= <logix_ask_guard_list>
+                           <logix_ask_guard_list> : <logix_tell_guard_list>
 
-<logix_ask_list>     ::= <logix_ask_guard>
-                         <logix_ask_guard> , <logix_ask_list>
+<logix_ask_list>       ::= <logix_ask_guard>
+                           <logix_ask_guard> , <logix_ask_list>
 
-<logix_tell_list>    ::= <logix_tell_guard>
-                         <logix_tell_guard> , <logix_tell_list>
+<logix_tell_list> ::=      <logix_tell_guard>
+                           <logix_tell_guard> , <logix_tell_list>
 
-<body>               ::= <call>
-                         <call> | <body>
+<body>                 ::= <call>
+                           <call> | <body>
 
-<call>               ::= <local_call>
-                         <local_sum>
-                         << <new_scope> >>
-                         <external_call>
-                         {<logix_goal>}
-                         {(<logix_goal_list>)}
-                         self
-                         self( <substitution_list> )
-                         true
-                         0
+<call>                 ::= <local_call>
+                           <local_sum>
+                           << <new_scope> >>
+                           <external_call>
+                           <macro_call>
+                           {<logix_goal>}
+                           {(<logix_goal_list>)}
+                           self
+			   self( <substitution_list> )
+                           true
+                           0
 
-<local_sum>          ::= <local_call>
-                         <local_call> + <local_sum>
+<local_sum>            ::= <local_call>
+                           <local_call> + <local_sum>
 
-<local_call>         ::= <atom>
-                         <process_name>( <substitution_list> )
+<local_call>           ::= <atom>
+                           <process_name>( <substitution_list> )
 
-<substitution_list>  ::= <substitution>
-                         <substitution> , <substitution_list>
+<substitution_list>    ::= <substitution>
+                           <substitution> , <substitution_list>
 
-<substitution>       ::= <argument> = <argument>
+<substitution>         ::= <argument> = <argument>
 
-<new_scope>          ::= <new_declaration_list> . <scope_content>
-                         <scope_content>
+<new_scope>            ::= <new_declaration_list> . <scope_content>
+                           <scope_content>
 
-<scope_content>      ::= <right_hand_side>
-                         <right_hand_side> . <process_definitions>
+<scope_content>        ::= <right_hand_side>
+                           <right_hand_side> . <process_definitions>
 
-<external_call>      ::= <logix_path_term>#<atom>
-                         <logix_path_term>#<logix_goal>
-                         <logix_path_term>#<external_call>
+<external_call>        ::= <logix_path_term>#<atom>
+                           <logix_path_term>#<logix_goal>
+                           <logix_path_term>#<external_call>
 
-<logix_goal_list>    ::= <logix_goal>
-                         <logix_goal> , <logix_goal_list>
+<macro_call>           ::= set_base_rate(<base_rate>, <channels_and_reply>)
+                           randomize_messages(<channels_and_reply>)
+                           serialize_messages(<channels_and_reply>)
+			   get_channel_status(<channel> , <channel_attributes>
+			                                , <logix_variable>)
+
+<channels_and_reply>   ::= <logix_variable>
+                           <channel> , <channels_and_reply>
+
+<channel_attributes>   ::= <logix_variable>
+		           <channel_attribute> , <channel_attributes>
+
+<logix_goal_list>      ::= <logix_goal>
+                           <logix_goal> , <logix_goal_list>
 \end{verbatim}
 
 
 \noindent
 {\bf\Large Primitives:}
 
-
 \begin{itemize}
 \item
 \verb+<channel> + is an alpha-numeric string, beginning with a lower-case
 alphabetic character; the string may contain underscore (\_) characters.
-It represents a $\pi$-calculus channel.
+It represents a $\Pi$-Calculus channel.
 
 \item
 \verb+<base_rate> + is a real number, which is a factor in the
 stochastic  weighting of a \verb+ <channel> +.  When the
 \verb+ <base_rate> + of a \verb+ <channel> + \linebreak is 0, the
 channel acts as a sink - all messages on that channel are discarded.
+
 \noindent
 A \verb+<base_rate>+ may be specified by a LOGIX variable for a new channel,
-but not for the default nor for a global channel.  The LOGIX variable
+but not for the default nor for a public channel.  The LOGIX variable
 should be instantiated to a number.
-\item
-\verb+<process_name> + is an alpha-numeric string, beginning with an
-upper case letter, which may contain underscore (\_) characters.
 
 \item
 \verb+<weighter>+ is an alpha-numeric string, beginning with a lower-case
 alphabetic character; the string may contain underscore (\_)
 characters.
 
+\noindent
 A \verb+<weighter>+ may be specified by a LOGIX variable for a new channel,
-but not for the default nor for a global channel.  The LOGIX variable
+but not for the default nor for a public channel.  The LOGIX variable
 should be instantiated to an alpha-numeric string as above.
 
-Any \verb+<weighter_parameter_list>+ element may be specified by a
-LOGIX variable for a new channel, but not for a global channel.
-The LOGIX variable should be instantiated to an alpha-numeric string as
-above (for the \verb+<weighter>+ name) or to a number (for any other parameter).
+\noindent
+Any \verb+<weighter_parameter>+ may be specified by a
+LOGIX variable for a new channel, but not for a public channel.
+The LOGIX variable should be instantiated to a real number.
+
+\item
+\verb+<process_name> + is an alpha-numeric string, beginning with an
+upper case letter, which may contain underscore (\_) characters.
+
+\item
+In a \verb+ <macro_call> + any argument which precedes the
+\verb+< channels_and_reply> + 
+or \verb+ <channel_attributes> + may be a read-only-variable
+(\verb+ <logix_variable>? +).  The \verb+ <logix_variable> + must be
+instantiated before the \verb+ <macro_call> + can complete.
+
+\noindent
+When a \verb+ <macro_call> + is completed, the trailing
+\verb+ <logix_variable> + is instantiated - its value is usually the
+string "true", but it may vary in some cases.
+
+\noindent
+The program macro, {bf \verb+get_channel_status+} instantiates the trailing
+\verb+ <logix_variable> + to the value(s) of the named attribute(s).  See 
+\verb+program_macros.txt+ for details regarding
+\verb+ <channel_attribute> + values.
 
 \item
 \verb+<logix_variable> + is an alpha-numeric string, beginning with an
@@ -1269,12 +1443,13 @@ specification of a remote procedure call in LOGIX language(compound).
 
 \newpage
 
+\noindent
 {\bf\Large Notes:}
 
 \begin{itemize}
 
 \item
-The ``new'' predicate has been subsumed into a prefix
+The ``new'' predicate of $\Pi$-Calulus has been subsumed into a prefix
 \verb+ <new_declaration_list>+\linebreak of a \verb+ <new_scope> +
 and the added
 \verb+ <new_declaration_list> + of a \verb+ <process> +.
@@ -1282,7 +1457,7 @@ and the added
 \item
 The \verb+ <argument>s + of a
 \verb+ <process> + are provided by a caller. An \verb+ <argument> +
-may be ``extruded'' from a \verb+ <process> + by a \verb+ <send> +.
+may be {\em extruded} from a \verb+ <process> + by a \verb+ <send> +.
 
 \item
 A \verb+ <process> + which is exported, may be called by an
@@ -1290,7 +1465,7 @@ external process.
 
 
 \item
-Nested ``new'' processes are scoped with double angle brackets (see
+Nested processes are scoped with double angle brackets (see
 definition of \verb+ <new_scope> +).
 
 
@@ -1331,8 +1506,8 @@ the \verb+ <logix_goal> + \verb+ spi_send/2 +, or received by the
 \verb+ <logix_goal> +, \verb+ spi_receive/2 +:
 
 \begin{verbatim}
-    spi_send(<message_content>, <channel>)
-    spi_receive(<channel>, <message_content>)
+  spi_send(<message_content>, <channel>)
+  spi_receive(<channel>, <message_content>)
 \end{verbatim}
 
 \newpage
@@ -1340,10 +1515,10 @@ the \verb+ <logix_goal> + \verb+ spi_send/2 +, or received by the
 {\em e.g.}
 
 \begin{verbatim}
-    spi_send({"String", {tuple}, [list | Tail]},
-             "_var"(channel))
+  spi_send({"String", {tuple}, [list | Tail]},
+           "_var"(channel))
 
-    spi_receive("_var"(channel), {String, Tuple, List})
+  spi_receive("_var"(channel), {String, Tuple, List})
 \end{verbatim}
 
 \item
@@ -1357,16 +1532,16 @@ The additive definition of \verb+ <left_hand_side> + is syntactic sugar
 - {\em e.g.}
 
 \begin{verbatim}
-    P + (<new_declaration_list>) ::= <right_hand_side>.
+  P + (<new_declaration_list>) ::= <right_hand_side>.
 \end{verbatim}
 
 \noindent
 is equivalent to:
 
 \begin{verbatim}
-    P ::= << <new_declaration_list> .
-             P1 .
-             P1 ::= <right_hand_side> >> .
+  P ::= << <new_declaration_list> .
+           P1 .
+           P1 ::= <right_hand_side> >> .
 \end{verbatim}
 
 \item
@@ -1374,42 +1549,42 @@ The recursive definition of \verb+ <right_hand_side> + is syntactic
 sugar - {\em e.g.}
 
 \begin{verbatim}
-    P ::= <communication1> ,
-              {<logix_ask_guard>} , Q;
-          <communication2> ,
-              (<comparison> , R;
-               otherwise , S).
+  P ::= <communication1> ,
+            {<logix_ask_guard>} , Q;
+        <communication2> ,
+            (<comparison> , R;
+             otherwise , S).
 \end{verbatim}
 
 \noindent
 is equivalent to:
 
 \begin{verbatim}
-    P ::= <communication1> ,
-               << P1 .
-                  P1 ::= {<logix_ask_guard>} , Q >>;
-          <communication2> ,
-               << P2 .
-                  P2 ::= <comparison> , R ;
-                         otherwise , S >>.
+  P ::= <communication1> ,
+             << P1 .
+                P1 ::= {<logix_ask_guard>} , Q >>;
+        <communication2> ,
+             << P2 .
+                P2 ::= <comparison> , R ;
+                       otherwise , S >>.
 \end{verbatim}
 
 \noindent
 and
 
 \begin{verbatim}
-    P ::= <communication> , ( {<logix_ask_guard1>} , Q ;
-                              {<logix_ask_guard2>} , R ) .
+  P ::= <communication> , ( {<logix_ask_guard1>} , Q ;
+                            {<logix_ask_guard2>} , R ) .
 \end{verbatim}
 
 \noindent
 is equivalent to:
 
 \begin{verbatim}
-    P ::= <communication> , 
-               << P1 .
-                  P1 ::= {<logix_ask_guard1>} , Q ;
-                         {<logix_ask_guard2>} , R >> .
+  P ::= <communication> , 
+             << P1 .
+                P1 ::= {<logix_ask_guard1>} , Q ;
+                       {<logix_ask_guard2>} , R >> .
 \end{verbatim}
 
 
@@ -1435,37 +1610,52 @@ categories:
 
 \section{Channel Management and Message Transmission Macros}
 
+These macros may be useful in auxilliary LOGIX programs.
+They may be used within an FCP goal; such use is not recommended.
+
 \subsection{Create Channel - pc}
+
+Create a new private channel.
 
 \begin{verse}
 pc(Channel) \\
-pc(Channel,Creator,BaseRate)
+pc(Channel,Creator,BaseRate) \\
 pc(Channel,Creator,BaseRate,ComputeWeight)
 \end{verse}
 
 \noindent
-are used to create channels.  The first macro creates an "instantaneous"
-(infinite rate) Channel.  The second creates a ``based'' Channel,whose
+The first macro creates an {\em instantaneous}
+(infinite rate) channel.
+
+\noindent
+The second macro creates a {\em based} Channel,whose
 name is derived from the string Creator, and whose base rate is specified by
 the non-negative number BaseRate (When BaseRate = 0, the created
-channel is a ``sink'' -
+channel is a {\em sink} -
 i.e. all sends and receives on the channel are discarded, and no actual
-transmission occurs.)  The third macro permits the user to specify a
-\verb+<weighter_declaration>+ for the new channel.
+transmission occurs.)
+
+\noindent
+The third macro permits the user to specify a
+\verb+ <weighter_declaration> +, Weighter, for the new channel.
 
 \noindent
 Channel may be a string, in which case a LOGIX variable named with that
 string is created.  The name may be used to refer to the channel
-when using the ps and pr commands to send and receive messages, or
-to inspect the channel - e.g.
+when using the ``ps'' and ``pr'' commands to send and receive messages,
+or to inspect the channel - e.g.
+
 \begin{verbatim}
-    @pc(a)
-    @ps([],a)
-    @a^
-    a = (spi.a = [send])
+  @pc(a)
+  @ps([],a)
+  @options(full)
+  @a^
+  a = spi.a(1)!
 \end{verbatim}
 
 \subsection{Send Message - ps}
+
+Offer to send a message on a channel.
 
 \begin{verse}
 ps(Message,Channel) \\
@@ -1473,11 +1663,13 @@ ps(Message,Channel,Multiplier)
 \end{verse}
 
 \noindent
-offer to send Message on Channel, where Multiplier is a positive integer;
+Multiplier is a positive integer;
 the likelihood that Channel will be selected for transmission
 increases with Multiplier.
 
 \subsection{Receive Message - pr}
+
+Offer to receive a message on a channel.
 
 \begin{verse}
 pr(Channel,Message) \\
@@ -1485,17 +1677,19 @@ pr(Channel,Message,Multiplier)
 \end{verse}
 
 \noindent
-offer to receive Message on Channel, where Multiplier is a positive 
-integer, as above.
+Multiplier is a positive integer, as above.
 
 \subsection{Set Default Weighter - weighter}
 \label{weighter macro}
+
+Set the default weight computation.
+
 \begin{verse}
 weighter(Weighter)
 \end{verse}
 
 \noindent
-sets the default weight computation.  Weighter  is an atom: a computation name
+Weighter  is an atom: a computation name
 (string) or a tuple  Name(P1, $\cdots$ , Pn), where P1, $\cdots$ , Pn
 are additional numeric parameters to the weight computation.
 
@@ -1505,9 +1699,9 @@ are additional numeric parameters to the weight computation.
 
 The basic LOGIX command to execute a program has the form:
 
-\begin{verse}
-Path\#Goal
-\end{verse}
+\begin{verbatim}
+  Path#Goal
+\end{verbatim}
 
 \noindent
 The system creates a computation, uniquely identified by a positive
@@ -1517,9 +1711,9 @@ integer throughout the session.
 To execute a SPI program, {\em e.g.} RunTT in module bland in directory
 boolean, call:
 
-\begin{verse}
-    boolean\#bland\#"RunTT"
-\end{verse}
+\begin{verbatim}
+  boolean#bland#"RunTT"
+\end{verbatim}
 
 \noindent
 The call above is an example of a Remote Process Call (RPC).
@@ -1532,13 +1726,16 @@ variables.
 \subsection{Execute Goals - run}
 \label{runners}
 
+Reset the session (as in \ref{reset}) and
+execute all of the Goals as a single computation.
+
 \begin{verse}
     run(Goals) \\
     run(Goals,Limit)
 \end{verse}
 
 \noindent
-execute all of the Goals as a single computation: the first form continues
+The first form continues
 indefinitely; the second continues until Limit units of internal time have 
 elapsed.  See  Appendix \ref{repeat} for details on specification 
 of multiple goals.
@@ -1546,64 +1743,61 @@ of multiple goals.
 \subsection{Execute Goals - record}
 \label{recorders}
 \begin{verse}
-    record(Goals,File,Limit)
-    record(Goals,File,Limit,Scale)
+    record(Goals,File,Limit) \\
+    record(Goals,File,Limit,Scale) \\
+    record(Goals,File,Limit,Format) \\
+    record(Goals,File,Limit,Scale,Format)
 \end{verse}
 
 \noindent
-also executes all of the goals until Limit, and records their behavior
+Like run it resets the session and
+executes all of the goals until Limit; it also records their behavior
 on the named file, optionally scaling the output times by multiplying
 by Scale.  See  Appendix \ref{repeat} for
 details on specification of multiple goals.  See  Appendix 
-\ref{record} for details about the file.
+\ref{record} for details about the file and formatting.
 
+\section{Execution Control}
 \noindent
 A computation may be  suspended ,  resumed  or  aborted.  You may also
 inspect its resolvent - the set of unterminated processes  - see
 Section \ref{debugger} for examples.
 
 \subsection{Suspend Execution - suspend}
+\label{suspend}
+
+Suspend the current or the specified computation(s).
 
 \begin{verse}
     s \\
-    suspend \\
     s(all) \\
-    suspend(all) \\
-    s(N) \\
-    suspend(N)
+    s(N)
 \end{verse}
 
 \noindent
-suspend the current or the specified computation(s) (N or all).  The last
-two forms also reset the current computation number.
+The last form also resets the current computation number.
+While the program is suspended, it may be inspected (see
+\ref{spr}, \ref{cta}, \ref{rtr}, \ref{xtr}).
 
 \subsection{Resume Execution - resume}
+\label{resume}
+Resume the current or the specified computation(s), as above.
 
 \begin{verse}
     re \\
-    resume \\
     re(all) \\
-    resume(all) \\
-    re(N) \\
-    resume(N)
+    re(N)
 \end{verse}
-
-\noindent
-resume the current or the specified computation(s), as above.
 
 \subsection{Abort Execution - abort}
 
+Abort the current or the specified computation(s), as above.
+
 \begin{verse}
     a \\
-    abort \\
     a(all) \\
-    abort(all) \\
-    a(N) \\
-    abort(N)
+    a(N)
 \end{verse}
-    
-\noindent
-abort the current or the specified computation(s), as above.
 
 
 \section{Debugging}
@@ -1613,19 +1807,19 @@ Debugging aids consist of inspection and execution control macros.
 \subsection{Set Display Options - options}
 \label{options}
 
+Set new display control options and (optionally) return old ones.
+
 \begin{verse}
     options(New) \\
     options(New,Old)
 \end{verse}
 
 \noindent
-set new display control options and (optionally) return old ones.
 New  may be a single option or a LOGIX list of options.
 
 \begin{itemize}
-\item none:     Don't display any messages.
-\item active:   Display all active message actions (send, receive, dimer);
-                this is the usual default.
+\item none:     Don't display any messages; this is the usual default.
+\item active:   Display all active message actions (send, receive, dimer).
 \item sender:   Display each message's sender in the form:
 \begin{verse}
 Process(ChannelName, Multiplier, Action)
@@ -1645,29 +1839,6 @@ In the macros below, options may be specified explicitly in one variant
 of most groups.  When the options are specified, they override the
 global options set by the options macro above.
 
-\subsection{Show Goal - spg}
-
-\begin{verse}
-   spg \\
-   spg(N) \\
-   spg(N,Options)
-\end{verse}
-
-\noindent
-display the goal of the current or of the specified computation.  The last
-two forms also reset the current computation number.
-
-\subsection{Show Resolvent - spr}
-
-\begin{verse}
-   spr \\
-   spr(N) \\
-   spr(N,Options)
-\end{verse}
-
-\noindent
-display the resolvent of the current or of the specified computation, as above.
-
 \subsection{Show a Channel - spc}
 
 \begin{verse}
@@ -1678,17 +1849,50 @@ display the resolvent of the current or of the specified computation, as above.
 \noindent
 display Channel.
 
-\subsection{Show Global Channels - spgcs}
+\subsection{Show Goal - spg}
+
+Display the goal of the current or of the specified computation.
 
 \begin{verse}
-    spgcs \\
-    spgcs(Options)
+   spg \\
+   spg(N) \\
+   spg(N,Options)
 \end{verse}
 
 \noindent
-display the global channels.
+The last two forms also reset the current computation number.
+
+\section{Debugging SPI}
+
+\subsection{Show Resolvent - spr}
+\label{spr}
+
+Suspend the current or specified computation and display its resolvent
+as above.
+
+\begin{verse}
+   spr \\
+   spr(N) \\
+   spr(N,Options)
+\end{verse}
+
+\noindent
+To continue the computation, use the resume command
+(see \ref{resume}).
+
+\subsection{Display Communicating Channels - cta}
+\label{cta}
+
+Display communicating channels.
+
+\label{cta}
+\begin{verse}
+    cta
+\end{verse}
 
 \subsection{Debug a Goal - pdb}
+
+Debug a single RPC.
 
 \begin{verse}
     pdb(RPC) \\
@@ -1696,34 +1900,33 @@ display the global channels.
 \end{verse}
 
 \noindent
-start debugging of the Remote Process Call (e.g. hysteresis\#"MODULE").
 The debugger provides help in reponse to the command ``help''.
+See the document \underline{supplement.mss} for details of the debugger
+commands.
 
 \subsection{Create an Execution Tree - vtree}
 
+Execute Goal, with respect to Path and prepare Tree.
+
 \begin{verse}
-    vtree(Path,Goal,Tree)
-    vtree(Path,Goal,Depth)
+    vtree(Path,Goal,Tree) \\
+    vtree(Path,Goal,Tree,Depth)
 \end{verse}
 
 \noindent
-executes Goal, with respect to Path and prepares Tree, which may be
-displayed using macros below; Depth is the depth of remote
-process call to be included in Tree.
-For example, if Path is boolean\#bland
-and goal is "RunTT", Tree represents the execution of the RPC:
+Tree may be displayed using macros ``ctree'' and ``vtree'' below.
+Depth is the depth of remote process call to be included in Tree -
+if omitted, all goals are included.
+For example, if Path is \verb+ boolean#bland +
+and goal is ``RunTT'', Tree represents the execution of the RPC:
 
 \begin{verse}
-    boolean\#bland\#"RunTT"
+    \verb+boolean#bland#"RunTT"+
 \end{verse}
 
-To include all of the processes executed in a call to tand
-in Section \ref{mbland}.
 \noindent
 Ordinarily, you should wait until the system becomes idle, or the
 computation has been suspended before attempting to view Tree.
-
-\noindent
 To view Tree, use either of the macros:
 
 \begin{verse}
@@ -1732,8 +1935,8 @@ To view Tree, use either of the macros:
 \end{verse}
 
 \noindent
-The default option for messages to be displayed is ``none'' instead
-of ``active''.  Additional options which may be specified are:
+See \ref{options} above for basic options.
+Additional options which may be specified are:
 
 \begin{itemize}
 \item prefix:   Display Tree in prefix order; this is the default.
@@ -1754,29 +1957,87 @@ participation in the execution of the computation.
 \noindent
 See Section \ref{vtree traces} for examples.
 
+\section{Debugging BIOSPI}
+
+\subsection{Show Ambient Tree - atr,ctr}
+\label{xtr}
+
+Display the ambient tree, a subtree, a node or a set of nodes.
+
+\begin{verse}
+   atr \\
+   atr(AmbientSelector) \\
+   ctr \\
+   ctr(AmbientSelector)
+\end{verse}
+
+\noindent
+The form of the display is specified
+by the AmbientSelector (default is the entire tree).  An Ambient is
+uniquely identified (within a run) by a positive integer.  Its
+full identifier is a 2-tuple, \verb+ <name>(<integer>) +.  The
+AmbientSelector may specify:
+
+\begin{itemize}
+\item if omitted or the empty string, the entire tree.
+\item if a positive integer, the entire subtree, starting with the
+  designated ambient.
+\item if a name, all ambients with that name;
+  The name ``system'' designates the root of the tree as well as
+  any other ambients whose full identifier is \verb+ system(<integer>)+.
+\item if a 2-tuple ({\em e.g.} \verb+ cell(6) +) or a negative integer 
+  ({\em e.g.} -6), the absolute value of the integer is the unique
+  identifier of the single node displayed; in the former case,
+  the name of the ambient is ignored.
+\end{itemize}
+
+\subsection{Show Resolvent - rtr}
+\label{rtr}
+
+Suspend the computation and display the resolvent as a tree of ambients.
+
+\begin{verse}
+   rtr \\
+   rtr(AmbientSelector)
+\end{verse}
+
+\noindent
+The active processes in each ambient are indented immediately below 
+the node identifier.
+To continue the computation, use the resume command
+(see \verb+ ref{resume}+).
+
+\noindent
+The AmbientSelector is treated as for atr/ctr above.
+
 \section{Miscellaneous Macros}
 
 \subsection{Reset the System - reset}
-
 \label{reset}
+
 This command closes all SPI activities,
 effectively returning the system to its initial state,
-except for the random seed and the current options.
+except for the random seed, the ordinals assigned to
+private channels and the current options.
+
 \begin{itemize}
-\item Service of existing channels is terminated;
-\item The list of existing global channels is discarded;
+\item Activity of existing channels is terminated;
+\item The list of existing public channels is discarded;
 \item The current internal clock is reset to 0
       (See Chapter \ref{stochastic});
 \item The current time limit is reset to a very large number;
-\item The current options are conserved (See Appendix \ref{options}).
+\item No computation, ambient or process is terminated.
 \end{itemize}
 
 \noindent
-The reset function is called automatically whenever the internal
+The reset function is called automatically at the beginning of
+any ``run'' or ``record'' command and whenever the internal
 time Limit is exceeded
-(See Section \ref{runners} and  Section \ref{recorders}).
+(See \ref{runners} and  \ref{recorders}).
 
 \subsection{Input Commands - input}
+
+Input the command file designated by Path.  
 
 \begin{verse}
     i(Path) \\
@@ -1784,7 +2045,7 @@ time Limit is exceeded
 \end{verse}
 
 \noindent
-Input the command file designated by Path.  For example to execute
+For example to execute
 the commands contained in the file test in sub-directory scripts:
 
 \begin{verse}
@@ -1793,46 +2054,64 @@ the commands contained in the file test in sub-directory scripts:
 
 \subsection{Call a UNIX Command - \{$\cdots$\}}
 
+Execute a UNIX command directly.
+
 \begin{verse}
     \{Command\}
 \end{verse}
 
 \noindent
-may be used to execute a UNIX command directly.  Examples:
+Examples:
 
 \begin{verse}
     \{ls\} \\
-    \{"cat notes"\}
+    \verb+{"cat notes"}+
 \end{verse}
 
-\subsection{Display Named Variables \^\ }
+\subsection{Display Named Variables - \^\ }
+
+Display a named variable.
 
 \begin{verse}
     VariableName\^\ 
 \end{verse}
 
 \noindent
-may be used to display a named variable.
+Display all named LOGIX variables.
 
 \begin{verse}
     \^\ 
 \end{verse}
 
-\noindent
-may be used to display all named LOGIX variables.
+\subsection{Change Current Computation  }
+
+Change the current computation according to the specified number.
+
+\begin{verse}
+    state(Number) 
+\end{verse}
+
+The current computation number is set to \verb+ Number + and
+that computation's goal and state are displayed,
 
 \chapter{Auxilliary LOGIX Procedures}
 \label{auxilliary}
 
 \section{record}
 \label{record}
+
 The spi\_record process can run a SPI process
 and record its behavior.
 
 \begin{verbatim}
-    spi_record#run(<call program>, <time limit>)
-    spi_record#run(<call program>, <file_name>, <time limit>)
-    spi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+  spi_record#run(<call program>, <time limit>)
+  spi_record#run(<call program>, <file_name>, <time limit>)
+  spi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+  spi_record#run(<call program>, <file_name>, <time limit>, <format>)
+  spi_record#run(<call program>, <file_name>, <time limit>,
+                 <scale>, <format>)
+  spi_record#run(<call program>, <file_name>, <time limit>,
+                 <format>, <scale>)
 \end{verbatim}
 
 \noindent
@@ -1873,11 +2152,17 @@ by 10.
 \end{itemize}
 
 \noindent
+The \verb+ <format> + argument may be one of ``none'', ``process'',
+``creator'', ``full''.  The default is ``none''; the other three
+annotate the records of communication with the name or identifier
+of the channel over which the communication occurred.
+
+\noindent
 To analyze the file, producing a table suitable for plotting with
 Matlab, use the PERL program ``spi2t'' - {\em e.g.}
 
 \begin{verbatim}
-   % spi2t fff
+  % spi2t fff
 \end{verbatim}
 
 creates a table, where column 1 is time, and columns $2 \cdots n$ are totals
@@ -1902,8 +2187,10 @@ add the argument N to the call to tally - e.g.
 To combine columns sums add terms of the form:
 
 \begin{verbatim}
-    <summed_column_name>+=<absorbed_column_name>
-
+  <summed_column_name>+=<absorbed_column_name>
+\end{verbatim}
+{\em e.g.}
+\begin{verbatim}
   % spi2t fff GENE+=BASAL+PROMOTED GENE+=ACTIVATED_TRANSCRIPTION
 \end{verbatim}
 
@@ -1930,37 +2217,37 @@ A short shell script, spixys, combines the functions with a call to gnuplot.
 \section{repeat}
 \label{repeat}
 This LOGIX procedure is called by the \verb+ run + and
-\verb+ record + macros - see Appendix \ref{runners} and
-Appendix \ref{recorders}.
+\verb+ record + macros (see \ref{runners} and
+\ref{recorders}).
 
 \noindent
 The repeat process can run a quantified set of SPI
 processes.
 
 \begin{verbatim}
-    repeat#run(<quantified process set>)
+  repeat#run(<quantified process set>)
 \end{verbatim}
 
 \noindent
 where:
 
 \begin{verbatim}
-    <quantified process set> ::=
-        <external call>
-        (<process set>)
-        <repetition> * (<process set>)
+  <quantified process set> ::=
+      <external call>
+      (<process set>)
+      <repetition> * (<process set>)
 
-    <process set> ::=
-        <quantified process set>
-        <process set> , <quantified process set>
+  <process set> ::=
+      <quantified process set>
+      <process set> , <quantified process set>
 
-    <repetition> ::= <integer>
+  <repetition> ::= <integer>
 \end{verbatim}
 
 \noindent
 A negative \verb+ <repetition> + is treated as zero.
 \noindent
-(See Appendix \ref{BNF} for the definition of \verb+ <external_call>+ .)
+(See Appendix \ref{SPIBNF} for the definition of \verb+ <external_call>+ .)
 
 \noindent
 Examples:
@@ -1980,7 +2267,7 @@ Examples:
 Note that the parentheses are necessary in the case of:
 
 \begin{verbatim}
-    <repetition>*(<external_call>)
+  <repetition>*(<external_call>)
 \end{verbatim}
 
 \noindent
@@ -1998,14 +2285,14 @@ Here is an example call to run (see Section \ref{bland}).
   It's true
   @spr
   <2> suspended
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-  bland # TT.comm(global.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-  bland # TT.comm(global.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-  bland # TT.comm(global.b2!)
-  bland # AndB.1.1.comm(Test.1.t, Test.1.f, global.b2!, AndB.1.x!)
-  bland # TT.comm(global.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland # TT.comm(public.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland # TT.comm(public.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland # TT.comm(public.b2!)
+  bland # AndB.1.1.comm(Test.1.t, Test.1.f, public.b2!, AndB.1.x!)
+  bland # TT.comm(public.b2!)
   @
 \end{verbatim}
 
@@ -2016,8 +2303,8 @@ default computations in Section \ref{default rate}.
 \noindent
 The user may specify custom computations using the notation for\linebreak
 \verb+<weighter_declaration>+
-in Appendix \ref{BNF}; the computation must be explicitly coded in the module
-\verb+Logix/<emulator name>/spiweight.c+ .
+in Appendix \ref{SPIBNF}; the computation must be explicitly coded in
+the module \verb+Logix/<emulator name>/spiweight.c+ .
 
 \noindent
 Module \verb+<emulator>/spiweight.c+ may be modified to
@@ -2056,5 +2343,3 @@ are included in the module.
 \bibliography{tutorial}
 
 \end{document}
-
-
