@@ -4,9 +4,9 @@ Main control of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 1999/07/09 07:03:21 $
+			$Date: 2003/04/30 06:08:29 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/debug/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -440,6 +440,10 @@ request(I, O, Requests, Requests') :-
 	I = parent(_Ok) : Requests!I, O = [];
 
 	I = trace(_Tree) : Requests!I, O = [];
+
+	I = _child(U, _), unknown(U) : I = O, Requests = Requests';
+
+	I = _behavior(U, _, _), unknown(U) : I = O, Requests = Requests';
 
 	otherwise : I = O, Requests = Requests'.
 
