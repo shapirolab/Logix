@@ -10,8 +10,8 @@ Program Execution
 Ambient Stochastic Pi Calus programs cannot be executed by a normal Logix 
 call.  Use the run user macro.
 
-    run(<goals>)
-    run(<goals>, <limit>)
+    run(<quantified process set>)
+    run(<quantified process set>, <limit>)
 
 
 Ambient tree displays (the "xtr" commands)
