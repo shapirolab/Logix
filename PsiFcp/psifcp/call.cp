@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/27 11:01:06 $
+		       	$Date: 2000/07/26 07:13:17 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -68,11 +68,12 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
     otherwise,
     tuple(Body1),
-    arity(Body1, 1) :
+    arity(Body1, 1),
+    arg(1, Body1, Goals) :
       ProcessDefinition = _,
       Locals = _,
       Primes = _,
-      Body2 = Body1,
+      Body2 = Goals,
       In = [logix_variables(LogixVars?) | NextIn],
       Errors = NextErrors,
       CallDefinition = [] |
