@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:56:35 $
+		       	$Date: 2004/05/31 06:31:22 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -220,8 +220,9 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	self;
 
     ArgTypes ? real,
-    Arguments ? Arg, number(Arg),
+    Arguments ? Arg,
     /* herewith a kluge due to problem in assembler$real_kind_code */
+    Arg @< [],
     convert_to_string(Arg, Arg') :
       OkArgs ! Arg' |
 	self;
