@@ -182,9 +182,14 @@ BNF for BioFcp
 <macro_call>           ::= set_base_rate(<base_rate>, <channels_and_reply>)
                            randomize_messages(<channels_and_reply>)
                            serialize_messages(<channels_and_reply>)
+			   get_channel_status(<channel> , <channel_attributes>
+			                                , <logix_variable>)
 
 <channels_and_reply>   ::= <logix_variable>
                            <channel> , <channels_and_reply>
+
+<channel_attributes>   ::= <logix_variable>
+		           <channel_attribute> , <channel_attributes>
 
 <logix_goal_list>      ::= <logix_goal>
                            <logix_goal> , <logix_goal_list>
@@ -296,13 +301,17 @@ variable names all begin with a capital letter or underscore; to reference a
 <logix_term>, refer to '_var'(<channel>).
 
 
-In a <macro_call> any argument which precedes the <channels_and_reply> may
-be a read-only-variable (<logix_variable>?).  The <logix_variable>
-must be instantiated before the <macro_call> can complete.
+In a <macro_call> any argument which precedes the <channels_and_reply> or
+<channel_attributes> may be a read-only-variable (<logix_variable>?).
+The <logix_variable> must be instantiated before the <macro_call> can complete.
 
 When a <macro_call> is completed, the trailing <logix_variable> is
 instantiated - its value is usually the string "true", but it may vary in
 some cases.
+
+The program macro, get_channel_status instantiates the trailing
+<logix_variable> to the value(s) of the named attribute(s).  See 
+program_macros.txt for details regarding <channel_attribute> values.
 
 
 A <logix_variable> may have a value which is an arbitrary logix term.  Such

@@ -3,59 +3,129 @@ program.  They have the general form:
 
     <program_macro_name>(<program_macro_arguments>)
 
-    <program_macro_arguments> ::=
-                        <logix_variable>
-                        <program_input_arguments>
-                        <program_input_arguments> , <logix_variable>
+    <program_macro_arguments> ::= <logix_variable>
+              <program_input_arguments>
+              <program_input_arguments> , <logix_variable>
 
-    <program_input_arguments> ::=
-                        <simple_logix_arguments>
-                        <channels>
-                        <simple_logix_arguments> , <channels>
+    <program_input_arguments> ::= <simple_arguments>
+			          <argument_list>
+                                  <simple_arguments> , <argument_list>
 
-    <simple_logix_arguments> ::=
-                        <simple_logix_argument>
-                        <simple_logix_argument> , <simple_logix_arguments>
+    <simple_arguments>        ::= <simple_argument>
+              <simple_argument> , <simple_arguments>
 
-    <simple_logix_argument>  ::= <integer>
-                                 <real>
-                                 <string>
-                                 []
-                                 <logix_variable>?
+    <simple_argument>         ::= <integer>
+                                  <real>
+                                  <string>
+                                  []
+                                  <channel>
+                                  <logix_variable>?
 
-    <channels>               ::= <channel>
-                                 <channel> , <channels>
+    <argument_list>           ::= <channels>
+                                  <strings>
 
-Where a <real> is designated, an <integer> or a <string> representing a
-real value may appear - it is converted to the correspondig real value before
+    <channels>                ::= <channel>
+                                  <channel> , <channels>
+
+    <strings>                 ::= <string>
+                                  <string> . <strings>
+
+A <real> is designated, a numeric value or a <string> representing a real
+value may appear - it is converted to the correspondig real value before
 the macro is performed.  This allows real values to be represented in the
 conventional form including an exponent.
 
+A string may be any logix string, including arbitrary quoted strings.  The
+possible string values may be enumerated for a specific macro.
+
 A read-only variable (<logix_variable>?) may appear in place of any
-<simple_logix_argument>.  The <logix_variable> must be instantiated to the
+<simple_argument>.  The <logix_variable> must be instantiated to the
 appropriate constant before the macro can be performed.
 
-The <logix_variable> is optional.  Unless otherwise indicated, it is set
-to  true  when the macro is successfully completed.
+The trailing <logix_variable> is optional.  Unless otherwise indicated; for
+most macros it is set to  true  when the macro is successfully completed 
 
 
 The following program macros are defined.
 
-  set_base_rate(<real> , <channels> , <logix_variable>)
+M1. set_base_rate(<real> , <channels> , <logix_variable>)
 
 The baserate of each of the designated channels is set to the the <real>'s
 value.  If the first argument is not (convertible to) real, the
 <logix_variable> is set to  false(<non_real>, [<channels>]) .
 
-  randomize_messages(<channels> , <logix_variable>)
+Example:
+
+   set_base_rate(3.7, a, b, c, Reply)
+
+sets Reply to true when the baserates of channels a, b and c have been set
+to 3.7.
+
+
+M2. randomize_messages(<channels> , <logix_variable>)
 
 Each of the designated channels is set to randomly select send and receive
 (or two dimer) offers to be completed, when the channel is chosen for 
 transmission.
 
-  serialize_messages(<channels> , <logix_variable>)
+
+M3. serialize_messages(<channels> , <logix_variable>)
 
 Each of the designated channels is set to select a send and a receive (or two
 dimer) offers to be completed on a first-come-first-served basis, when the 
 channel is chosen for transmission.
 
+
+M4. get_channel_status(<channel> , <string_list> , <logix_variable>)
+
+The <string_list> is a list of names of channel attributes.
+
+When the <string_list> consists of exactly one attribute name, the reply
+<logix_variable> is set to the value of the <channels>'s corresponding element.
+When the <string_list> consists of multiple attribute names, the
+<logix_variable> is set to a <logix_list> of named values of the <channel>'s
+corresponding attributes.
+
+The following table enumerates the named channel attributes and their values.
+
+   Name            Value
+
+   blocked         true or false
+   type             based,  bimolecular, or  homodimerized, or
+                   #based, #bimolecular, or #homodimerized;
+   baserate        <real> number;
+   references      <integer> count of references to the channel;
+   messages        {<sends>, <receives>} for a based or bimolecular channel;
+                   <integer> message count for a homodimerized channel;
+   sends           <integer> count of sends;
+   receives        <integer> receives count (0 for a homodimerized channel);
+   dimers          <integer> message count (sends if a bimolecular channel);
+   weight          real <baserate>*<sendweight>*<receiveweight> or
+                        <baserate>*<messages>*(<messages>-1);        
+   sendweight      <integer> summed weight of sends (or dimers);
+   receiveweight   <integer> summed weight of receives (or 0);
+   dimerweight     <integer> summed weight of sends;
+   name            unique identifier of the channel.
+
+The attribute name  all  may be used to designate the list:
+
+   blocked, type, rate, refs, messages, weight, name
+
+
+Examples:
+
+1. get_channel_status(a, type, X)
+
+Set variable X to one of the strings  based, bimolecular or homodimerized,
+or to one of the 2-tuples,  #based, #bimolecular or #homodimerized.
+
+2. get_channel_status(a, blocked, rate, messages, weight, name, L) |
+        screen#display_stream(L, prefix("Channel a"))
+
+Display, e.g:
+
+   Channel a - 1 blocked = false
+   Channel a - 2 rate = 3.7
+   Channel a - 3 messages = {17, 3}
+   Channel a - 4 weight = 233.1
+   Channel a - 5 name = Example.eg(11)

@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/04 15:42:55 $
+		       	$Date: 2003/03/21 07:07:41 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -140,17 +140,21 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
   macro_call(ChannelNames, Locals, Name, Arguments, MacroedArguments) :-
 
-    Name =?= set_base_rate :
-      ALL_CHANNELS = [channel | ALL_CHANNELS] |
-	verify_macro + (ArgTypes = [real | ALL_CHANNELS]);
+    Name =?= set_base_rate |
+	verify_macro + (ArgTypes = [real | channels]);
 
-    Name =?= randomize_messages :
-      ALL_CHANNELS = [channel | ALL_CHANNELS] |
-	verify_macro + (ArgTypes = ALL_CHANNELS);
+    Name =?= randomize_messages |
+	verify_macro + (ArgTypes = channels);
 
-    Name =?= serialize_messages :
-      ALL_CHANNELS = [channel | ALL_CHANNELS] |
-	verify_macro + (ArgTypes = ALL_CHANNELS);
+    Name =?= serialize_messages |
+	verify_macro + (ArgTypes = channels);
+
+    Name =?= get_channel_status,
+    Arguments = [Channel | StatusList] :
+      Arguments' = [Channel | VerifiedStatusList] |
+	verify_status_list,
+	verify_macro +
+	  (ArgTypes = [channel | strings]);
 
     otherwise :
       Arguments = _,
@@ -159,12 +163,43 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       Name = _,
       MacroedArguments = unrecognized_macro_call.
 
+  verify_status_list(StatusList, VerifiedStatusList) :-
+
+    StatusList = [all, Reply], Reply = `Name, string(Name) :
+      VerifiedStatusList =
+	[blocked, type, baserate, refences, messages, weight, name, Reply];
+
+    otherwise |
+	utilities#subtract_list(StatusList,
+		[blocked, type, rate, references,
+		 messages, sends, receives, dimers,
+		 weight, sendweight, receiveweight, dimerweight, 
+		 name], Remnant),
+	check_status_remnant.
+
+  check_status_remnant(StatusList, VerifiedStatusList, Remnant) :-
+
+    Remnant = [`Name], string(Name) :
+      VerifiedStatusList = StatusList;
+
+    Remnant = [] :
+      VerifiedStatusList = StatusList;
+
+    otherwise :
+      StatusList = _,
+      VerifiedStatusList = error(invalid_arguments(Remnant)).
+
   verify_macro(ChannelNames, Locals, ArgTypes, Arguments,
 		 MacroedArguments) :-
 	verify_macro_arguments + (OkArgs, OkArguments = OkArgs).
 
   verify_macro_arguments(ChannelNames, Locals, ArgTypes, Arguments,
 			  OkArguments, OkArgs, MacroedArguments) :-
+
+    ArgTypes ? _Type,
+    Arguments ? ReadOnly, ReadOnly =?= ?_ :
+      OkArgs ! ReadOnly |
+	self;
 
     ArgTypes ? string,
     Arguments ? Arg, string(Arg) :
@@ -188,29 +223,34 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       OkArgs ! [] |
 	self;
 
-    ArgTypes ? ReadOnly, ReadOnly =?= ?_,
-    Arguments ? Type, Type =\= channel :
-      OkArgs ! ReadOnly |
-	self;
-
     ArgTypes ? channel,
     Arguments ? Arg, string(Arg) :
-      OkArgs ! [`Arg | OkChannelNames],
-      OkArgs'' = [OkChannelNames | OkArgs'] | 
+      OkArgs ! `Arg |
 	utilities#verify_channel("", Arg, ChannelNames, Locals, _,  Err, []),
 	verified_macro_channel;
 
-    ArgTypes ? channel,
+    ArgTypes =?= strings,
+    Arguments ? Arg, string(Arg) :
+      OkArgs ! [Arg | Strings],
+      OkArgs'' = [Strings | OkArgs'] |
+	self;
+
+    ArgTypes =?= channels,
+    Arguments ? Arg, string(Arg) :
+      OkArgs ! [`Arg | OkChannelNames],
+      OkArgs'' = [OkChannelNames | OkArgs'] |
+	utilities#verify_channel("", Arg, ChannelNames, Locals, _,  Err, []),
+	verified_macro_channel;
+
+    string(ArgTypes),
     Arguments = [`Variable], string(Variable) :
-      ArgTypes' = _,
       ChannelNames = _,
       Locals = _,
       OkArgs = [[] | Arguments] |
 	verified_macro_arguments(OkArguments, MacroedArguments);
 
-    ArgTypes ? channel,
+    string(ArgTypes),
     Arguments = [] :
-      ArgTypes' = _,
       ChannelNames = _,
       Locals = _,
       OkArgs = [[], `"_"] |
@@ -249,6 +289,13 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
     Arguments ? Arg,
     ArgTypes = [] :
       Message = excess_argument(Arg) |
+	verify_macro_arguments;
+
+    Arguments =?= error(Error) :
+      ArgTypes = _,
+      Message = Error,
+      Arguments' = [],
+      ArgTypes' = [] |
 	verify_macro_arguments;
 
     Arguments =?= [],
@@ -535,15 +582,31 @@ prime_macro_arguments(Primes, MacroedArguments, PrimedArguments, Variables) :-
 	prime_local_channels(Primes, [Variable], [Variable']),
 	self;
 
-    MacroedArguments ? List, list(List) :
+    MacroedArguments ? `Channel :
+      PrimedArguments ! `Channel',
+      Variables ! Channel |
+	prime_local_channels(Primes, [Channel], [Channel']),
+	self;
+
+    MacroedArguments ? List, List = [`_ | _] :
       Variables = [Reply? | List'?],
       PrimedArguments = [List'?, Reply] |
 	prime_local_channels(Primes, List, List'),
 	prime_local_channels(Primes, MacroedArguments', [Reply]);
 
+    MacroedArguments ? List, List =\= [`_ | _], List =\= _(_) :
+      Variables = [Reply],
+      PrimedArguments = [List, Reply] |
+	prime_local_channels(Primes, MacroedArguments', [Reply]);
+
     MacroedArguments =?= [`_] :
       Variables = PrimedArguments? |
-	prime_local_channels(Primes, MacroedArguments, PrimedArguments).
+	prime_local_channels(Primes, MacroedArguments, PrimedArguments);
+
+    MacroedArguments =?= _(_) :
+      Primes = _,
+      PrimedArguments = MacroedArguments,
+      Variables = [].      
 
 
 prime_local_channels(Primes, Arguments, Primed) :-
