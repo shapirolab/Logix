@@ -38,8 +38,8 @@ rm Spi-release/Documentation/attributes.txt
 cp -p Doc/attributes.txt Spi-release/Documentation
 rm Spi-release/Documentation/global.txt
 cp -p Doc/global.txt Spi-release/Documentation
-rm Spi-release/Documentation/macros.txt
-cp -p Doc/macros.txt Spi-release/Documentation
+rm Spi-release/Documentation/program_macros.txt
+cp -p Doc/program_macros.txt Spi-release/Documentation
 rm Spi-release/Documentation/record.txt
 cp -p Doc/record.txt Spi-release/Documentation
 rm Spi-release/Documentation/repeat.txt
@@ -48,6 +48,8 @@ rm Spi-release/Documentation/stochastic.txt
 cp -p Doc/stochastic.txt Spi-release/Documentation
 rm Spi-release/Documentation/trace.txt
 cp -p Doc/trace.txt Spi-release/Documentation
+rm Spi-release/Documentation/user_macros.txt
+cp -p Doc/user_macros.txt Spi-release/Documentation
 rm Spi-release/Documentation/weighter.txt
 cp -p Doc/weighter.txt Spi-release/Documentation
 
