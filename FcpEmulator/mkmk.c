@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.8 2003/12/22 09:09:47 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.9 2003/12/22 09:09:50 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
