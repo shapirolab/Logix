@@ -1,6 +1,6 @@
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([make_channel/1, make_channel/2, make_channel/3,
+-export([make_channel/1, make_channel/2, make_channel/3, make_channel/4,
 	 "SPC"/1, "SPC"/2,
 	 parse_options/5,
 	 show_channel/3, show_goal/3, show_goals/3,
@@ -16,17 +16,27 @@
 
 make_channel(Channel) :-
 	make_channel(Channel, psi, infinite).
-make_channel(Channel, Creator) :-
-    string(Creator) |
-	make_channel(Channel, Creator, infinite).
 make_channel(Channel, BaseRate) :-
 	make_channel(Channel, psi, BaseRate).
 make_channel(Channel, Creator, BaseRate) :-
-    we(Channel) :
+
+    we(Channel),
+    number(BaseRate) :
       Channel = Channel'? |
 	psi_monitor#new_channel(Creator, Channel', BaseRate);
 
-    string(Channel), Channel =\= "_", Channel =\= "" |
+    we(Channel),
+    BaseRate =?= infinite :
+      Channel = Channel'? |
+	psi_monitor#new_channel(Creator, Channel', BaseRate);
+
+    string(Channel), Channel =\= "_", Channel =\= "",
+    number(BaseRate) |
+	computation#dictionary(add, Channel, Ch?, Reply),
+	made_channel(Channel, Creator, BaseRate, Ch, Reply);
+
+    string(Channel), Channel =\= "_", Channel =\= "",
+    BaseRate =?= infinite |
 	computation#dictionary(add, Channel, Ch?, Reply),
 	made_channel(Channel, Creator, BaseRate, Ch, Reply);
 
@@ -50,6 +60,84 @@ make_channel(Channel, Creator, BaseRate) :-
       Channel = _ |
 	computation#display(("psi_utils: Can't make_channel" : Name - Reply)).
 
+
+make_channel(Channel, Creator, BaseRate, ComputeWeight) :-
+
+    we(Channel),
+    number(BaseRate) :
+      Channel = Channel'? |
+	make_channel_with_weight;
+
+    we(Channel),
+    BaseRate =?= infinite :
+      Channel = Channel'? |
+	make_channel_with_weight;
+
+    string(Channel), Channel =\= "_", Channel =\= "",
+    number(BaseRate) |
+	computation#dictionary(add, Channel, Ch?, Reply),
+	made_channel(Channel, Creator, BaseRate, ComputeWeight, Ch, Reply);
+
+    string(Channel), Channel =\= "_", Channel =\= "",
+    BaseRate =?= infinite |
+	computation#dictionary(add, Channel, Ch?, Reply),
+	made_channel(Channel, Creator, BaseRate, ComputeWeight, Ch, Reply);
+
+    otherwise :
+      Creator = _,
+      BaseRate = _,
+      ComputeWeight = _ |
+	computation#display(("Can't make_channel" : Channel)).
+
+  made_channel(Name, Creator, BaseRate, ComputeWeight, Channel, Reply) :-
+    Reply = new,
+    string_to_dlist(Creator, CL, CT),
+    string_to_dlist(Name, Cl, []) :
+      ascii('.', Dot),
+      CT = [Dot | Cl] |
+	list_to_string(CL, Creator'),
+	make_channel_with_weight;
+
+    otherwise :
+      Creator = _,
+      BaseRate = _,
+      ComputeWeight = _,
+      Channel = _ |
+	computation#display(("psi_utils: Can't make_channel" : Name - Reply)).
+
+make_channel_with_weight(Channel, Creator, BaseRate, ComputeWeight) :-
+
+    string(ComputeWeight) |
+	psi_monitor#new_channel(Channel, Creator, ComputeWeight, BaseRate);
+
+    tuple(ComputeWeight) |
+	utils#tuple_to_dlist(ComputeWeight, [Name | Parameters], []),
+	validate_parameters(Parameters, List, Invalid),
+	validated_parameters;
+
+    otherwise :
+      Channel = _,
+      Creator = _,
+      BaseRate = _ |
+	computation#display(
+		("psi_utils: ComputeWeight must be a string or a tuple" :
+				Creator - ComputeWeight)).
+
+  validated_parameters(Channel, Creator, BaseRate, Name, List, Invalid) :-
+
+    string(Name), Invalid =?= [] |
+	utils#list_to_tuple([Name, _ | List], WeightTuple),
+	psi_monitor#new_channel(Creator, Channel, WeightTuple, BaseRate);
+
+    otherwise,
+    known(Invalid) :
+      Channel = _,
+      Creator = _,
+      BaseRate = _,
+      List = _ |
+	utils#list_to_tuple([Name | Invalid], BadTuple),
+	computation#display(
+		("psi_utils: Bad ComputeWeight elements" : Creator - BadTuple)).
 
 send(Message, Channel) :-
     send(Message, Channel, 1, _, sender).
@@ -1115,26 +1203,12 @@ weighter(Weighter) :-
 
     tuple(Weighter) |
 	utils#tuple_to_dlist(Weighter, [Name | Parameters], []),
-	validate_parameters,
+	validate_parameters(Parameters, List, Invalid),
 	update_weighter;
 
     otherwise |
-	fail("Weighter must be a string or a tuple" - Weighter).
-
-  validate_parameters(Parameters, List, Invalid) :-
-
-    Parameters ? P, number(P) :
-      List ! P |
-	self;
-
-    Parameters ? P, otherwise :
-      Invalid ! P |
-	self;
-
-    Parameters = [] :
-      List = [],
-      Invalid = [].
-
+	computation#display(
+		"psi_utils: Weighter must be a string or a tuple" - Weighter).
 
   update_weighter(Name, List, Invalid) :-
 
@@ -1146,4 +1220,21 @@ weighter(Weighter) :-
     otherwise :
       List = _ |
 	utils#list_to_tuple([Name | Invalid], Weighter),
-	fail("bad waiter" - Weighter).
+	computation#display("psi_utils: Bad Weighter elements" - Weighter).
+
+
+validate_parameters(Parameters, List, Invalid) + (Bad = Tail?, Tail) :-
+
+    Parameters ? P, number(P) :
+      List ! P |
+	self;
+
+    Parameters ? P, otherwise :
+      Tail ! P |
+	self;
+
+    Parameters = [] :
+      Tail = [],
+      List = [],
+      Invalid = Bad.
+

@@ -17,12 +17,28 @@ psi_channel(Channel, Creator) :-
 psi_channel(Channel, Creator, BaseRate) :-
 	psi_channel(Channel, Creator, BaseRate).
 psi_channel(Channel, Creator, BaseRate) :-
-    true :
+    number(BaseRate) :
+      Channel = Channel'? |
+	psi_monitor#new_channel(Creator, Channel', BaseRate);
+    BaseRate =?= infinite :
       Channel = Channel'? |
 	psi_monitor#new_channel(Creator, Channel', BaseRate);
     otherwise :
       Creator = _,
       BaseRate = _ |
+	computation#display(('psi_library: Can''t make channel' : Channel)).
+
+psi_channel(Channel, Creator, BaseRate, ComputeWeight) :-
+    string(ComputeWeight) :
+      Channel = Channel'? |
+	psi_monitor#new_channel(Creator, Channel', ComputeWeight, BaseRate);
+    tuple(ComputeWeight) :
+      Channel = Channel'? |
+	psi_utils#make_channel(Creator, Channel', ComputeWeight, BaseRate);
+    otherwise :
+      Creator = _,
+      BaseRate = _,
+      ComputeWeight = _ |
 	computation#display(('psi_library: Can''t make channel' : Channel)).
 
 psi_send(Message, Channel) :-

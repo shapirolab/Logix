@@ -1,7 +1,7 @@
 -monitor(serve).
 -language([evaluate,compound,colon]).
 -export([get_global_channels/1, global_channels/1, global_channels/2,
-	 new_channel/3,
+	 new_channel/3, new_channel/4,
 	 options/2, reset/0, scheduler/1]).
 -include(psi_constants).
 
@@ -79,8 +79,8 @@ server(In, Options, Scheduler) +
       write_channel(New, Scheduler) |
 	self;
 
-    In ? New , New = new_channel(_Creator, _Channel, _BaseRate,
-					_ComputeWeight) :
+    In ? New , New = new_channel(_Creator, _Channel, _ComputeWeight,
+					_BaseRate) :
       write_channel(New, Scheduler) |
 	self;
 
@@ -131,7 +131,7 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
     we(NewChannel),
-    Globals ? Global, Global = Name(PsiChannel, BaseRate, _ComputeWeight),
+    Globals ? Global, Global = Name(PsiChannel, _ComputeWeight, BaseRate),
     vector(PsiChannel),
     read_vector(PSI_CHANNEL_REFS, PsiChannel, References),
     References++ :
@@ -143,7 +143,7 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
 	self;
 
     List ? Name(_NewChannel, BaseRate),
-    Globals ? Entry, Entry = Name(_PsiChannel, OtherBaseRate, _ComputeWeight),
+    Globals ? Entry, Entry = Name(_PsiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
       NewGlobals ! Entry |
 	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
@@ -166,21 +166,23 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
-      Globals' = [Name(PsiChannel?, BaseRate, default) | Globals],
-      write_channel(new_channel(Id?, PsiChannel, BaseRate, default),
-			Scheduler),
+      Globals' =
+	[Name(PsiChannel?, PSI_DEFAULT_WEIGHT_NAME, BaseRate) | Globals],
+      write_channel(new_channel(Id?, PsiChannel, PSI_DEFAULT_WEIGHT_NAME,
+				BaseRate), Scheduler),
       GT = NL |
 	list_to_string(GL, Id),
 	self;
 
-    List ? Name(NewChannel, BaseRate, ComputeWeight),
+    List ? Name(NewChannel, CW, BaseRate),
     Last @< Name,
     we(NewChannel),
-    Globals ? Global, Global = Name(PsiChannel, BaseRate, ComputeWeight),
+    Globals ? Global, Global = Name(PsiChannel, ComputeWeight, BaseRate),
     vector(PsiChannel),
     read_vector(PSI_CHANNEL_REFS, PsiChannel, References),
     References++ :
       Last = _,
+      CW = ComputeWeight?,
       NewChannel = PsiChannel,
       store_vector(PSI_CHANNEL_REFS, References', PsiChannel),
       NewGlobals ! Global,
@@ -194,15 +196,15 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
 	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
-    List ? Name(_NewChannel, _, ComputeWeight),
-    Globals ? Entry, Entry = Name(_PsiChannel, _, OtherComputeWeight),
+    List ? Name(_NewChannel, ComputeWeight, _),
+    Globals ? Entry, Entry = Name(_PsiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight :
       NewGlobals ! Entry |
 	fail(global_channel(compute_weight_conflict(Name -
 				ComputeWeight =\= OtherComputeWeight))),
 	self;
 
-    List = [Name(_NewChannel, _BaseRate, _ComputeWeight) | _], string(Name),
+    List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
     Globals ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
@@ -210,7 +212,7 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
       NewGlobals ! Entry |
 	self;
 
-    List ? Name(NewChannel, BaseRate, ComputeWeight),
+    List ? Name(NewChannel, ComputeWeight, BaseRate),
     we(NewChannel),
     Globals =?= [Name1(_, _, _) | _],
     string(Name),
@@ -218,9 +220,9 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
     string_to_dlist("global.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
-      List'' = [Name(NewChannel', BaseRate, ComputeWeight) | List'],
-      Globals' = [Name(PsiChannel?, BaseRate, ComputeWeight) | Globals],
-      write_channel(new_channel(Id?, PsiChannel, BaseRate, ComputeWeight),
+      List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
+      Globals' = [Name(PsiChannel?, ComputeWeight, BaseRate) | Globals],
+      write_channel(new_channel(Id?, PsiChannel, ComputeWeight, BaseRate),
 			Scheduler),
       GT = NL |
 	list_to_string(GL, Id),
@@ -343,7 +345,7 @@ make_channel_anchor(Name, Anchor) :-
 **    cutoff(Time)
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel, BaseRate)
-**    new_channel(ChannelName, Channel, BaseRate, ComputeWeight)
+**    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    pause(Continue)
 **    record(Record?^)
 **    end_record(Record?^)
@@ -432,12 +434,12 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
 	new_channel + (ComputeWeight = DefaultWeighter),
 	continue_waiting;
 
-    Schedule ? new_channel(ChannelName, Channel, BaseRate, ComputeWeight),
+    Schedule ? new_channel(ChannelName, Channel, ComputeWeight, BaseRate),
     string(ComputeWeight) |
 	new_channel + (ComputeWeight = ComputeWeight(_)),
 	continue_waiting;
 
-    Schedule ? new_channel(ChannelName, Channel, BaseRate, ComputeWeight),
+    Schedule ? new_channel(ChannelName, Channel, ComputeWeight, BaseRate),
     tuple(ComputeWeight), arity(ComputeWeight) > 1 |
 	new_channel,
 	continue_waiting;
@@ -629,8 +631,8 @@ continue_waiting(Schedule, Offset, PsiOffsets, Waiter,
 	scheduling;
 
     /* check for paused. */
-    unknown(Waiting) :
-      Reply = _ |
+    Reply =?= true,
+    unknown(Waiting) |
 	scheduling.
 
 
@@ -727,7 +729,7 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
     we(Channel),
     arg(1, ComputeWeight, WeighterName),
     convert_to_real(0, Zero) :
-      execute(PsiOffset, {PSI_INDEX, WeighterName, WeighterIndex, Reply}),
+      execute(PsiOffset, {PSI_INDEX, WeighterName, WeighterIndex, Result}),
       make_vector(CHANNEL_SIZE, Channel, _),
       store_vector(PSI_BLOCKED, FALSE, Channel),
       store_vector(PSI_CHANNEL_TYPE, PSI_UNKNOWN, Channel),
@@ -749,8 +751,8 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       store_vector(PSI_NEXT_CHANNEL, Channel, Channel),
       store_vector(PSI_PREVIOUS_CHANNEL, Channel, Channel),
       store_vector(PSI_CHANNEL_NAME, ChannelName, Channel) |
-	complete_weighter_tuple,
-	based_or_instantaneous;
+	based_or_instantaneous,
+	complete_weighter_tuple;
 
     convert_to_real(0, Zero),
     arg(PSI_INDEX, PsiOffsets, unbound),
@@ -778,25 +780,28 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       store_vector(PSI_NEXT_CHANNEL, Channel, Channel),
       store_vector(PSI_PREVIOUS_CHANNEL, Channel, Channel),
       store_vector(PSI_CHANNEL_NAME, ChannelName, Channel) |
-	based_or_instantaneous;
+	based_or_instantaneous + (Result = true);
 
     otherwise :
       BasedAnchor = _,
       InstantaneousAnchor = _,
       PsiOffsets = _,
       Scheduler = _,
-      Reply = error(failed_new(ChannelName, Channel, BaseRate, ComputeWeight)).
+      Reply = error(new_channel(ChannelName, Channel, BaseRate, ComputeWeight)).
   
-  based_or_instantaneous(ChannelName, Channel, BaseRate, Scheduler,
-			 Reply, BasedAnchor, InstantaneousAnchor) :-
+  based_or_instantaneous(ChannelName, BaseRate, Scheduler, Result, Reply,
+			 Channel, BasedAnchor, InstantaneousAnchor) :-
 
+    Result =?= true,
     BaseRate =?= infinite :
       BasedAnchor = _,
       store_vector(PSI_CHANNEL_TYPE, PSI_INSTANTANEOUS, Channel),
-      Reply = true,
+      Reply = Result,
       DEBUG((ChannelName: instantaneous)) |
 	queue_channel(Channel, InstantaneousAnchor);
 
+    Result =?= true,
+    number(BaseRate),
     BaseRate =< 0 :
       BasedAnchor = _,
       InstantaneousAnchor = _,
@@ -804,21 +809,34 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       Reply = true,
       DEBUG((ChannelName: sink));
 
+    Result =?= true,
+    number(BaseRate),
     BaseRate > 0,
     convert_to_real(BaseRate, BaseRate') :
       InstantaneousAnchor = _,
       store_vector(PSI_CHANNEL_RATE, BaseRate', Channel),
-      Reply = true,
+      Reply = Result,
       DEBUG((ChannelName: based_channel)) |
 	queue_channel(Channel, BasedAnchor);
 
+    Result =?= true,
     otherwise :
       BasedAnchor = _,
       Channel = _,
       InstantaneousAnchor = _,
       Scheduler = _,
       store_vector(PSI_CHANNEL_TYPE, PSI_SINK, Channel),
-      Reply = "invalid base rate"(ChannelName - BaseRate).
+      Reply = "invalid base rate"(ChannelName - BaseRate);
+
+    Result =\= true :
+      BasedAnchor = _,
+      BaseRate = _,
+      Channel = _,
+      ChannelName = _,
+      InstantaneousAnchor = _,
+      Scheduler = _,
+      store_vector(PSI_CHANNEL_TYPE, PSI_SINK, Channel),
+      Reply = Result.
 
   complete_weighter_tuple(Reply, ComputeWeight, WeighterIndex, WeighterTuple) :-
 
@@ -834,9 +852,9 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
 	fail(invalid_weighter_index(ComputeWeight));
 
     Reply =\= true :
+      ComputeWeight = _,
       WeighterIndex = _,
-      WeighterTuple = PSI_DEFAULT_WEIGHT_NAME(PSI_DEFAULT_WEIGHT_INDEX) |
-	fail(Reply(ComputeWeight)).
+      WeighterTuple = PSI_DEFAULT_WEIGHT_NAME(PSI_DEFAULT_WEIGHT_INDEX).
 
 
 queue_channel(Channel, Anchor) :-
