@@ -107,11 +107,10 @@ show_named_channel(Channel, Options, Display, Reply) :-
 
     Reply =?= true,
     Channel = Name(Vector, Stream), string(Name), vector(Vector) :
-      make_channel(BadOption, _),
-      Display = (Name : Content) |
+      make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	show_channel_content;
+	show_channel_content + (Left = Display, Right = (Name : Content));
 
     otherwise :
       Options = _,
@@ -178,19 +177,21 @@ parse_options(Options, Depth, Order, Sender, Which) :-
 	parse_options.
 
 
-show_channel_content(Stream, Which, Depth, Sender, Content) :-
+show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
 
     unknown(Stream) :
       Which = _,
       Depth = _,
       Sender = _,
-      Content = [];
+      Content = [],
+      Left = Right;
 
     Stream =\= [_|_] :
       Which = _,
       Depth = _,
       Sender = _,
-      Content = "invalid stream"/*(Other)*/;
+      Content = "invalid stream"(Stream),
+      Left = Right;
 
     Which =\= none,
     Stream ? Id(Message, _Tag, Choice) |
@@ -206,9 +207,11 @@ show_channel_content(Stream, Which, Depth, Sender, Content) :-
       Stream = _,
       Depth = _,
       Sender = _,
-      Content = "?".
+      Content = "?",
+      Left = Right.
 
-show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content) :-
+show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content,
+		Left, Right) :-
 
     Which =?= active,
     we(Choice) :
@@ -220,7 +223,7 @@ show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content) :-
     Which =?= all :
       Content ! Condensed? |
 	type_of_choice,
-	condense_message,
+	condense_message + (Left = Left, Right = Left'?),
 	show_channel_content;
 
     otherwise :
@@ -243,48 +246,53 @@ show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content) :-
     not_we(Choice), Choice =\= 0 :
       Type = consumed.
 
-condense_message(Type, Id, Message, Which, Depth, Sender, Condensed) :-
+condense_message(Type, Id, Message, Which, Depth, Sender, Condensed,
+			Left, Right) :-
 
+    known(Type),
     Message =?= [] :
       Which = _,
       Depth = _ |
 	id_and_message + (Msg = Type([]));
 
+    known(Type),
     tuple(Message),
     arity(Message, Index),
     Index++,
     make_tuple(Index', Msg),
-    Depth-- |
-	arg(1, Msg, Type),
-	id_and_message,
-	show_message_channels;
+    arg(1, Msg, T),
+    Depth-- :
+      T = Type |
+	id_and_message + (Left = Left, Right = Left'?),
+	show_message_args;
 
     otherwise :
       Which = _,
       Depth = _,
       Sender = _,
       Message = _ |
-	id_and_message + (Msg  = Type("non-message")/*(Message)*/).
+	id_and_message + (Msg  = Type(Message)).
 
-  id_and_message(Sender, Id, Msg, Condensed) :-
+  id_and_message(Sender, Id, Msg, Condensed, Left, Right) :-
 
     Sender =?= sender :
-      Condensed = Id(Msg);
+      Condensed = Id(Msg),
+      Left = Right;
 
     otherwise :
       Sender = _,
       Id = _,
-      Condensed = Msg.
+      Condensed = Msg,
+      Left = Right.
 
 
-show_message_channels(Message, Which, Depth, Sender, Index, Msg) :-
+show_message_args(Message, Which, Depth, Sender, Index, Msg, Left, Right) :-
 
     Index > 1,
     arg(Index, Msg, Display),
     Index--,
-    arg(Index', Message, Argument) :
-      Tuple = false |
-	show_argument,
+    arg(Index', Message, Argument) |
+	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
 	self;
 
     Index =?= 1 :
@@ -292,24 +300,44 @@ show_message_channels(Message, Which, Depth, Sender, Index, Msg) :-
       Which = _,
       Depth = _,
       Sender = _,
-      Msg = _.
+      Msg = _,
+      Left = Right.
 
 
-show_argument(Argument, Which, Depth, Sender, Tuple, Display) :-
+show_tuple_args(Tuple, Which, Depth, Sender, Index, Args, Left, Right) :-
+
+    Index > 0,
+    arg(Index, Args, Display),
+    arg(Index, Tuple, Argument),
+    Index-- |
+	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
+	self;
+
+    Index =:= 0 :
+      Tuple = _,
+      Which = _,
+      Depth = _,
+      Sender = _,
+      Args = _,
+      Left = Right.
+
+
+show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
     Argument = Name(Vector, Stream), string(Name), vector(Vector),
     Depth =\= 0,
     unknown(Stream) :
       Which = _,
       Sender = _,
-      Tuple = _,
-      Display = Name;
+      PiMacro = _,
+      Display = Name,
+      Left = Right;
 
     Argument = Name(Vector, Stream), string(Name), vector(Vector),
     Depth =\= 0,
     Which =\= none,
     known(Stream) :
-      Tuple = _,
+      PiMacro = _,
       Display = (Name = Content) |
 	show_channel_content;
 
@@ -318,71 +346,104 @@ show_argument(Argument, Which, Depth, Sender, Tuple, Display) :-
     Which =?= none,
     known(Stream) :
       Sender = _,
-      Tuple = _,
-      Display = (Name!);
+      PiMacro = _,
+      Display = (Name!),
+      Left = Right;
 
     Argument = Name(Vector, _Stream), string(Name), vector(Vector),
     Depth =?= 0 :
       Which = _,
       Sender = _,
-      Tuple = _,
-      Display = Name;
+      PiMacro = _,
+      Display = Name,
+      Left = Right;
 
     constant(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
-      Tuple = _,
-      Display = Argument;
+      PiMacro = _,
+      Display = Argument,
+      Left = Right;
 
     tuple(Argument),
-    Tuple = true,
+    PiMacro = true,
     arity(Argument, Index),
     Index++,
-    make_tuple(Index', Msg) :
+    make_tuple(Index', Msg),
+    arg(1, Msg, String) :
       Depth = _,
       Depth' = 0,
       Message = Argument,
-      Display = Msg |
-	arg(1, Msg, message),
-	show_message_channels;
+      Display = Msg,
+      String = message |
+	show_message_args;
 
     ro(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
-      Tuple = _,
-      Display = "_?";
+      PiMacro = _,
+      Display = "_?",
+      Left = Right;
 
     we(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
-      Tuple = _,
-      Display = "_";
+      PiMacro = _,
+      Display = "_",
+      Left = Right;
+
+    Argument = Name(_Vector, _Stream), unknown(Name) :
+      PiMacro = _ |
+	show_compound;
+
+    Argument = _Name(Vector, _Stream), unknown(Vector) :
+      PiMacro = _ |
+	show_compound;
 
     otherwise :
-      Argument = _,
+      PiMacro = _ |
+	show_compound.
+
+  show_compound(Argument, Which, Depth, Sender, Display, Left, Right) :-
+
+    tuple(Argument),
+    arity(Argument, Index),
+    make_tuple(Index, Args) :
+      Tuple = Argument,
+      Display = Args |
+	show_tuple_args;
+
+/* Add list later */
+
+   otherwise :
       Which = _,
       Depth = _,
       Sender = _,
-      Tuple = _,
-      Display = other/*(Argument)*/.
+      Display = Argument,
+      Left = Right.
 
 
-show_goal(Goal, Options, PiFcp) :-
+show_goal(Goal, Options, Output) :-
+    show_goal(Goal, Options, PiFcp, Output, PiFcp?).
+
+show_goal(Goal, Options, PiFcp, Left, Right) :-
 
     string(Goal) :
       Options = _,
-      PiFcp = Goal;
+      PiFcp = Goal,
+      Left = Right;
 
     tuple(Goal), Goal =\= (_#_),
     arg(1, Goal, Name), string(Name),
     arity(Goal, Index),
-    make_tuple(Index, Result) :
-      PiFcp = Result,
+    make_tuple(Index, Tuple),
+    arg(1, Tuple, N) :
+      N = Name,
+      PiFcp = Tuple,
       make_channel(BadOption, _) |
-	arg(1, Result, Name),
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
 	goal_channels;
@@ -394,35 +455,33 @@ show_goal(Goal, Options, PiFcp) :-
     otherwise :
       Goal = _,
       Options = _,
-      PiFcp = "~PiFcp".
+      PiFcp = non_goal(Goal),
+      Left = Right.
 
-  goal_channels(Goal, Index, Which, Depth, Sender, PiFcp) :-
+  goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
 
     Index =?= 3,
     arg(1, Goal, pi_send),
     arg(Index, Goal, Argument),
     arg(Index, PiFcp, Display),
-    Index-- :
-      Tuple = true |
-	show_argument,
+    Index-- |
+	show_argument + (PiMacro = true, Left = Left, Right = Left'?),
 	self;
 
     Index =?= 3,
     arg(1, Goal, pi_receive),
     arg(Index, Goal, Argument),
     arg(Index, PiFcp, Display),
-    Index-- :
-      Tuple = true |
-	show_argument,
+    Index-- |
+	show_argument + (PiMacro = true, Left = Left, Right = Left'?),
 	self;
 
     Index > 1,
     otherwise,
     arg(Index, Goal, Argument),
     arg(Index, PiFcp, Display),
-    Index-- :
-      Tuple = false |
-	show_argument,
+    Index-- |
+	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
 	self;
 
     Index = 1 :
@@ -430,7 +489,8 @@ show_goal(Goal, Options, PiFcp) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiFcp = _.
+      PiFcp = _,
+      Left = Right.
 
 
 close_tree(Tree) :-
@@ -478,8 +538,9 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
 		Head', [end(PiTreeId?) | Head'']),
 	nodes;
 
-    Nodes ? RPC, RPC = _#_ :
-      Head ! {'#', RPC, Level, Time} |
+    Nodes ? Goal, Goal = _#_ :
+      Head ! {'#', PiGoal?, Level, Time} |
+	show_goal(Goal, Options, PiGoal),
 	nodes;
 
     Nodes ? reduce(Goal, _Id, Time', BranchList),
@@ -504,7 +565,7 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
 
     TreeId ? Goal :
       PiTreeId ! PiFcp? |
-	show_goal+(Options = [0]),
+	show_goal(Goal, [0], PiFcp),
 	self;
 
     TreeId = [] :
@@ -543,11 +604,13 @@ display_tree(Head, Order, TreeTrace) :-
 
   display_execute_order(Sorted, TreeTrace) :-
 
-    Sorted ? {Operator, Goal, _, _}, Operator =\= "|" :
+    Sorted ? {Operator, Goal, _, _}, Operator =\= "|",
+    known(Goal) :
       TreeTrace ! {Operator, "", Goal} |
 	self;
 
-    Sorted ? {"|", Goal, _, _} :
+    Sorted ? {"|", Goal, _, _},
+    known(Goal) :
       TreeTrace ! Goal |
 	self;
 
@@ -557,7 +620,8 @@ display_tree(Head, Order, TreeTrace) :-
 
 display_prefix_order(Head, Level, Indent, TreeTrace) :-
 
-    Head ? begin(PiTreeId, _Context, _Link) :
+    Head ? begin(PiTreeId, _Context, _Link),
+    known(PiTreeId) :
       Level = _,
       Indent = _,
       Level' = 0,
@@ -565,11 +629,13 @@ display_prefix_order(Head, Level, Indent, TreeTrace) :-
       TreeTrace ! (begin : PiTreeId) |
 	self;
 
-    Head ? end(PiTreeId) :
+    Head ? end(PiTreeId),
+    known(PiTreeId) :
       TreeTrace ! (end : PiTreeId) |
 	self;
 
-    Head ? Operator(Goal, Level', _Time) :
+    Head ? Operator(Goal, Level', _Time),
+    known(Goal) :
       TreeTrace ! {Operator, Indent', Goal} |
 	update_indent(Level, Level', Indent, Indent'),
 	self;
@@ -667,9 +733,8 @@ show_resolvent(Resolvent, Options, Stream) :-
 
   show_resolvent_goals(Name, Options, Goals, Stream, NextStream) :-
 
-    Goals ? Goal :
-      Stream ! (Name # PiFcp?) |
-	show_goal,
+    Goals ? Goal |
+	show_goal(Goal, Options, PiFcp, Stream, [(Name # PiFcp?) | Stream'?]),
 	self;
 
     Goals =?= [] :
