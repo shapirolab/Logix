@@ -1,7 +1,7 @@
 -monitor(serve).
 -language([evaluate,compound,colon]).
 -export([get_global_channels/1, global_channels/1, global_channels/2,
-	 scheduler/1,
+	 debug/1, record/1, scheduler/1,
 	 options/2, reset/1]).
 
 /*
@@ -22,8 +22,6 @@ MERGE(Merger, Sorted, List1, List2, Pair) =>
 
 RAN =>  4.					/* random real number */
 LN  =>  9.					/* natural logarithm */
-
-CREATIONS => 4.					/* for info(I, V) */
 
 serve(In) :-
 
@@ -74,8 +72,12 @@ server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
     In ? scheduler(Scheduler^) |
 	self;
 
-    In ? debug(Debug) :
-      write_channel(debug(Debug), Scheduler) |
+    In ? debug(Stream?) :
+      write_channel(debug(Stream), Scheduler) |
+	self;
+
+    In ? record(Stream?) :
+      write_channel(record(Stream), Scheduler) |
 	self;
 
     In ? Other,
@@ -171,26 +173,92 @@ cdr_past_msgs(In, Out) :-
 
 start_scheduling(Scheduler, Offset, Ok) :-
 
-    Ok =?= true :
+    Ok =?= true,
+    convert_to_real(0, Zero) :
       make_channel(Scheduler, Schedule),
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential}) |
 	scheduling(Schedule, Offset, NegativeExponential,
-			0, [], [], false, _Wakeup, _Debug);
+			Zero, [], [], false, _Wakeup, _Recording, _Debug);
 
     Ok =\= true :
       Scheduler = _,
       Offset = _ |
 	fail(math_offset(Ok)).
 
+/*
+** scheduling monitors the stream generated using the scheduler channel.
+**
+** It recognises:
+**
+**    schedule(<scheduling_list>)
+**    terminate(<token>, Now^)
+**    record(Record?)
+**    end_record(Record'?)
+**
+** and the debugging aids:
+**
+**    input(Schedule?)
+**    debug(Debug?)
+**
+** Processing:
+**
+** Maintain time  Now  and sorted list of scheduling pairs,  PairList ,
+** and an unsorted auxiliary list,  NewList , of new scheduling pairs:
+**
+**	{WakeupTime, WaitVariable}
+**
+** a. For each schedule(List) item:
+**
+**	(1) WakeupTime := integer(Now + exponential(Mean)),
+**	    where exponential(Mean) := Variate is computed by
+**
+**		execute(MathOffset, {MathExponential, Mean, Variate})
+**
+**	    Initially WakeUpTime is computed by:
+**
+**		execute(MathOffset, {Random, 0, UniformVariate}),
+**		execute(MathOffset, {NaturalLog, UniformVariate, Variate}),
+**		WakeupTime := Now - Mean*Variate,
+**
+**	(2) Add scheduling pair to an NewList (push onto front).
+**
+** b. Whenever system becomes idle and NewList or PairList is non-empty:
+**
+**	(1) Sort NewList and mege with PairList on WakeupTime,
+**	    unifying WaitVariable for equal WaitTime.
+**
+**	(2) Unify "true" with first WaitVariable and discard that pair.
+**
+** c. Provide a record of:
+**
+**	WaitList <token>  % (End of WaitList may be any non-list token.)
+**      Changes to  Now .
+**      Termination <token>.
+*/
+
 scheduling(Schedule, Offset, NegativeExponential,
-		Now, PairList, NewList,	Waiting, Wakeup, Debug) :-
+	Now, PairList, NewList,	Waiting, Wakeup, Record, Debug) :-
+
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
+    Channel = Ic(_Vc, _Sc, 0, _Send) :
+      Debug ! receive(Ic, 0),
+      WakeVar = true,
+      Schedule'' = [schedule(More) | Schedule'] |
+	self;
+
+    Schedule ? schedule([send(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, _Receive, 0) :
+      Debug ! send(Ic, 0),
+      WakeVar = true,
+      Schedule'' = [schedule(More) | Schedule'] |
+	self;
+
+    Schedule ? schedule([receive(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean =\= 0,
     Waiting =\= true,
     WakeupTime := Now - Mean*NegativeExponential :
-/**************************** Debugging line ********************************/
       Debug ! receive(Ic, WakeupTime),
       Wakeup = _,
       Waiting' = true,
@@ -202,10 +270,9 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
+    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean =\= 0,
     Waiting =\= true,
     WakeupTime := Now - Mean*NegativeExponential :
-/**************************** Debugging line ********************************/
       Debug ! send(Ic, WakeupTime),
       Wakeup = _,
       Waiting' = true,
@@ -217,7 +284,7 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
+    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean =\= 0,
     Waiting =?= true,
     WakeupTime := Now - Mean*NegativeExponential :
       Debug ! receive(Ic, WakeupTime),
@@ -228,10 +295,9 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
+    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean =\= 0,
     Waiting =?= true,
     WakeupTime := Now - Mean*NegativeExponential :
-/**************************** Debugging line ********************************/
       Debug ! send(Ic, WakeupTime),
       Schedule'' = [schedule(More) | Schedule'],
       NewList' = [{WakeupTime, WakeVar} | NewList],
@@ -239,26 +305,37 @@ scheduling(Schedule, Offset, NegativeExponential,
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	self;
 
-    Schedule ? schedule(TheEnd), TheEnd =\= [_|_] :
-/**************************** Debugging line ********************************/
-      Debug ! process(TheEnd) |
+    Schedule ? schedule(Token), Token =\= [_|_] :
+      Debug ! process(Token),
+      Record ! Token |
 	self;
 
     Schedule =?= [] :
-      Debug = [],
       Offset = _,
       NegativeExponential = _,
       Now = _,
       PairList = _,
       NewList = _,
       Waiting = _,
-      Wakeup = _;
+      Wakeup = _,
+      Record = [],
+      Debug = [];
 
-/**************************** Debugging code ********************************/
-    Schedule ? Other,
-    Other =\= schedule(_), Other =\= debug(_), Other =\= input(_) |
-	fail(Other),
+    Schedule ? record(Stream) :
+      Stream = Record? |
 	self;
+
+    Schedule ? end_record(Stream) :
+      Record = [],
+      Stream = Record'? |
+	self;
+
+    Schedule ? terminate(Token, When?) :
+      When = Now,
+      Record ! Token |
+	self;
+
+/**************************** Debuging code ********************************/
 
     Schedule ? input(Stream) :
       Stream = Schedule'? |
@@ -267,14 +344,18 @@ scheduling(Schedule, Offset, NegativeExponential,
     Schedule ? debug(Stream) :
       Stream = Debug? |
 	self;
+
+    Schedule ? Other,
+    otherwise |
+	fail(Other),
+	self;
+
 /***************************************************************************/
 
     Wakeup =?= done,
     PairList =?= [],
-    NewList =?= [],
-/**************************** Debugging lines *******************************/
-    info(CREATIONS, Creations) :
-      Debug ! idle(Now, Creations),
+    NewList =?= [] :
+      Debug ! idle(Now),
       Waiting = _,
       Waiting' = false,
       Wakeup' = _ |
@@ -282,10 +363,9 @@ scheduling(Schedule, Offset, NegativeExponential,
 
     Wakeup =?= done,
     PairList ? {Now', Signal}, PairList' =?= [],
-    NewList =?= [],
-/**************************** Debugging lines *******************************/
-    info(CREATIONS, Creations) :
-      Debug ! time(Now', Creations),
+    NewList =?= [] :
+      Debug ! time(Now'),
+      Record ! Now',
       Now = _,
       Waiting = _,
       Signal = true, % done(Now, Now'),
@@ -295,21 +375,19 @@ scheduling(Schedule, Offset, NegativeExponential,
 
     Wakeup =?= done,
     PairList ? {Now', Signal}, PairList' =\= [],
-    NewList =?= [],
-/**************************** Debugging lines *******************************/
-    info(CREATIONS, Creations) :
-      Debug ! time(Now', Creations),
+    NewList =?= [] :
+      Debug ! time(Now'),
+      Record ! Now',
       Now = _,
       Signal = true | % done(Now, Now') |
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Wakeup =?= done,
-    NewList =\= [],
-/**************************** Debugging lines *******************************/
-    info(CREATIONS, Creations) :
-      Debug ! time(Now', Creations),
+    NewList =\= [] :
+      Debug ! time(Now'),
       Now = _,
+      Record ! Now',
       Pair = {Now', true}, % done(Now, Now')},
       NewList' = [] |
 	SORT(Merger1, NewList, Sorted),
@@ -318,7 +396,6 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self.
 
 quick_sort_pairs(List, Sorted) + (Tail = []) :-
-
 
     List ? Pair, Pair = {Time, Event} |
 	partition_pairs(Time, Event, List', Small, Large),
