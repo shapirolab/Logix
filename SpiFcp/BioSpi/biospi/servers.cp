@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/09/16 16:28:54 $
+		       	$Date: 2003/02/19 07:40:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -342,7 +342,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
     Guard =?= {Operator, C1, C2},
     ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
       Notes ! variables(List?) |
-	message_to_channels({C1, C2}, Name, ChannelNames, Privates, false, List,
+	message_to_channels({C1, C2}, Name, ChannelNames, Privates, List,
 				Errors, Errors'?),
 	compare_channels_ok,
 	self;
@@ -377,7 +377,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 						ChannelNames, Privates,
 						Locus, ChannelName,
 						Errors'', Errors'''?),
-	message_to_channels(Message'?, Name, ChannelNames, Privates, false,
+	message_to_channels(Message'?, Name, ChannelNames, Privates,
 				MsChannelNames, Errors''', Errors''''?),
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
@@ -1152,49 +1152,43 @@ make_communication_guard(Type, Locus, ChannelName, Multiplier, Index, Guard) :-
 		request(Type, ChannelName, Multiplier, Index, Locus)}.
 
 
-message_to_channels(Message, Name, ChannelNames, Privates, Underscore,
-			MsChannelNames, Errors, NextErrors) + (Index = 1) :-
+message_to_channels(Message, Name, ChannelNames, Privates, MsChannelNames,
+			Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
       Name = _,
       ChannelNames = _,
       Privates = _,
-      Underscore = _,
       Index = _,
       MsChannelNames = [],
       Errors = NextErrors;
 
     arg(Index, Message, Channel),
     string(Channel),
-    Underscore =\= true, Index++ :
+    Index++ :
       MsChannelNames ! OkChannelName? |
 	utilities#verify_channel(Name, Channel, ChannelNames, Privates,
 				OkChannelName, Errors, Errors'),
 	self;
 
     arg(Index, Message, Var), Var =?= `Channel,
-    Underscore =\= true, Var =\= BIO_SCHEDULER, Index++ :
+    Var =\= BIO_SCHEDULER, Index++ :
       MsChannelNames ! OkChannelName? |
 	utilities#verify_channel(Name, Channel, ChannelNames, Privates,
 					OkChannelName, Errors, Errors'),
 	self;
 
     arg(Index, Message, Var), Var =?= `Channel,
-    Underscore =\= true, Var =?= BIO_SCHEDULER, Index++ :
+    Var =?= BIO_SCHEDULER, Index++ :
       MsChannelNames ! Channel |
 	self;
 
-    arg(Index, Message, _),
-    Underscore =?= true, Index++ :
-      MsChannelNames ! NULL |
-	self;
 
     Index > arity(Message) :
       Message = _,
       Name = _,
       ChannelNames = _,
       Privates = _,
-      Underscore = _,
       MsChannelNames = [],
       Errors = NextErrors;
 
@@ -1208,7 +1202,6 @@ message_to_channels(Message, Name, ChannelNames, Privates, Underscore,
     otherwise :
       ChannelNames = _,
       Privates = _,
-      Underscore = _,
       Index = _,
       MsChannelNames = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
@@ -1297,8 +1290,7 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Privates, Primes,
 	Privates, NextPrivates, Primes, NextPrimes) :-
 
     ChannelNames = [ChannelName |Å†_],
-    string_to_dlist(ChannelName, CL, Prime) :
-      Prime = [39],
+    string_to_dlist(ChannelName, CL, [CHAR_PRIME]) :
       Privates = NextPrivates,
       Primes = [{ChannelName, ChannelNamePrime?} | NextPrimes] |
 	list_to_string(CL, ChannelNamePrime);
