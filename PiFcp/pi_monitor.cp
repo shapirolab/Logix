@@ -4,10 +4,10 @@
 	 options/2, reset/0, scheduler/1]).
 
 SORT(Merger, List, Sorted) =>
-	quick_sort_pairs(List, Sorted).
+	quick_sort_triplets(List, Sorted).
 
 MERGE(Merger, Sorted, List1, List2, Pair) =>
-	merge_pairs(Sorted, List1, [Pair | List2]).
+	merge_triplets(Sorted, List1, [Pair | List2]).
 
 RAN =>  4.					/* random real number */
 LN  =>  9.					/* natural logarithm */
@@ -90,13 +90,11 @@ merge_channels(List, Global, New_Global, Last) :-
     List ? Name(NewChannel, _ReceiveMean, _SendMean), string(Name),
     Last @< Name,
     we(NewChannel),
-    Global ? Name(PiChannel),
-    PiChannel = Id(Vector, Stream, ReceiveMean, SendMean) :
-      NewChannel = Id(Vector, Stream'?, ReceiveMean, SendMean),
+    Global ? Name(PiChannel) :
+      NewChannel = PiChannel,
       New_Global ! Name(NewChannel),
       Last = _,
       Last' = Name |
-	cdr_past_msgs(Stream, Stream'),
 	self;
 
     List = [Name(_, _, _)|_], string(Name),
@@ -119,7 +117,7 @@ merge_channels(List, Global, New_Global, Last) :-
       GT = NL,
       Last' = Name |
 	list_to_string(GL, Id),
-	pi_channel(PiChannel, Id?, _, _, ReceiveMean, SendMean),
+	pi_channel(PiChannel, Id?, ReceiveMean, SendMean),
 	self;
 
     otherwise :
@@ -144,19 +142,6 @@ copy_global(Global, List, Ends) :-
       List = [],
       Ends = Global.
 
-
-cdr_past_msgs(In, Out) :-
-
-    In ? _Sender(_Msg, _Tag, Choice),
-    known(Choice) |
-	self;
-
-    In = [_Sender(_Msg, _Tag, Choice) | _],
-    unknown(Choice) :
-      Out = In;
-
-    unknown(In) :
-      Out = In.
 
 start_scheduling(Scheduler, Offset, Ok) :-
 
@@ -192,10 +177,10 @@ start_scheduling(Scheduler, Offset, Ok) :-
 **
 ** Processing:
 **
-** Maintain time  Now  and sorted list of scheduling pairs,  PairList ,
-** and an unsorted auxiliary list,  NewList , of new scheduling pairs:
+** Maintain time  Now  and sorted list of scheduling triplets,  TripletList ,
+** and an unsorted auxiliary list,  NewList , of new scheduling triplets:
 **
-**	{WakeupTime, WaitVariable}
+**	{WakeupTime, Vector, WaitVariable}
 **
 ** a. For each schedule(List) item:
 **
@@ -210,14 +195,14 @@ start_scheduling(Scheduler, Offset, Ok) :-
 **		execute(MathOffset, {NaturalLog, UniformVariate, Variate}),
 **		WakeupTime := Now - Mean*Variate,
 **
-**	(2) Add scheduling pair to an NewList (push onto front).
+**	(2) Add scheduling triplet to an NewList (push onto front).
 **
-** b. Whenever system becomes idle and NewList or PairList is non-empty:
+** b. Whenever system becomes idle and NewList or TripletList is non-empty:
 **
-**	(1) Sort NewList and mege with PairList on WakeupTime,
+**	(1) Sort NewList and mege with TripletList on WakeupTime,
 **	    unifying WaitVariable for equal WaitTime.
 **
-**	(2) Unify "true" with first WaitVariable and discard that pair.
+**	(2) Unify "true" with first WaitVariable and discard that triplet.
 **
 ** c. Provide a record of:
 **
@@ -227,70 +212,70 @@ start_scheduling(Scheduler, Offset, Ok) :-
 */
 
 scheduling(Schedule, Offset, NegativeExponential,
-	Now, PairList, NewList,	Waiting, Wakeup, Record, Debug,
+	Now, TripletList, NewList, Waiting, Wakeup, Record, Debug,
 			Cutoff, Start_real_time) :-
 
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, 0, _Send) :
-      Debug ! receive(Ic, 0),
-      WakeVar = true,
+    Channel = Id(Vector, {0, _Send}) :
+      Debug ! receive(Id, 0),
+      WakeVar = Vector,
       Schedule'' = [schedule(More) | Schedule'] |
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, _Receive, 0) :
-      Debug ! send(Ic, 0),
-      WakeVar = true,
+    Channel = Id(Vector, {_Receive, 0}) :
+      Debug ! send(Id, 0),
+      WakeVar = Vector,
       Schedule'' = [schedule(More) | Schedule'] |
 	self;
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean =\= 0,
+    Channel = Id(Vector, {Mean, _Send}), Mean =\= 0,
     Waiting =\= true,
     WakeupTime := Now - Mean*NegativeExponential :
-      Debug ! receive(Ic, WakeupTime),
+      Debug ! receive(Id, WakeupTime),
       Wakeup = _,
       Waiting' = true,
       Schedule'' = [schedule(More) | Schedule'],
-      NewList' = [{WakeupTime, WakeVar} | NewList],
+      NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean =\= 0,
+    Channel = Id(Vector, {_Receive, Mean}), Mean =\= 0,
     Waiting =\= true,
     WakeupTime := Now - Mean*NegativeExponential :
-      Debug ! send(Ic, WakeupTime),
+      Debug ! send(Id, WakeupTime),
       Wakeup = _,
       Waiting' = true,
       Schedule'' = [schedule(More) | Schedule'],
-      NewList' = [{WakeupTime, WakeVar} | NewList],
+      NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean =\= 0,
+    Channel = Id(Vector, {Mean, _Send}), Mean =\= 0,
     Waiting =?= true,
     WakeupTime := Now - Mean*NegativeExponential :
-      Debug ! receive(Ic, WakeupTime),
+      Debug ! receive(Id, WakeupTime),
       Schedule'' = [schedule(More) | Schedule'],
-      NewList' = [{WakeupTime, WakeVar} | NewList],
+      NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
-    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean =\= 0,
+    Channel = Id(Vector, {_Receive, Mean}), Mean =\= 0,
     Waiting =?= true,
     WakeupTime := Now - Mean*NegativeExponential :
-      Debug ! send(Ic, WakeupTime),
+      Debug ! send(Id, WakeupTime),
       Schedule'' = [schedule(More) | Schedule'],
-      NewList' = [{WakeupTime, WakeVar} | NewList],
+      NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	self;
@@ -306,7 +291,7 @@ scheduling(Schedule, Offset, NegativeExponential,
       NewList = _,
       Now = _,
       Offset = _,
-      PairList = _,
+      TripletList = _,
       Start_real_time = _,
       Waiting = _,
       Wakeup = _,
@@ -357,7 +342,7 @@ scheduling(Schedule, Offset, NegativeExponential,
       Offset = _,
       NegativeExponential = _,
       NewList = _,
-      PairList = _,
+      TripletList = _,
       Schedule = _,
       Waiting = _,
       Wakeup = _,
@@ -369,7 +354,7 @@ scheduling(Schedule, Offset, NegativeExponential,
 	wait_done;
 
     Wakeup =?= done,
-    PairList =?= [],
+    TripletList =?= [],
     NewList =?= [] :
       Debug ! idle(Now),
       Waiting = _,
@@ -378,24 +363,23 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
     Wakeup =?= done,
-    PairList ? {Now', Signal}, PairList' =?= [],
+    TripletList ? {Now', Vector, WakeVar}, TripletList' =?= [],
     NewList =?= [] :
       Debug ! time(Now'),
       Record ! Now',
       Now = _,
       Waiting = _,
-      Signal = true, % done(Now, Now'),
+      WakeVar = Vector,
       Waiting' = false |
-%     Now'' = 0 |
 	self;
 
     Wakeup =?= done,
-    PairList ? {Now', Signal}, PairList' =\= [],
+    TripletList ? {Now', Vector, WakeVar}, TripletList' =\= [],
     NewList =?= [] :
       Debug ! time(Now'),
       Record ! Now',
       Now = _,
-      Signal = true | % done(Now, Now') |
+      WakeVar = Vector |
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
@@ -404,10 +388,10 @@ scheduling(Schedule, Offset, NegativeExponential,
       Debug ! time(Now'),
       Now = _,
       Record ! Now',
-      Pair = {Now', true}, % done(Now, Now')},
+      Triplet = {Now', Vector, Vector},
       NewList' = [] |
 	SORT(Merger1, NewList, Sorted),
-	MERGE(Merger2, Sorted, PairList, PairList', Pair),
+	MERGE(Merger2, Sorted, TripletList, TripletList', Triplet),
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self.
 
@@ -417,12 +401,12 @@ scheduling(Schedule, Offset, NegativeExponential,
 	pi_monitor#reset.
 
 
-quick_sort_pairs(List, Sorted) + (Tail = []) :-
+quick_sort_triplets(List, Sorted) + (Tail = []) :-
 
-    List ? Pair, Pair = {Time, Event} |
-	partition_pairs(Time, Event, List', Small, Large),
-	quick_sort_pairs(Small?, Sorted, [Pair | LSorted]),
-	quick_sort_pairs(Large?, LSorted, Tail);
+    List ? Triplet, Triplet = {Time, Vector, Event} |
+	partition_triplets(Time, Vector, Event, List', Small, Large),
+	quick_sort_triplets(Small?, Sorted, [Triplet | LSorted]),
+	quick_sort_triplets(Large?, LSorted, Tail);
 
     List ? _,
     otherwise |
@@ -432,24 +416,30 @@ quick_sort_pairs(List, Sorted) + (Tail = []) :-
       Sorted = Tail.
 
 
-merge_pairs(S1, S2, S3) :-
+merge_triplets(S1, S2, S3) :-
 
-    S1 ? Pair, Pair =?= {X, _V1},
-    S2 = [{Y, _V2} | _],
+    S1 ? Triplet, Triplet =?= {X, _V1, _W1},
+    S2 = [{Y, _V2, _W2} | _],
     X < Y :
-      S3 ! Pair |
+      S3 ! Triplet |
 	self;
 
-    S1 =?= [{X, _V1} | _],
-    S2 ? Pair, Pair =?= {Y, _V2},
+    S1 =?= [{X, _V1, _W1} | _],
+    S2 ? Triplet, Triplet =?= {Y, _V2, _W2},
     Y < X :
-      S3 ! Pair |
+      S3 ! Triplet |
 	self;
 
-    S1 ? Pair,
+    S1 ? Triplet, Triplet =?= {X, V1, _W1},
+    S2 = [{X, V2, _W2} | _],
+    V1 =\= V2 :
+      S3 ! Triplet |
+	self;
+
+    S1 ? Triplet,
     S2 ? Match :
-      Pair = Match,
-      S3 ! Pair |
+      Triplet = Match,
+      S3 ! Triplet |
 	self;
 
     S1 = [] :
@@ -458,152 +448,30 @@ merge_pairs(S1, S2, S3) :-
     S2 = [] :
       S3 = S1.
 
-  partition_pairs(X, E, List, Small, Large) :-
+  partition_triplets(X, V, E, List, Small, Large) :-
 
-    List ? Pair, Pair =?= {Y, _V},
+    List ? Triplet, Triplet =?= {Y, _V, _W},
     X > Y :
-      Small ! Pair |
+      Small ! Triplet |
 	self;
 
-    List ? Pair, Pair =?= {Y, _V},
+    List ? Triplet, Triplet =?= {Y, _V, _W},
     X < Y :
-      Large ! Pair |
+      Large ! Triplet |
 	self;
 
-    List ? Pair, Pair =?= {X, V} :
-      V = E |
+    List ? Triplet, Triplet =?= {X, NV, _W},
+    V =\= NV :
+      Small ! Triplet |
+	self;
+
+    List ? Triplet, Triplet =?= {X, V, W} :
+      W = E |
 	self;
 
     List = [] :
       X = _,
+      V = _,
       E = _,
       Small = [],
       Large = [].
-
-/********************* Borrowed from Logix: utils.cp *************************/
-/*************************  Slower Sort/Merge ********************************
-ordered_merger(In) :-
-
-    In ? ordered_merge(In1, In2, Out) |
-	ordered_merge(In1, In2, Out),
-	ordered_merger;
-
-    In = [] |
-	true.
-
-ordered_merge(In1, In2, Out) :-
-
-    In1 ? T1, T1 = {I1, _}, In2 = [{I2, _} | _],
-    I1 < I2 :
-      Out ! T1 |
-	ordered_merge;
-
-    In1 = [{I1, _} | _], In2 ? T2, T2 = {I2, _},
-    I2 < I1 :
-      Out ! T2 |
-	ordered_merge;
-
-    In1 = [T1 | _], In2 ? T2 :
-      T1 = T2 |
-	ordered_merge;
-
-    In1 = [] :
-      In2 = Out;
-
-    In2 = [] :
-      In1 = Out.
-
-binary_merge(In, Out, Merger) :-
-    true :
-      make_channel(CH, Merger) |
-	level1_merge_server(In, Odds, Evens, PairList),
-	binary_merger(Odds, Evens, PairList, Out, CH, done, Done),
-	close_merger(Done, CH).
-
-level1_merge_server(In, Odds, Evens, PairList) :-
-
-    In ? Odds^ |
-	level1_merge_server(In', Evens, PairList);
-
-    otherwise : In = _,
-      Odds = [], Evens = [],
-      PairList = [] .
-
-level1_merge_server(In, Evens, PairList) :-
-
-    In ? Evens^ :
-      PairList ! {One, Two} |
-	level1_merge_server(In', One, Two, PairList');
-
-    otherwise : In = _,
-      Evens = [],
-      PairList = [] .
-
-
-binary_sort_merge(In, Out, Merger) :-
-    true :
-      make_channel(CH, Merger) |
-	level1_sort_server(In, Odds, Evens, PairList),
-	binary_merger(Odds, Evens, PairList, Out, CH, done, Done),
-	close_merger(Done, CH).
-
-level1_sort_server(In, Odds, Evens, PairList) :-
-
-    In ? Odd :
-      Odds = [Odd] |
-	level1_sort_server(In', Evens, PairList);
-
-    otherwise : In = _,
-      Odds = [], Evens = [],
-      PairList = [] .
-
-level1_sort_server(In, Evens, PairList) :-
-
-    In ? Even :
-      Evens = [Even],
-      PairList ! {One, Two} |
-	level1_sort_server(In', One, Two, PairList');
-
-    otherwise : In = _,
-      Evens = [],
-      PairList = [] .
-
-
-binary_merger(In1, In2, PairList, Out, CH, Left, Right) :-
-
-    list(In2) :
-      write_channel(ordered_merge(In1, In2, In1'), CH) |
-	binary_merger2(PairList, In2', PairList', CH, Left, Left'),
-	binary_merger;
-
-    In2 = [] : PairList = _, CH = _, 
-      In1 = Out,
-      Left = Right .
-
-binary_merger1(PairList, UpList, CH, Left, Right) :-
-
-    PairList ? {In1, In2} :
-      UpList ! {Out1, Out2},
-      write_channel(ordered_merge(In1, In2, Out1), CH) |
-	binary_merger2(PairList', Out2, UpList', CH, Left, Right);
-
-    PairList = [] : CH = _,
-      UpList = [],
-      Left = Right .
-
-binary_merger2(PairList, Out, UpList, CH, Left, Right) :-
-
-    PairList ? {In1, In2} :
-      write_channel(ordered_merge(In1, In2, Out), CH) |
-	binary_merger1(PairList', UpList, CH, Left, Right);
-
-    PairList = [] : CH = _,
-      Out = [],
-      UpList = [],
-      Left = Right .
-
-
-close_merger(done, CH) :-
-    true :
-      close_channel(CH) .
-*****************************************************************************/

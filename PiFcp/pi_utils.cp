@@ -1,6 +1,7 @@
 -language(compound).
 -mode(failsafe).
--export([make_channel/1, make_channel/3, make_channel/4, make_channel/6,
+-export([make_channel/1, make_channel/2, make_channel/3,
+	 make_channel/4, make_channel/5,
 	 parse_options/5,
 	 show_channel/3, show_goal/3, show_goals/3,
 	 show_resolvent/3, show_value/3,
@@ -9,31 +10,36 @@
 
 
 make_channel(Channel) :-
-	make_channel(Channel, "SYSTEM",  _,  _, 0, 0).
+	make_channel(Channel, "SYSTEM", 0, 0, _).
+make_channel(Channel, Creator) :-
+	make_channel(Channel, Creator, 0, 0, _).
 make_channel(Channel, ReceiveMean, SendMean) :-
-	make_channel(Channel, "SYSTEM",  _,  _, ReceiveMean, SendMean).
-make_channel(Channel, Creator, VC, MsC) :-
-	make_channel(Channel, Creator, VC, MsC, 0, 0).
-make_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean) :-
+	make_channel(Channel, "SYSTEM",  ReceiveMean, SendMean, _).
+make_channel(Channel, Creator, ReceiveMean, SendMean) :-
+	make_channel(Channel, Creator,  ReceiveMean, SendMean, _).
+make_channel(Channel, Creator, ReceiveMean, SendMean, VC) :-
     we(Channel) :
-      make_channel(VC, MsC),
-      Channel = Creator(VC, MsC, ReceiveMean, SendMean);
+      make_vector(2, VC, Streams),
+      Streams = {MsC, _},
+      store_vector(2, MsC, VC),
+      Channel = Creator(VC, {ReceiveMean, SendMean});
     string(Channel), Channel =\= "_", Channel =\= "" |
 	computation#dictionary(add, Channel, V, R),
-	made_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean, V, R).
+	made_channel(Channel, Creator, VC, ReceiveMean, SendMean, V, R).
 
-  made_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean, V, R) :-
+  made_channel(Channel, Creator, VC, ReceiveMean, SendMean, V, R) :-
     R = new,
     string_to_dlist(Creator, CL, CT),
     string_to_dlist(Channel, Cl, []) :
       CT = [46 | Cl],
-      make_channel(VC, MsC),
-      V = Creator'?(VC, MsC, ReceiveMean, SendMean) |
+      make_vector(2, VC, Streams),
+      Streams = {MsC, _},
+      store_vector(2, MsC, VC),
+      V = Creator'?(VC, {ReceiveMean, SendMean}) |
 	list_to_string(CL, Creator');
     otherwise :
       Creator = _,
       VC = _,
-      MsC = _,
       ReceiveMean = _,
       SendMean = _,
       V = _ |
@@ -41,10 +47,9 @@ make_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean) :-
 
 
 send(Message, Channel) :-
-    Channel = _Creator(C, _Stream, _RM, _SM),
-    channel(C) :
+    Channel = _Creator(VC, _Args) :
       Ms = Sender?(Message, 1, _),
-      write_channel(Ms, C) |
+      write_vector(1, Ms, VC) |
 	pi_monitor#unique_sender("PI_UTILS.send", Sender);
 
     string(Channel), Channel =\= "_", Channel =\= "" |
@@ -67,21 +72,25 @@ send(Message, Channel) :-
 	computation#display(("pi_utils: Can't send to" : Channel - R)).
 
 
-receive(Channel, Message) :-
-    string(Channel), Channel =\= "_", Channel =\= "" |
+receive(Channel, Message) + (Stream = _) :-
+    string(Channel), Channel =\= "_", Channel =\= "" :
+      Stream = _ |
 	computation#dictionary(find, Channel, V, R),
 	receive_message(Channel, Message, V, R);
 
-    Channel = Creator(C, Stream, ReceiveMean, SendMean),
-    Stream ? _Sender(_Message, _N, Choice),
-    not_we(Choice) :
-      Channel' = Creator(C, Stream', ReceiveMean, SendMean) |
+    we(Stream),
+    Channel = _Creator(VC, _Args),
+    read_vector(2, VC, Stream') |
 	self;
 
-    Channel = _Creator(_C, Stream, _RM, _SM),
+    Stream ? _Sender(_Message, _N, Choice),
+    not_we(Choice) |
+	self;
+
+    Channel = _Creator(VC, _Args),
     Stream ? _Sender(M, N, Choice),
     we(Choice) :
-      Stream' = _,
+      store_vector(2, Stream', VC),
       Choice = N,
       Message = M.
 
@@ -116,7 +125,8 @@ show_named_channel(Channel, Options, Display, Reply) :-
 	computation#display(("pi_utils: Can't show channel" : Channel-Reply));
 
     Reply =?= true,
-    Channel = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector) :
+    Channel = Name(Vector, _Args), string(Name), vector(Vector),
+    read_vector(2, Vector, Stream) :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
@@ -357,8 +367,9 @@ show_value(Argument, Options, Display) :-
 
 show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
-    Argument = Name(Vector, Stream, _, _), string(Name), vector(Vector),
+    Argument = Name(Vector, _Args), string(Name), vector(Vector),
     Depth =\= 0,
+    read_vector(2, Vector, Stream),
     unknown(Stream) :
       Which = _,
       Sender = _,
@@ -366,24 +377,26 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = Name,
       Left = Right;
 
-    Argument = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector),
+    Argument = Name(Vector, _Args), string(Name), vector(Vector),
     Depth =\= 0,
     Which =\= none,
+    read_vector(2, Vector, Stream),
     known(Stream) :
       PiMacro = _,
       Display = (Name = Content) |
 	show_channel_content;
 
-    Argument = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector),
+    Argument = Name(Vector, _Args), string(Name), vector(Vector),
     Depth =\= 0,
     Which =?= none,
+    read_vector(2, Vector, Stream),
     known(Stream) :
       Sender = _,
       PiMacro = _,
       Display = (Name!),
       Left = Right;
 
-    Argument = Name(Vector, _Stream, _RM, _SM), string(Name), vector(Vector),
+    Argument = Name(Vector, _Args), string(Name), vector(Vector),
     Depth =?= 0 :
       Which = _,
       Sender = _,
@@ -428,11 +441,11 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = Argument,
       Left = Right;
 
-    Argument = Name(_Vector, _Stream, _RM, _SM), unknown(Name) :
+    Argument = Name(_Vector, _Args), unknown(Name) :
       PiMacro = _ |
 	show_compound;
 
-    Argument = _Name(Vector, _Stream, _RM, _SM), unknown(Vector) :
+    Argument = _Name(Vector, _Args), unknown(Vector) :
       PiMacro = _ |
 	show_compound;
 

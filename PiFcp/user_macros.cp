@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/09 12:02:01 $
+		       	$Date: 2000/04/16 07:29:41 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.12 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
