@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:08 $
+		       	$Date: 2002/07/07 17:28:45 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -593,8 +593,8 @@ dimerize_requests(Tell, NewTell) :-
 	request(dimer, ChannelName, Multiplier, {SendTag, ReceiveTag}),
       Retell = [NewRequest | Tell'?] ;
 
-    Tell ? request(receive, ChannelName, Multiplier, SendTag),
-    Request =?= request(send, ChannelName, Multiplier, ReceiveTag) :
+    Tell ? request(receive, ChannelName, Multiplier, ReceiveTag),
+    Request =?= request(send, ChannelName, Multiplier, SendTag) :
       NewRequest =
 	request(dimer, ChannelName, Multiplier, {SendTag, ReceiveTag}),
       Retell = [NewRequest | Tell'?] ;
