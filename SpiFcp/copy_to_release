@@ -36,8 +36,8 @@ rm -f Spi-release/Documentation/BNF.txt
 cp -p Documentation/BNF.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/attributes.txt
 cp -p Documentation/attributes.txt Spi-release/Documentation
-rm -f Spi-release/Documentation/global.txt
-cp -p Documentation/global.txt Spi-release/Documentation
+rm -f Spi-release/Documentation/public.txt
+cp -p Documentation/public.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/program_macros.txt
 cp -p Documentation/program_macros.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/public_variables.txt
@@ -105,3 +105,20 @@ rm -f Spi-release/BioSpi/Examples/symporter_comm.cp
 cp -p BioSpi/Examples/symporter_comm.cp Spi-release/BioSpi/Examples/symporter_comm.cp
 rm -f Spi-release/BioSpi/Examples/vesicle_merge.cp
 cp -p BioSpi/Examples/vesicle_merge.cp Spi-release/BioSpi/Examples/vesicle_merge.cp
+
+rm -f Spi-release/Tutorial/bland.cp
+cp -p Tutorial/bland.cp Spi-release/Tutorial/bland.cp
+rm -f Spi-release/Tutorial/booland.cp
+cp -p Tutorial/booland.cp Spi-release/Tutorial/booland.cp
+rm -f Spi-release/Tutorial/hello.cp
+cp -p Tutorial/hello.cp Spi-release/Tutorial/hello.cp
+rm -f Spi-release/Tutorial/public_which.cp
+cp -p Tutorial/public_which.cp Spi-release/Tutorial/public_which.cp
+rm -f Spi-release/Tutorial/sender.cp
+cp -p Tutorial/sender.cp Spi-release/Tutorial/sender.cp
+rm -f Spi-release/Tutorial/tryer.cp
+cp -p Tutorial/tryer.cp Spi-release/Tutorial/tryer.cp
+rm -f Spi-release/Tutorial/tutorial.ps
+cp -p Tutorial/tutorial.ps Spi-release/Tutorial/tutorial.ps
+rm -f Spi-release/Tutorial/which.cp
+cp -p Tutorial/which.cp Spi-release/Tutorial/which.cp
