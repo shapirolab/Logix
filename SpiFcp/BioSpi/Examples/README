@@ -1,4 +1,9 @@
-These modules may be compiled and executed - e.g.
+The .cp modules in this directory may be compiled and executed - e.g.
 
-    bc(eg1)
+    c(eg1)
     run(eg1,20)
+
+The sub-directories vesicle and complex may be compiled and executed - e.g.
+
+    c(complex)
+    run(complex,10)
