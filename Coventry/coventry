@@ -5,9 +5,10 @@
 # Note: killall is available on SGI, but not on Solaris
 #
 IS_ON=/etc/chkconfig
-COVENTRY=/usr/local/sbin
-COVENTRYD=$COVENTRY/coventryd
-PATH=$COVENTRY:$PATH
+AUXILIARY_DIR=/usr/local/sbin
+COVENTRY_DIR=/usr/local/sbin
+
+COVENTRYD=$COVENTRY_DIR/coventryd
 
 if $IS_ON verbose 
 then
@@ -21,7 +22,7 @@ case $1 in
             if $IS_ON coventry && test -x $COVENTRYD; then
 	        killall -k 1 coventryd
 	        $ECHO Starting coventry daemon
-	        $COVENTRYD &
+	        $COVENTRYD -D$AUXILIARY_DIR &
 	    fi
 	;;
 	'stop')

@@ -89,8 +89,17 @@ if ($debug) {# debug
 
 # Initialization and argument handling
 
-# If first argument = -Qn - display processes with elapsed time >= n minutes.
-# Default for n is $QUERY_MINIMUM.
+# If first argument = -D<path> use <path> as auxiliary directory.
+if (@ARGV[0] =~ /-D(.+)/) {
+    $AUXILIARY_DIR = $1;
+    shift(@ARGV);
+}
+else {
+    $AUXILIARY_DIR = "/usr/local/sbin";
+}
+
+# If first argument (after -D<path>) = -Qn - display processes with
+# elapsed time >= n minutes.  Default for n is $QUERY_MINIMUM.
 
 $query = shift(@ARGV) if @ARGV[0] =~ /-Q(\d*)/;
 
@@ -109,8 +118,10 @@ else {
 $pscomm =
     "ps $args -o user,nice,time,pid,pgid,class," .
         "comm=aaaaaaaaaabbbbbbbbbbcccccccccc";
+
 if ($debug) {# debug
   print "command = ", $pscomm ,"\n";
+  print "AUXILIARY_DIR = \"$AUXILIARY_DIR\"\n";
 }# endebug
 
     exit 0 if query_processes($query);
@@ -192,7 +203,7 @@ sub parse_process
     $class =~ tr/A-Z/a-z/;
 
     if ($class eq "gn" || $class eq "gb") {
-	$_ = `getndpri $pid`;
+	$_ = `$AUXILIARY_DIR/getndpri $pid`;
 	return undef if !/^ndpri.* = (\d+)$/;
 	$nice = (int $1) ? $1 - $NDPRI_OFFSET : $NICE_DEFAULT;
     }
@@ -259,7 +270,7 @@ sub setnice #(process, nice)
     else {
       # $class eq "gn" || $class eq "gb"
 	$nice += $NDPRI_OFFSET if $nice;
-	return `setndpri $nice $pid`;
+	return `$AUXILIARY_DIR/setndpri $nice $pid`;
     }
 }
 
