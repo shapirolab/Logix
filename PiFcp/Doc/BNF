@@ -8,14 +8,22 @@ BNF for PiFcp
 <process>              ::= <left_hand_side> :- <right_hand_side>
 
 <left_hand_side>       ::= <atom>
-                           <atom>+<channel>
-                           <atom>+(<channel_list>)
+                           <atom>+<stochastic_channel>
+                           <atom>+(<stochastic_channel_list>)
 
 <atom>                 ::= <name>
                            <name>(<channel_list>)
 
+<stochastic_channel_list>
+                       ::= <stochastic_channel>
+                           <stochastic_channel> , <stochastic_channel_list>
+
 <channel_list>         ::= <channel>
                            <channel> , <channel_list>
+
+<stochastic_channel>   ::= <channel>
+                           <channel>(<integer>)
+                           <channel>(<integer>, <integer>)
 
 <right_hand_side>      ::= <synchronized_clauses>
                            <logix_guard_clauses>
@@ -79,7 +87,7 @@ BNF for PiFcp
 
 <substitution>         ::= <channel> = <channel>
 
-<new_scope>            ::= <channel_list> . <scope_content>
+<new_scope>            ::= <stochastic_channel_list> . <scope_content>
                            <scope_content>
 
 <scope_content>        ::= <right_hand_side>

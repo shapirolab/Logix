@@ -19,7 +19,8 @@ Representations and transformations of the PiFcp language to Compound Fcp
 
 <channel>        ::~ <pi_channel>
 
-  <pi_channel>     ::= <creator>(<fcp_channel>, <message_stream>)
+  <pi_channel>     ::= <creator>(<fcp_channel>, <message_stream>,
+                                 <receive_mean>, <send_mean>)
 
   <creator> identifies the <process> which created the channel; it is used
             for debugging and includes the <variable> representing the channel
@@ -27,6 +28,9 @@ Representations and transformations of the PiFcp language to Compound Fcp
 
    <fcp_channel> is used to <send> a <message> on the <channel>, appending
                  the corresponding <pi_message> to the <message_stream>.
+
+   <receive_mean> and <send_mean> are means of exponential distributions
+                  from which communication delays are sampled.
 
   <message_stream> ::= _
                        [<pi_message> | <message_stream>]
@@ -48,18 +52,37 @@ variable.  The <process> then waits in a generated procedure for a <pi_message>
 to be chosen by some receiver, which unifies the <choice_tag> with the
 <choice>, effectively withdrawing all other offered <pi_message>s.  The
 procedure commits to the <body> corresponding to the chosen <message>.  When
-the <process> includes one or more <receive>s, the corresponding Fcp clauses
+the <process> includes one or more <send>s, the corresponding Fcp clauses
 are in the generated procedure; in this case, if some other sender is
 synchronized with the received <pi_message>, the offered <message>s are
 withdrawn by unifying <choice> with 0.
 
-Each <process> is represented by an Fcp procedure.  Each <channel> which is an
+Each <process> is represented by an Fcp procedure.  Each <channel> which is a
 parameter or an added <channel> of the <process> is represented by a
 <pi_channel> - the Fcp variable which represents the <pi_channel> has the same
 name as the <channel>.
 
+A <program> is the content of a module, following its fcp attributes.
 A <program> defines a scope which is global to every <process> which is
-defined within the <program>.
+defined within the <program>.  In the head of the module, prior to the
+<program>, global channels may be declared in an fcp attribute:
+
+    -global([<stochastic_channel_list>]).
+
+A module may be declared stochastic by one of the fcp attributes:
+
+    -stochastic.
+or
+    -stochastic(<both_means>).
+or
+    -stochastic(<receive_mean>, <send_mean>).
+
+The declared means are defaults for the means of any global or new
+<pi_channel> which is declared without explicit means.  If no means are
+declared, the defaults are 0.
+
+A <process> may be "exported" from the module by an fcp export attribute.
+
 
 A <process> defines a scope within which each <channel> in the containing
 scope is defined.  This is implemented by adding each <channel> to the
@@ -75,24 +98,26 @@ procedure representing a <process> within the scope has an augmented parameter
 list as above.
 
 Each <process> defined in the outermost scope of the program is like an
-independant program - such <process>es do not share any context.
+independant program - such <process>es do not share any context, other than
+the global <stochastic_channel_list>.
 
 
 A PiFcp process is transformed into a procedure as follows.
 
 
 Each <process> in the <program> is transformed into one Fcp procedure with
-the same name, if it does not have an added <channel_list> - i.e. its
-<left_hand_side> is an <atom>.  Otherwise, it is transformed into two
+the same name, if it does not have an added <stochastic_channel_list> - i.e.
+its <left_hand_side> is an <atom>.  Otherwise, it is transformed into two
 Fcp procedures.  The first procedure initializes each added channel and calls
 the second procedure.
 
 The parameter <channel_list> of a <process> (if any) consists of channels
 which have been initialized elsewhere.
 
-A procedure in the outermost scope has no additional parameters.  Its
-<channels_list>s form the base channel-set for all scopes which are defined
-within its <process>.  Each <process> defines a scope.
+A procedure in the outermost scope has additional parameters consisting of
+the global <channel_list>.  Its <stochastic_channel>s and its other parameters
+form the base channel-set for all scopes which are defined within its
+<process>.  Each <process> defines a scope.
 
 For each procedure defined within a scope, the scope's channel-set is reduced
 by removing any channels which are explicitly declared by the procedure's
@@ -101,12 +126,12 @@ of its <process>, followed by the reduced channel-set of the containing scope,
 followed by any added channels.  These defined parameters form the base
 channel-set of the inner scope.
 
-When a <receive> in a <synchronized_guard> instantiates a channel whose name
+When a <receive> in a <synchronized_guard> instantiates a <channel> whose name
 is in the channel-set of the scope, that instance and all subsequent instances
-of the channel in the same <synchronized_clause> are renamed, by appending a
+of the <channel> in the same <synchronized_clause> are renamed, by appending a
 single-quote (') to its name.
 
-A channel whose name is not in the channel-set of the scope and which is
+A <channel> whose name is not in the channel-set of the scope and which is
 instantiated by a <receive> in a <synchronized_guard>, is referred to as a
 "local" channel.  A local channel is added to the channel-set of its scope,
 within the <synchronized_clause> in which it is declared; this is significant
@@ -117,12 +142,23 @@ A <new_scope> within a <process> has the same semantics as a declared
 not called; in addition it may contain <process_definitions> whose <process>es
 can only be referred to within the declared scope.
 
-When a <process> includes a <receive> in a <synchronized_clause>, an additional
-procedure is invented.  The first procedure implements all <send> offers, and
-call the additional procedure.  The additional procedure commits to the
-corresponding <body> when the offer is accepted.  In the case of mixed choice
-<synchronized_clauses>, a <synchronized_guard> <receive> <communication> may
-commit instead, in which case all of the offers are withdrawn.
+When a <process> includes a <send> in a <synchronized_clause>, or for any
+communciation in a stochastic module, an additional procedure is invented. 
+The first procedure implements all <send> offers, and calls the additional
+procedure.  The additional procedure commits to the corresponding <body>
+when the offer is accepted.  In the case of a mixed choice
+<synchronized_clause>, a <synchronized_guard> <receive> <communication> may
+commit instead, in which case all of the offers are withdrawn.  When the
+<process> is in a stochastic module, a call to a monitor in the first
+procedure determines a delay for each communication.
+
+When a communication process is in a stochastic module, none of its
+communications can be resolved until an associated delay is finished.  The
+delays are determined dynamically by a call to a monitor, which samples a
+value from an exponential distribution whose mean is defined within the object
+(<pi_channel>) which represents the communication channel.  Additional
+parameters to the generated procedure are fcp variables; Each variable is
+unknown until the associated delay is finished.
 
 A <call> to <atom> or to <name>( <substitution_list> ) to a <process> within
 the same <program> is implemented by a compound-fcp call to the named
@@ -138,3 +174,6 @@ Note:
 
 The initial version of the transformation requires that no two <process>es
 within a <program> have the same name.
+
+Process summations and most of the transformations related to stochastic
+modules are deferred until all of the other transformations are completed.

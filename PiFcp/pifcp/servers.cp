@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/28 10:08:22 $
+		       	$Date: 2000/03/07 11:52:27 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -86,7 +86,8 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
-	create_entry(GlobalDescriptors, GlobalNames, Export?,
+	make_prefix_call(Export, Means, GlobalNames, Prefix),
+	create_entry(GlobalDescriptors, GlobalNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
 			Entries, Entries'?),
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
@@ -105,16 +106,37 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
 	/* sum_procedures. */
 	call#sum_procedures(Summed, Entries, Errors).
 
+  make_prefix_call(Export, Means, GlobalNames, Prefix) :-
 
-create_entry(GlobalDescriptors, GlobalNames, Export,
+    Export =?= true,
+    arg(1, Means, stochastic),
+    GlobalNames = [] |
+      Prefix = scheduler(`spifcp(schedule));
+
+    Export =?= true,
+    arg(1, Means, stochastic),
+    GlobalNames =\= [] |
+      Prefix = global_channels(_GlobalPairList, `spifcp(schedule));
+
+    Export =?= true,
+    arg(1, Means, none),
+    GlobalNames =\= [] :
+      Prefix = global_channels(_GlobalPairList);
+
+    otherwise :
+      Export = _,
+      Means = _,
+      GlobalNames = _,
+      Prefix = [].
+
+
+create_entry(GlobalDescriptors, GlobalNames, Prefix,
 		ProcessDefinition, NewDefinition, Entries, NextEntries) :-
-
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
 					CodeTuple},
     Name =\= "_",
-    GlobalNames =\= [],
-    Export = true,
+    tuple(Prefix),
     Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
@@ -128,13 +150,13 @@ create_entry(GlobalDescriptors, GlobalNames, Export,
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
 	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
-					Initializer);
+					Initializer, Prefix);
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
 					CodeTuple},
     Name =\= "_",
+    Prefix = [],
     GlobalNames =\= [],
-    Export = false,
     Index := arity(OuterLHS) :
       GlobalDescriptors = _,
       NextEntries = Entries,
@@ -146,7 +168,7 @@ create_entry(GlobalDescriptors, GlobalNames, Export,
     otherwise :
       GlobalDescriptors = _,
       GlobalNames = _,
-      Export = _,
+      Prefix = _,
       NewDefinition = ProcessDefinition,
       Entries = NextEntries.
 
@@ -171,8 +193,8 @@ create_entry(GlobalDescriptors, GlobalNames, Export,
       ChannelNameList = [].
 
 
-  initialize_global_channels(Index, Tuple, GlobalDescriptors, Initializer)
-				+ (List = Tail?, Tail) :-
+  initialize_global_channels(Index, Tuple, GlobalDescriptors,
+			Initializer, Prefix) + (List = Tail?, Tail) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
@@ -188,10 +210,12 @@ create_entry(GlobalDescriptors, GlobalNames, Export,
 	self;
 
     Index > arity(Tuple),
-    arg(1, Tuple, ProcedureName) :
+    arg(1, Tuple, ProcedureName),
+    arg(2, Prefix, GlobalPairList) :
       GlobalDescriptors = _,
       Tail = [],
-      Initializer = (pi_monitor#global_channels(List), ProcedureName).
+      Initializer = (pi_monitor#Prefix, ProcedureName) |
+	unify_without_failure(GlobalPairList, List).
 
 
 /*
@@ -417,7 +441,7 @@ serve_process_scope(In, ProcessDefinition, Means,
       NCL = CL;
 
     CL = [] :
-      Extract = (`C = {`"_", `pinch(C), `"_"}),
+      Extract = (`C = {`"_", `pinch(C), `"_", `"_", `"_"}),
       NCL = [C].
     
   make_comparer(Extract1, Extract2, Compare, Comparer) :-

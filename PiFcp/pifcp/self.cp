@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/28 10:08:21 $
+		       	$Date: 2000/03/07 11:52:27 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -198,7 +198,7 @@ program(Source, Controls, Delay, Exports, Terms, Errors) :-
 	servers#serve_empty_scope(Scope?, Controls, Exports,
 					NextTerms, Errors),
 	process_definitions+(Processes = [], NextScope = []),
-	spc#output(Terms'?, Exports, Delay, Terms).
+	spc#output(Terms'?, Delay, Terms).
 
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
@@ -452,13 +452,13 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 			Sends, NextSends) :-
 
     Mode =?= send, FinalMode =?= mixed,
-    RHSList ? (Send | Body):
+    RHSList ? (Send | Body) :
       Sends ! Send,
       ClauseList ! (`pifcp(chosen) = Index : `pifcp(sendid) = `"_" | Body) |
 	self;
 
     Mode = send, FinalMode =\= mixed,
-    RHSList ? (Send | Body):
+    RHSList ? (Send | Body) :
       Sends ! Send,
       ClauseList ! (`pifcp(chosen) = Index | Body) |
 	self;
