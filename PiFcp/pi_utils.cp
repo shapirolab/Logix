@@ -1,7 +1,8 @@
 -language(compound).
 -mode(failsafe).
 -export([make_channel/1, make_channel/4, parse_options/5,
-	 show_channel/3, show_goal/3, show_goals/3, show_resolvent/3,
+	 show_channel/3, show_goal/3, show_goals/3,
+	 show_resolvent/3, show_value/3,
 	 show_tree/3, close_tree/1,
 	 receive/2, send/2]).
 
@@ -135,6 +136,9 @@ parse_options(Options, Depth, Order, Sender, Which) :-
 	unify_without_failure(Which, W(W)).
 
   define_option(Options, Depth, Order, Sender, Which, Option) :-
+
+    Option = fcp |
+	parse_options;
 
     integer(Option) :
       Depth = Option(_) |
@@ -331,6 +335,17 @@ show_tuple_args(Tuple, Which, Depth, Sender, Index, Args, Left, Right) :-
       Left = Right.
 
 
+show_value(Argument, Options, Display) :-
+
+    Options =?= fcp :
+      Display = Argument;
+
+    Options =\= fcp :
+      make_channel(BadOption, _) |
+	parse_options(Options, Depth(1), BadOption(BadOption),
+		      Sender(no_sender), Which(active)),
+	show_argument + (PiMacro = false, Left = Display, Right = Display'?).
+
 show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
     Argument = Name(Vector, Stream), string(Name), vector(Vector),
@@ -393,7 +408,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Depth = _,
       Sender = _,
       PiMacro = _,
-      Display = "_?",
+      Display = Argument,
       Left = Right;
 
     we(Argument) :
@@ -401,7 +416,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Depth = _,
       Sender = _,
       PiMacro = _,
-      Display = "_",
+      Display = Argument,
       Left = Right;
 
     Argument = Name(_Vector, _Stream), unknown(Name) :
@@ -425,7 +440,10 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = Args |
 	show_tuple_args;
 
-/* Add list later */
+    Argument ? A :
+      Display ! D |
+	show_argument(A, Which, Depth, Sender, false, D, Left, Left'?),
+	self;
 
    otherwise :
       Which = _,
@@ -436,7 +454,12 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
 
 show_goal(Goal, Options, Output) :-
-    show_goal(Goal, Options, PiFcp, Output, PiFcp?).
+
+    Options =?= fcp :
+      Output = Goal;
+
+    Options =\= fcp |
+	show_goal(Goal, Options, PiFcp, Output, PiFcp?).
 
 show_goal(Goal, Options, PiFcp, Left, Right) :-
 
@@ -718,7 +741,11 @@ sort_on_time(List, Sorted) + (Tail =[]) :-
 
 show_goals(Goals, Options, Output) :-
 
-    true :
+    Options =?= fcp :
+      Options' = [] |
+	self;
+
+    Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
@@ -737,7 +764,11 @@ show_goals(Goals, Options, Output) :-
 
 show_resolvent(Resolvent, Options, Stream) :-
 
-    true :
+    Options =?= fcp :
+      Options' = [] |
+	self;
+
+    Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
