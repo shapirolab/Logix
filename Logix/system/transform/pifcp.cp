@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/17 10:10:33 $
+		       	$Date: 2000/01/23 09:31:18 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/transform/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -209,7 +209,7 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
       Primes = _ |
 	verify_channel(Name, Channel, Channels, Locals,
 			Channel', Errors, Errors'?),
-	parse_message(ProcessDefinition, Message, ChannelNames,
+	parse_message(Name, Channels, Message, ChannelNames,
 			Locals', Primes', Errors', Errors''?),
 	instantiated_local_channels(Primes'?, ChannelNames?, ChannelNames'),
 	channels_to_variables(ChannelNames', Variables, N),
@@ -681,26 +681,34 @@ channels_to_atom(Cs, T, I, Atom) :-
 
 
 make_guard_receive(Channel, ChannelList, SendId, Iterates, Consume) :-
-
     string_to_dlist(Channel, CL, Prime) :
       Prime = [39],
 
-      Iterates = {(`Channel = {`"CId", `"CV", `"Mss"},
-		   `"Mss" ? {`"_", `"_", `"_", `"Choice"},
-		   not_we(`"Choice") :
-		     `ChannelP = {`"CId", `"CV", `"Mss'"} |
+      Iterates = {(`Channel = {`pifcp(id), `pifcp(cv), `pifcp(mss)},
+		   `pifcp(mss) = [{`"_", `"_", `"_", `pifcp(choice)}
+				 | `pifcp(mssp)],
+		   not_we(`pifcp(choice)) :
+		     `ChannelP = {`pifcp(id), `pifcp(cv), ?pifcp(mssp)} |
 			self),
-		  (`Channel = {`"CId", `"CV", `"Mss"},
-		   `"Mss" ? {`SendId, `"_", `"_", `"Chosen"} :
-		     `ChannelP = {`"CId", `"CV", `"Mss'"} |
+		  (`Channel = {`pifcp(id), `pifcp(cv), `pifcp(mss)},
+		   `pifcp(mss) =?= [{`SendId, `"_", `"_", `pifcp(chosen)}
+				   | `pifcp(mssp)] :
+		     `ChannelP = {`pifcp(id), `pifcp(cv), ?pifcp(mssp)} |
 			self)},
 
-      Consume = (`Channel = {`"_", `"_", `"Mss"},
-		 `"Mss" ? {`Sender, ChannelList, `"ChoiceTag", `"Choose"},
-		 ExcludeSender? : CancelSends?),
-      Choose = (`"Choose" = `"ChoiceTag"),
+      Consume = (`Channel = {`"_", `"_", `pifcp(mss)},
+		 `pifcp(mss) =?=
+			[{`Sender, ChannelList, `pifcp(tag), `pifcp(choose)}
+			| `"_" /*pifcp(mssp)*/],
+		  ExcludeSender? :
+/* This may only be done if we can handle multiple primes - e.g.
+** when the message is a <channel_list> which includes  Channel .
+**		    `ChannelP = {`pifcp(id), `pifcp(cv), ?pifcp(mssp)},
+*/
+		    CancelSends?),
+      Choose = (`pifcp(choose) = `pifcp(tag)),
 
-      TestWe = we(`"Choose") |
+      TestWe = we(`pifcp(choose)) |
 
 	list_to_string(CL, ChannelP),
 	receive_sender.
@@ -713,20 +721,18 @@ make_guard_receive(Channel, ChannelList, SendId, Iterates, Consume) :-
       CancelSends = Choose;
 
     otherwise :
-      Sender = "Sender",
+      Sender = pifcp(sender),
       ExcludeSender = (`SendId =\= `Sender, TestWe),
-      CancelSends = (`"Chosen" = 0, Choose).
+      CancelSends = (`pifcp(chosen) = 0, Choose).
 
 
 make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
 
-    string_to_dlist('V', VL, VS),
-    string_to_dlist(ChannelName, Suffix, []) :
-      VS = Suffix,
+    true :
+      VN = pinch(ChannelName),
       Guard = {`ChannelName = {`"_", `VN, `"_"},
-		write_channel({Sender, ChannelList, SendIndex, `"Chosen"},
-				`VN)} |
-	list_to_string(VL, VN).
+		write_channel({Sender, ChannelList, SendIndex, `pifcp(chosen)},
+				`VN)} .
 
   make_guard_sender(SendId, Name, ChannelName, Sender) :-
 
@@ -736,10 +742,9 @@ make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
     otherwise :
       Name = _,
       ChannelName = _,
-      Sender = `SendId.
+      Sender = ?SendId.
 
-
-make_sender(Name, ChannelName, Sender) :-
+  make_sender(Name, ChannelName, Sender) :-
 
     string_to_dlist(Name, NL, NC),
     string_to_dlist(ChannelName, CL, []) :
@@ -844,24 +849,32 @@ verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
       Errors = [Name - undefined_channel(ChannelName) | NextErrors].
 
 
-parse_message(ProcessDefinition, Message, ChannelNames, Locals, Primes,
+parse_message(Name, Channels, Message, ChannelNames, Locals, Primes,
 			Errors, NextErrors) :-
 
     Message = [] :
-      ProcessDefinition = _,
+      Name = _,
+      Channels = _,
       ChannelNames = [],
       Locals = [],
       Primes = [],
       Errors = NextErrors;
 
-    tuple(Message),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtoms, _InnerAtoms} :
+    tuple(Message) :
       Index = 1 |
 	extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
 					Errors, Errors'?),
 	check_for_duplicates(Strings, UniqueStrings,
 		{Name, duplicate_receive_channel}, Errors', NextErrors),
-	instantiate_channels.
+	instantiate_channels;
+
+    otherwise :
+      Channels = _,
+      ChannelNames = [],
+      Locals = [],
+      Primes = [],
+      Errors = [(Name - invalid_message(Message)) | NextErrors].
+
 
   extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
 				Errors, NextErrors) :-
@@ -1308,18 +1321,12 @@ process(Status, RHSS, Scope, Process, Nested) :-
 
     string_to_dlist(".", DotName, Dt),
     string_to_dlist(Channel, Suffix, []),
-    string_to_dlist(Name, PH, PS),
-    string_to_dlist("V", VH, VS),
-    string_to_dlist("Ms", MsH, MsS) :
-      MakeChannel = make_channel(`VA?, `MsA?),
-      NameChannel = (`Channel = ChannelId?(`VA?, `MsA?)),
+    string_to_dlist(Name, PH, PS) :
+      MakeChannel = make_channel(`pinch(Channel), `pimss(Channel)),
+      NameChannel = (`Channel = ChannelId?(?pinch(Channel), ?pimss(Channel))),
       Dt = Suffix,
-      PS = DotName,
-      VS = Suffix,
-      MsS = Suffix |
-	list_to_string(PH, ChannelId),
-	list_to_string(VH, VA),
-	list_to_string(MsH, MsA).
+      PS = DotName |
+	list_to_string(PH, ChannelId).
 
 
 nested_procedures(Process, Nested, Terms, NextTerms) :-
@@ -1344,11 +1351,12 @@ nested_procedures(Process, Nested, Terms, NextTerms) :-
 guarded_clauses(RHS1, RHS2, Nested, Scope) +
 		(Mode = none, SendId = _, NextNested = [], NextScope = [],
 			 Index = 0, NextRHSS, RHSS = NextRHSS?,
-			 NextSends = []) :-
+			 NextSends = [], FinalMode = _) :-
 
     RHS1 =?= (_ | _),
     Index++ :
-      NextRHSS = [Clauses?] |
+      NextRHSS = [Clauses?],
+      FinalMode = Mode'? |
 	guarded_clause(RHS1, GuardMode(SendId?, Index'), Clauses,
 			Nested, Nested'?, Scope, Scope'?),
 	update_process_mode(Mode, GuardMode, Mode'),
@@ -1366,7 +1374,8 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
     otherwise :
       Index = _,
       Scope ! error(invalid_guarded_clause(RHS1)),
-      NextRHSS = [] |
+      NextRHSS = [],
+      FinalMode = none |
 	make_right_hand_side + (Index = 1),
 	make_rhs2.
 
@@ -1411,10 +1420,10 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	make_choice_name(PName, ".sends", SendChoices),
 	make_predicate_list(';', ClauseList, FcpClauses),
 	sends_to_writes(Sends, Writes),
-	make_choice_atom+(Name = SendChoices, ChoiceVars = [`"Chosen"]);
+	make_choice_atom+(Name = SendChoices, ChoiceVars = [`pifcp(chosen)]);
 
     Mode =?= mixed :
-      SendId = "Sendid",
+      SendId = pifcp(sendid),
       RHS2 = (Writes | pi_monitor#unique_sender(PName?, `SendId),
 			MixedChoices),
       Nested = [(ChoiceAtom? :- FcpClauses?) | NextNested],
@@ -1424,7 +1433,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	make_predicate_list(';', ClauseList, FcpClauses),
 	sends_to_writes(Sends, Writes),
 	make_choice_atom+(Name = MixedChoices,
-			ChoiceVars = [`"Chosen", `SendId]);
+			ChoiceVars = [`pifcp(chosen), `SendId]);
 
     /* receive, compared, logix, none */
     Mode =\= conflict, Mode =\= compare :
@@ -1475,13 +1484,13 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	utils#tuple_to_dlist(InnerAtom, [_|Channels], ChoiceVars),
 	utils#list_to_tuple([Name|Channels], ChoiceAtom).
 
-  make_right_hand_side(RHSS, Index, ClauseList, Sends, NextSends) :-
+  make_right_hand_side(RHSS, FinalMode, Index, ClauseList, Sends, NextSends) :-
 
     RHSS ? RHS,
     RHS = {Mode, RHSList},
     Index++ |
-	make_clauselist(Mode, Index, RHSList, ClauseList, ClauseList'?,
-			Sends, Sends'?),
+	make_clauselist(Mode, FinalMode, Index, RHSList,
+			ClauseList, ClauseList'?, Sends, Sends'?),
 	self;
 
     RHSS ? true,
@@ -1489,18 +1498,25 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	self;
 
     RHSS =?= [] :
+      FinalMode = _,
       Index = _,
       ClauseList = [],
       Sends = NextSends.
 
 
-  make_clauselist(Mode, Index, RHSList, ClauseList, NextClauseList,
+  make_clauselist(Mode, FinalMode, Index, RHSList, ClauseList, NextClauseList,
 			Sends, NextSends) :-
 
-    Mode = send,
+    Mode =?= send, FinalMode =?= mixed,
     RHSList ? (Send | Body):
       Sends ! Send,
-      ClauseList ! (`"Chosen" = Index | Body) |
+      ClauseList ! (`pifcp(chosen) = Index : `pifcp(sendid) = `"_" | Body) |
+	self;
+
+    Mode = send, FinalMode =\= mixed,
+    RHSList ? (Send | Body):
+      Sends ! Send,
+      ClauseList ! (`pifcp(chosen) = Index | Body) |
 	self;
 
     Mode =?= none,
@@ -1514,6 +1530,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 
     RHSList =?= [] :
       Mode = _,
+      FinalMode = _,
       Index = _,
       ClauseList = NextClauseList,
       Sends = NextSends.
