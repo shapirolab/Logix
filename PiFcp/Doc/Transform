@@ -31,11 +31,9 @@ Representations and transformations of the PiFcp language to Compound Fcp
   <message_stream> ::= _
                        [<pi_message> | <message_stream>]
 
-Since <channel> names begin with a lower case letter, the transformation
-converts them to Fcp variables of the same name; declared process names
+When a <channel> name begins with a lower case letter, the transformation
+converts it to an Fcp variable of the same name; declared process names
 begin with an upper case letter.
-
-The sender may withdraw the message by unifying <choice> with 0.
 
 To <receive> a <message> the two/three corresponding Fcp clauses cdr down
 the <message_stream> to a <pi_message> whose <choice> is writable, and which
@@ -43,17 +41,29 @@ was NOT offered (sent) by another <clause> of the same active <process>
 (This may occur in a mixed choice <process>.)  The <choice_tag> and the
 <choice> of the selected <pi_message> are unified to consume the <message>. 
 
+To <send> one or more synchronized <message>s, a procedure offers the
+<message>(s) by writing each <pi_message> on its communication channel. 
+When multiple <pi_message>s are offered, they share the same <choice>
+variable.  The <process> then waits in a generated procedure for a <pi_message>
+to be chosen by some receiver, which unifies the <choice_tag> with the
+<choice>, effectively withdrawing all other offered <pi_message>s.  The
+procedure commits to the <body> corresponding to the chosen <message>.  When
+the <process> includes one or more <receive>s, the corresponding Fcp clauses
+are in the generated procedure; in this case, if some other sender is
+synchronized with the received <pi_message>, the offered <message>s are
+withdrawn by unifying <choice> with 0.
+
 Each <process> is represented by an Fcp procedure.  Each <channel> which is an
-argument of the of the <process> is represented by a <pi_channel> - the name
-of the Fcp variable which represents the <pi_channel> in the arguments of the
-Fcp procedure is the <variable> name of the <channel>.
+parameter or an added <channel> of the <process> is represented by a
+<pi_channel> - the Fcp variable which represents the <pi_channel> has the same
+name as the <channel>.
 
 A <program> defines a scope which is global to every <process> which is
 defined within the <program>.
 
-A <process> defines a scope within which each channel in the containing
-scope is defined.  This is implemented by adding all of those channels to
-the parameters of the Fcp procedure definitions and to calls within the Fcp
+A <process> defines a scope within which each <channel> in the containing
+scope is defined.  This is implemented by adding each <channel> to the
+parameters of the Fcp procedure definitions and to calls within the Fcp
 procedure.
 
 Fcp procedures within a scope are renamed as necessary to avoid naming
@@ -68,14 +78,14 @@ Each <process> defined in the outermost scope of the program is like an
 independant program - such <process>es do not share any context.
 
 
-An PiFcp process is transformed into a procedure as follows.
+A PiFcp process is transformed into a procedure as follows.
 
 
 Each <process> in the <program> is transformed into one Fcp procedure with
 the same name, if it does not have an added <channel_list> - i.e. its
 <left_hand_side> is an <atom>.  Otherwise, it is transformed into two
-Fcp procedures.  The first procedure initializes and opens the channels of
-the added <channel_list> and calls the second procedure.
+Fcp procedures.  The first procedure initializes each added channel and calls
+the second procedure.
 
 The parameter <channel_list> of a <process> (if any) consists of channels
 which have been initialized elsewhere.
@@ -93,7 +103,7 @@ channel-set of the inner scope.
 
 When a <receive> in a <synchronized_guard> instantiates a channel whose name
 is in the channel-set of the scope, that instance and all subsequent instances
-of the channel in the same <synchronized)clause> are renamed, by appending a
+of the channel in the same <synchronized_clause> are renamed, by appending a
 single-quote (') to its name.
 
 A channel whose name is not in the channel-set of the scope and which is
@@ -120,8 +130,8 @@ procedure:  name  or  name+(substitutes)  as appropriate.
 
 A <communication> in the <body> is implemented by a logix library macro.
 
-<external_call> and <logix_call> are implemented by logix Remote Procedure
-Calls - they are not synchronized.
+An <external_call> is implemented by a logix Remote Procedure Call - it is not
+synchronized.
 
 
 Note:

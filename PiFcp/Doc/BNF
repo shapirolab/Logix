@@ -15,19 +15,17 @@ BNF for PiFcp
                            <name>(<channel_list>)
 
 <channel_list>         ::= <channel>
-                           <channel>, <channel_list>
+                           <channel> , <channel_list>
 
 <right_hand_side>      ::= <synchronized_clauses>
+                           <logix_guard_clauses>
                            <comparison_clauses>
                            <body>
 
 <synchronized_clauses> ::= <synchronized_clause> 
                            <synchronized_clause> ; <synchronized_clauses>
 
-<synchronized_clause>  ::= <synchronized_guard> | <body>
-
-<synchronized_guard>   ::= <communication>
-                           <communication> | <synchronized_guard>
+<synchronized_clause>  ::= <communication> | <right_hand_side>
 
 <communication>        ::= <receive>
                            <send>
@@ -36,20 +34,27 @@ BNF for PiFcp
 
 <send>                 ::= <channel> ! <message>
 
-<comparison_clauses>   ::= <comparison_clause> ; otherwise | <body>
+<message>              ::= []
+                           {<channel_list>}
+
+<logix_guard_clauses>  ::= <logix_guard_clause> 
+                           <logix_guard_clause> ; <logix_guard_clauses>
+
+<logix_guard_clause>   ::= {<logix_guard_list>} | <right_hand_side>
+
+<logix_guard_list>     ::= <logix_ask_guard>
+                           <logix_ask_guard> , <logix_guard_list>
+
+<comparison_clauses>   ::= <comparison_clause> ; otherwise | <right_hand_side>
                            <comparison_clause> ; <comparison_clauses>
 
-<comparison_clause>    ::= <comparison> | <body>
-                           <comparison> | <synchronized_clause>
+<comparison_clause>    ::= <comparison> | <right_hand_side>
 
 <comparison>           ::= <compare>
                            <compare> & <comparison>
 
 <compare>              ::= <channel> =?= <channel>
                            <channel> =\= <channel>
-
-<message>              ::= []
-                           {<channel_list>}
 
 <body>                 ::= <call>
                            <call> , <body>
@@ -58,9 +63,9 @@ BNF for PiFcp
                            <name>( <substitution_list> )
                            <communication>
                            << <new_scope> >>
-                           true
                            <external_call>
-                           <logix call>
+                           {<logix_goal_list>}
+                           true
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
@@ -73,41 +78,62 @@ BNF for PiFcp
 <scope_content>        ::= <right_hand_side>
                            <right_hand_side> . <process_definitions>
 
-<external_call>        ::= <logix_node_name>#<atom>
-                           <logix_node_name>#<external_call>
+<external_call>        ::= <logix_term>#<atom>
+                           <logix_term>#<logix_goal>
+                           <logix_term>#<external_call>
 
-<logix_call>           ::= <logix_node_name>#<logix_atom>
-                           <logix_node_name>#<logix_call>
+<logix_goal_list>      ::= <logix_goal>
+                           <logix_goal> , <logix_goal_list>
 
 Primitives:
 
 
-A <channel> is an alpha-numeric string, beginning with a lower case letter,
-which may contain  an underscore (_) character, or it is just an underscore
-character.  By convention the <channel> "_" is anonymous; it may only be
-used in a <receive> <channel_list>, where it matches any <channel> which
-is sent in the corresponding position.
+A <channel> is an alpha-numeric string, beginning with an alphabetic character,
+which may contain underscore (_) characters, or it is just an underscore
+character.  By convention the <channel> "_" is anonymous; it may not be used
+as a parameter or as an added <channel> of a <left_hand_side>.
 
 
-A <name> is an alpha-numeric string, beginning with a upper case letter, which
-may contain an underscore (_) character.
+A <name> is an alpha-numeric string, beginning with an upper case letter, which
+may contain underscore (_) characters.
 
 
-A <logix_node_name> is a non-empty string.
+A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
+language(compound).
+
+A <logix_goal> is any predicate permitted in the right-hand-side of a clause
+in logix language(compound).
+
+A <logix_term> is any term permitted in logix language(compound).  This
+includes <logix_ask_guard> and <logix_goal>, as well as arbitrary tuples,
+lists and channels.
 
 
 Notes:
 
+Any channel may have a value which is an arbitrary <logix_term>.  Such
+values may be tested or manipulated by a <logix_ask_guard> or by a
+<logix_goal>.  A channel whose name begins with a capital letter is most
+convenient for this purpose.  An arbitrary <logix_term> can be sent in a
+message by the library <logix_goal> :
+
+    pi_send(<sender>, <message_content>, <channel>)
+
+e.g.
+
+    pi_send("me.C", {"A string", a(Tuple), [A, list | Tail]}, C)
+
 
 The "new" predicate has been subsumed into a prefix <channel_list> of
 a <new_scope> and the added <channel_list> of a <process>.
+
 
 The <channel>s in the <arguments> of a <process> are provided by a caller.
 A <channel> may be "extruded" from a <process> by a <send> to such an argument
 channel.
 
 
-If a <process> is declared at level one of a <program> definition, it may be
+A <process> which is declared at level one of a <program> definition, may be
 called by an external process.
 
 
@@ -115,26 +141,33 @@ Nested "new" processes are scoped with angle brackets (see definition of
 <new_scope>).
 
 
+Within a <logix_term>, normal logix recognition of variables applies - i.e.
+variable names all begin with a capital letter or underscore; to reference a
+<channel> whose name begins with a lower case letter, within a <logix_term>,
+refer to '_var'(<channel_name>.
+
+
+Thusfar, the only reserved name is "true".  It should only be needed as the
+only <call> in the <body> of a clause.
+
+
 Channel typing has been omitted.
 
 
-A <logix_atom> is any Logix procedure call.
+The additive definition of <left_hand_side> is syntactic sugar - e.g.
 
-
-Reserved atoms are not (yet) specified, except for "true", which should only
-be needed as the only <call> in the <body> of a <synchronized_clause>.
-
-
-The recursive definition of <synchronized_guard> is syntactic sugar - e.g.
-
-    p :- <communication1> | <synchronized_guard1> | q;
-         <communication2> | <synchronized_guard2> | r.
+    P+(<channel_list>) :- <right_hand_side>.
 
 is equivalent to:
 
-    p :- <communication1> | p1;
-         <communication2> | p2.
+    P :- << <channel_list> . P1; P1 :- <right_hand_side> >> .
 
-    p1 :- <synchronized_guard1> | q.
+The recursive definition of <right_hand_side> is syntactic sugar - e.g.
 
-    p2 :- <synchronized_guard2> | r.
+    P :- <communication1> | {<logix_guard_list>} | Q;
+         <communication2> | (<comparison> | R; otherwise | S).
+
+is equivalent to:
+
+    P :- <communication1> | << P1 . P1 :- {<logix_guard_list>} | Q >>;
+         <communication2> | << P2 . P2 :- <comparison> | R ; otherwise | S >>.
