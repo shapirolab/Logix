@@ -156,8 +156,16 @@ format_typerate(Type, Rate, TypeRate, Left, Right) :-
       TypeRate = bimolecular(Rate),
       Left = Right;
 
+    Type =?= SPI_BIMOLECULAR_PRIME :
+      TypeRate = "bimolecular'"(Rate),
+      Left = Right;
+
     Type =?= SPI_HOMODIMERIZED :
       TypeRate = homodimerized(Rate),
+      Left = Right;
+
+    Type =?= SPI_HOMODIMERIZED_PRIME :
+      TypeRate = "homodimerized'"(Rate),
       Left = Right;
 
     Type =?= SPI_INSTANTANEOUS :

@@ -46,6 +46,7 @@ SPI_POST =>            1.
 SPI_CLOSE =>           2.
 SPI_STEP =>            3.
 SPI_INDEX =>           4.
+SPI_RATE =>            5.
 
 /* Sub-Channel Indices */
 
@@ -69,12 +70,14 @@ CHANNEL_SIZE => 12.
 
 /* Channel Types */
 
-SPI_CHANNEL_ANCHOR =>  0.
-SPI_UNKNOWN =>         1.
-SPI_BIMOLECULAR =>     2.
-SPI_HOMODIMERIZED =>   3.
-SPI_INSTANTANEOUS =>   4.
-SPI_SINK =>            5.
+SPI_CHANNEL_ANCHOR =>      0.
+SPI_UNKNOWN =>             1.
+SPI_BIMOLECULAR =>         2.
+SPI_HOMODIMERIZED =>       3.
+SPI_INSTANTANEOUS =>       4.
+SPI_SINK =>                5.
+SPI_BIMOLECULAR_PRIME =>   6.
+SPI_HOMODIMERIZED_PRIME => 7.
 
 /* Weight Computation Values */
 

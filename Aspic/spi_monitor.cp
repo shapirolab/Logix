@@ -19,20 +19,21 @@ STOPPED => Reply = _.
 
 /*
 ** Arguments of SPIOFFSETS correspond to the C-executable (spicomm.c)
-** sub-functions: Post, Close, Step, Index (see spi_constants.cp).
+** sub-functions: Post, Close, Step, Index, Rate (see spi_constants.cp).
 **
 ** To test one or more C-executables, set the other arguments "unbound" - e.g. 
 ** 
-** SPIOFFSETS => {unbound, unbound, SpiOffset, SpiOffset}
+** SPIOFFSETS => {unbound, unbound, SpiOffset, SpiOffset, unbound}
 **
 ** to allow the monitor to call the C step function and the C index function,
 ** and to execute the other operations with fcp code.  Note that the
-** C index function is not implemented in fcp for non-standard weighters.
+** C index function and the C rate function are not implemented in fcp for
+** non-standard weighters.
 */
 
-%SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
-SPIOFFSETS => {unbound, SpiOffset, unbound, SpiOffset}.
-%SPIOFFSETS => {unbound, unbound, unbound, unbound}.
+%SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
+SPIOFFSETS => {unbound, SpiOffset, unbound, SpiOffset, SpiOffset}.
+%SPIOFFSETS => {unbound, unbound, unbound, unbound, unbound}.
 
 initialize(In) :-
 
@@ -53,7 +54,7 @@ initialize(In) :-
 
     Ok =\= true :
       DefaultSpiOffsets = _,
-      SpiOffsets = {unbound, unbound, unbound, unbound} |
+      SpiOffsets = {unbound, unbound, unbound, unbound, unbound} |
 	computation#comment(("No spicomm" : "No non-standard weighters."));
 
     Ok =?= true :
@@ -382,18 +383,16 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
       store_vector(SPI_CHANNEL_RATE, Zero, Anchor),
       store_vector(SPI_CHANNEL_REFS, 1, Anchor),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Anchor),
-       make_channel(NextS, _),
-       make_channel(PrevS, _),
-       SendAnchor = {SPI_MESSAGE_ANCHOR, "", [], 0, 0, [], NextS, PrevS, []},
-       store_vector(1, SendAnchor, NextS),
-       store_vector(1, SendAnchor, PrevS),
+       make_vector(2, LinksS, _),
+       SendAnchor = {SPI_MESSAGE_ANCHOR, "", [], 0, 0, 0, [], LinksS, []},
+       store_vector(SPI_NEXT_MS, SendAnchor, LinksS),
+       store_vector(SPI_PREVIOUS_MS, SendAnchor, LinksS),
       store_vector(SPI_SEND_WEIGHT, 0, Anchor),
       store_vector(SPI_RECEIVE_ANCHOR, ReceiveAnchor, Anchor),
-       make_channel(NextR, _),
-       make_channel(PrevR, _),
-       ReceiveAnchor = {SPI_MESSAGE_ANCHOR, "", [], 0, 0, [], NextR, PrevR, []},
-       store_vector(1, ReceiveAnchor, NextR),
-       store_vector(1, ReceiveAnchor, PrevR),
+       make_vector(2, LinksR, _),
+       ReceiveAnchor = {SPI_MESSAGE_ANCHOR, "", [], 0, 0, 0, [], LinksR, []},
+       store_vector(SPI_NEXT_MS, ReceiveAnchor, LinksR),
+       store_vector(SPI_PREVIOUS_MS, ReceiveAnchor, LinksR),
       store_vector(SPI_RECEIVE_WEIGHT, 0, Anchor),
       store_vector(SPI_WEIGHT_TUPLE, 
 		SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX), Anchor),
@@ -433,12 +432,12 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **   Cutoff - least upper bound of internal timer (:Now) - initially large
 **   DefaultWeighter - assigned to new Channel, unless Weighter provide
 **   InstantaneousAnchor - anchor for (circular) list of infinite rate Channels
-**   NegativeExponential - computed random variable (see total_weight1)
+**   NegativeExponential - computed random variable (see compute_total_weight)
 **   Now - 0-based internal clock
 **   Ordinal - Unique index assigned to a non - "public."/".global" file
 **   SpiOffsets - magic number (or "unknown") for C-coded functions
 **   Start_real_time - real time when Cutoff set (Now = 0)
-**   Uniform - computed random variable (see total_weight)
+**   Uniform - computed random variable (see compute_total_weight)
 **
 ** Signal:
 **
@@ -707,12 +706,14 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     arg(SPI_CLOSE, SpiOffsets', Close),
     arg(SPI_POST, SpiOffsets', Post),
     arg(SPI_STEP, SpiOffsets', Step),
-    arg(SPI_INDEX, SpiOffsets', Index) :
+    arg(SPI_INDEX, SpiOffsets', Index),
+    arg(SPI_RATE, SpiOffsets', Rate) :
       SpiOffsets = _,
       Close = Close'?,
       Post = Post'?,
       Step = Step'?,
-      Index = Index'? |
+      Index = Index'?,
+      Rate = Rate'? |
 	processor#link(lookup(spicomm, SpiOffset), _Ok),
 	spifunctions,
 	self;
@@ -762,13 +763,15 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     Wakeup = done,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
-    SpiOffset =?= unbound :
+    SpiOffset =?= unbound,
+    arg(SPI_RATE, SpiOffsets, RateOffset) :
       Waiting = _,
       Waiting' = false |
-	sum_weights(BasedAnchor, 0, Total),
-	total_weight1(MathOffset, BasedAnchor, Now, Total, Wakeup', Now',
-			Uniform, NegativeExponential,
-			Uniform', NegativeExponential'),
+	sum_weights(BasedAnchor, RateOffset, 0, Total),
+	logix_total_weight(MathOffset, BasedAnchor, Now, RateOffset,
+			   Total, Wakeup', Now',
+			   Uniform, NegativeExponential,
+			   Uniform', NegativeExponential'),
 	self;
 
     Wakeup =?= done,
@@ -1031,16 +1034,11 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
       Name' = Name,
       Ordinal' = Ordinal.
 
-spifunctions(List, SpiOffset, Close, Index, Post, Step) :-
+spifunctions(List, SpiOffset, Close, Post, Step, Index, Rate) :-
 
     List ? C,
     C =:= ascii('c') :
       Close = SpiOffset? |
-	self;
-
-    List ? I,
-    I =:= ascii('i') :
-      Index = SpiOffset? |
 	self;
 
     List ? P,
@@ -1051,6 +1049,16 @@ spifunctions(List, SpiOffset, Close, Index, Post, Step) :-
     List ? S,
     S =:= ascii('s') :
       Step = SpiOffset? |
+	self;
+
+    List ? I,
+    I =:= ascii('i') :
+      Index = SpiOffset? |
+	self;
+
+    List ? R,
+    R =:= ascii('r') :
+      Rate = SpiOffset? |
 	self;
 
     List ? Other,
@@ -1069,7 +1077,8 @@ spifunctions(List, SpiOffset, Close, Index, Post, Step) :-
 	unify_without_failure(unbound, Close),
 	unify_without_failure(unbound, Post),
 	unify_without_failure(unbound, Step),
-	unify_without_failure(unbound, Index);
+	unify_without_failure(unbound, Index),
+	unify_without_failure(unbound, Rate);
 
     otherwise :
       List' = [] |
@@ -1264,11 +1273,11 @@ execute(MathOffset, Arguments) :-
       Messages = AddMessages? |
 	post_pass1,
 	post_pass2 ;
-
+/*
     Arguments = step(Now, Anchor, NewNow, Reply) |
-	sum_weights(Anchor, 0, Total),
+	sum_weights(Anchor, unknown, 0, Total),
 	total_weight;
-
+*/
     Arguments = close(Channels, Reply),
     tuple(Channels),
     N := arity(Channels) :
@@ -1407,7 +1416,31 @@ post_pass1(OpList, Common, Ok) :-
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_BIMOLECULAR_PRIME,
+    MessageType =?= SPI_SEND :
+      store_vector(SPI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
     ChannelType =?= SPI_BIMOLECULAR,
+    MessageType =?= SPI_RECEIVE :
+      store_vector(SPI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_BIMOLECULAR_PRIME,
     MessageType =?= SPI_RECEIVE :
       store_vector(SPI_BLOCKED, FALSE, Channel) |
 	self;
@@ -1431,33 +1464,99 @@ post_pass1(OpList, Common, Ok) :-
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_SEND :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_RECEIVE :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
+    ChannelType =?= SPI_HOMODIMERIZED_PRIME,
     MessageType =?= SPI_DIMER :
+      store_vector(SPI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_SEND,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
+      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_SEND,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
+      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR_PRIME, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_RECEIVE,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
+      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_RECEIVE,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
+      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR_PRIME, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_DIMER,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
       store_vector(SPI_CHANNEL_TYPE, SPI_HOMODIMERIZED, Channel) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_TYPE, Operation, MessageType),
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= SPI_UNKNOWN,
+    MessageType =?= SPI_DIMER,
+    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
+    arg(2, WeightTuple, Index),
+    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
+      store_vector(SPI_CHANNEL_TYPE, SPI_HOMODIMERIZED_PRIME, Channel) |
 	self;
 
     OpList ? Operation,
@@ -1640,14 +1739,17 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
 
 /*************************** step procedures *********************************/
 
-sum_weights(Channel, Sum, Total) :-
+sum_weights(Channel, RateOffset, Sum, Total) :-
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
     Type =?= SPI_CHANNEL_ANCHOR :
+      RateOffset = _,
       Total = Sum;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
@@ -1659,6 +1761,7 @@ sum_weights(Channel, Sum, Total) :-
 	self;    
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
@@ -1676,10 +1779,38 @@ sum_weights(Channel, Sum, Total) :-
 	self;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
-    otherwise |
+    vector(Channel'),
+    read_vector(SPI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =?= SPI_BIMOLECULAR_PRIME :
+      execute(RateOffset, {SPI_RATE, Channel', Addend, Reply}) |
+	sum_weight_cumulate(Reply, Addend, Sum, Sum'),
+	self;    
+
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
+    read_vector(SPI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =?= SPI_HOMODIMERIZED_PRIME :
+      execute(RateOffset, {SPI_RATE, Channel', Addend, Reply}) |
+	sum_weight_cumulate(Reply, Addend, Sum, Sum'),
+	self;    
+
+    otherwise,
+    vector(Channel),
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel') |
 	self.
 
+  sum_weight_cumulate(Reply, Addend, Sum, Cumulated) :-
 
+    Reply =?= true,
+    Sum  += Addend :
+      Cumulated = Sum'.
+
+/*
 total_weight(MathOffset, Anchor, Now, Total, Reply, NewNow) :-
 
     Total =< 0 :
@@ -1695,12 +1826,15 @@ total_weight(MathOffset, Anchor, Now, Total, Reply, NewNow) :-
 	Residue := Uniform'*Total,
 	select_channel + (Channel = Anchor),
 	NewNow := Now - NegativeExponential/Total.
+*/
 
-total_weight1(MathOffset, Anchor, Now, Total, Reply, NewNow, U, NE, NU, NNE) :-
+logix_total_weight(MathOffset, Anchor, Now, RateOffset, Total,
+		   Reply, NewNow, U, NE, NU, NNE) :-
 
     Total =< 0 :
       Anchor = _,
       MathOffset = _,
+      RateOffset = _,
       NewNow = Now,
       NU = U,
       NNE = NE,
@@ -1709,13 +1843,15 @@ total_weight1(MathOffset, Anchor, Now, Total, Reply, NewNow, U, NE, NU, NNE) :-
     Total > 0,
     Residue := U*Total,
     Now' := Now - NE/Total :
+      RateOffset = _,
       NewNow = Now',
       execute(MathOffset, {RAN, 0, Uniform}),
       execute(MathOffset, {LN, Uniform, NNE}),
       execute(MathOffset, {RAN, 0, NU}) |
 	select_channel + (Channel = Anchor).
 
-select_channel(Residue, Channel, Reply) :-
+
+select_channel(RateOffset, Residue, Channel, Reply) :-
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
     read_vector(SPI_BLOCKED, Channel', Blocked),
@@ -1728,7 +1864,8 @@ select_channel(Residue, Channel, Reply) :-
     read_vector(SPI_RECEIVE_WEIGHT, Channel', ReceiveWeight),
     ReceiveWeight > 0,
     Residue -= Rate*SendWeight*ReceiveWeight,
-    Residue' =< 0 |
+    Residue' =< 0 :
+      RateOffset = _ |
 	do_bimolecular_transmit;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
@@ -1760,7 +1897,8 @@ select_channel(Residue, Channel, Reply) :-
     read_vector(SPI_CHANNEL_RATE, Channel', Rate),
     read_vector(SPI_DIMER_WEIGHT, Channel', DimerWeight),
     Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
-    Residue' =< 0 |
+    Residue' =< 0 :
+      RateOffset = _ |
 	do_homodimerized_transmit;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
@@ -1782,8 +1920,57 @@ select_channel(Residue, Channel, Reply) :-
 	self;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
+    read_vector(SPI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =?= SPI_BIMOLECULAR_PRIME :
+      execute(RateOffset, {SPI_RATE, Channel', Subtrahend, Reply1}) |
+	sum_weight_decrement;    
+
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    vector(Channel'),
+    read_vector(SPI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =?= SPI_HOMODIMERIZED_PRIME :
+      execute(RateOffset, {SPI_RATE, Channel', Subtrahend, Reply1}) |
+	sum_weight_decrement;    
+
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
     otherwise |
 	self.
+
+  sum_weight_decrement(RateOffset, Residue, Channel, Reply, Type,
+			Subtrahend, Reply1) :-
+
+    Reply1 = true,
+    Subtrahend =< 0 :
+      Type = _ |
+	select_channel;
+
+    Reply1 = true,
+    Subtrahend > 0,
+    Residue -= Subtrahend,
+    Residue' > 0 :
+      Type = _ |
+	select_channel;
+
+    Reply1 = true,
+    Subtrahend > 0,
+    Residue -= Subtrahend,
+    Residue' =< 0,
+    Type =?= SPI_BIMOLECULAR_PRIME :
+      RateOffset = _  |
+	do_bimolecular_transmit;
+
+    Reply1 = true,
+    Subtrahend > 0,
+    Residue -= Subtrahend,
+    Residue' =< 0,
+    Type =?= SPI_HOMODIMERIZED_PRIME :
+      RateOffset = _  |
+	do_homodimerized_transmit.
 
 /****** based transmit - complete a transmission for a pair of messages ******/
 
