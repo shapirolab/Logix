@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/26 08:51:49 $
+		       	$Date: 2001/12/02 13:55:56 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -94,23 +94,38 @@ output(In, ProcessTable, Terms) :-
 
     In ? Mode(Atom, RHSS, Procedure),
     Mode =\= outer, Mode =\= export, Mode =\= conflict,
-    arg(1, Atom, Name) :
+    arg(1, Atom, Name),
+    Arity := arity(Atom) - 1,
+    make_tuple(Arity, ProcessId)  :
       ProcessTable ! member(Name, Channels, _Ok),
       Terms ! (Atom :- NewRHSS?) |
 	prototype_channel_table,
 	utilities#untuple_predicate_list(';', RHSS, RHSS'),
+	make_process_id,
 	stochastic;
 
     In = [] :
       Terms = [] |
 	ProcessTable = [].
 
+  make_process_id(Arity, Atom, ProcessId) :-
 
-stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
+    Arity-- > 0,
+    arg(Arity, Atom, Arg),
+    arg(Arity, ProcessId, A) :
+      A = Arg |
+	self;
+
+    Arity =< 0 :
+      Atom = _,
+      ProcessId = _.
+
+
+stochastic(In, ProcessTable, Terms, ProcessId, RHSS, Prototype, Procedure,
 		NewRHSS) :-
 
     Procedure =\= (_ :- _) :
-      Name = _ |
+      ProcessId = _ |
 	analyze_rhss(RHSS, Prototype, [], ChannelTables,
 			ProcessTable, ProcessTable'?),
 	update_rhss(false, RHSS, ChannelTables,
@@ -121,8 +136,8 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
     Procedure =?= (Atom :- Communicate1),
     RHSS =?= [(Ask : Requests | Body)] :
       Tell =
-	write_channel(start(Name, Operations?, `"Message.", `psifcp(chosen)),
-			`"Scheduler."),
+	write_channel(start(ProcessId, Operations?, `"Message.",
+					`psifcp(chosen)), `"Scheduler."),
       NewRHSS = (Ask'? : Tell | Body),
       Terms ! (Atom :- Communicate2?) |
 	utilities#untuple_predicate_list(',', Ask, Asks'),

@@ -37,11 +37,12 @@ serve(In) + (Options = []) :-
       Options = _;
 
     In =\= [] :
-      PsiOffset = _ |
+      PsiOffset = _,
+      Ordinal = 1 |
 	server(In, Options, Scheduler),
 	processor#link(lookup(math, Offset), Ok),
 	processor#link(lookup(psicomm, PsiOffset), _Ok),
-	start_scheduling(Scheduler, Offset, PSIOFFSETS,
+	start_scheduling(Scheduler, Offset, Ordinal, PSIOFFSETS,
 		PSI_DEFAULT_WEIGHT_NAME(PSI_DEFAULT_WEIGHT_INDEX), Ok).
 
 server(In, Options, Scheduler) +
@@ -280,7 +281,7 @@ get_active_request(Requests, NextRequests, Request) :-
 
 /***************************** Scheduling ***********************************/ 
 
-start_scheduling(Scheduler, Offset, PsiOffsets, DefaultWeighter, Ok) :-
+start_scheduling(Scheduler, Offset, Ordinal, PsiOffsets, DefaultWeighter, Ok):-
 
     Ok =?= true,
     info(REALTIME, Start_real_time),
@@ -293,7 +294,7 @@ start_scheduling(Scheduler, Offset, PsiOffsets, DefaultWeighter, Ok) :-
 	make_channel_anchor(based, BasedAnchor),
 	make_channel_anchor(instantaneous, InstantaneousAnchor),
 	processor#Waiter?,
-	scheduling(Schedule, Offset, PsiOffsets, Waiter,
+	scheduling(Schedule, Offset, Ordinal, PsiOffsets, Waiter,
 				NegativeExponential, Uniform',
 				BasedAnchor, InstantaneousAnchor,
 				Scheduler, _Recording, _Debug,
@@ -304,6 +305,7 @@ start_scheduling(Scheduler, Offset, PsiOffsets, DefaultWeighter, Ok) :-
       DefaultWeighter = _,
       Scheduler = _,
       Offset = _,
+      Ordinal = _,
       PsiOffsets = _ |
 	fail(math_offset(Ok)).
 
@@ -346,6 +348,7 @@ make_channel_anchor(Name, Anchor) :-
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel, BaseRate)
 **    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
+**    ordinal(Old?^, New)
 **    pause(Continue)
 **    record(Record?^)
 **    end_record(Record?^)
@@ -371,7 +374,7 @@ make_channel_anchor(Name, Anchor) :-
 **   Selected processes .
 */
 
-scheduling(Schedule, Offset, PsiOffsets, Waiter,
+scheduling(Schedule, Offset, Ordinal, PsiOffsets, Waiter,
 		NegativeExponential, Uniform,
 		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
@@ -386,6 +389,7 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
       NegativeExponential = _,
       Now = _,
       Offset = _,
+      Ordinal = _,
       PsiOffsets = _,
       Scheduler = _,
       Start_real_time = _,
@@ -429,18 +433,24 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     Schedule ? input(Schedule'', Schedule'^) |
 	self;
 
+    Schedule ? ordinal(Ordinal', Ordinal^) |
+	self;
+
     /* Create a new channel. */
     Schedule ? new_channel(ChannelName, Channel, BaseRate) |
+	index_channel_name(ChannelName, Ordinal, ChannelName', Ordinal'),
 	new_channel + (ComputeWeight = DefaultWeighter),
 	continue_waiting;
 
     Schedule ? new_channel(ChannelName, Channel, ComputeWeight, BaseRate),
     string(ComputeWeight) |
+	index_channel_name(ChannelName, Ordinal, ChannelName', Ordinal'),
 	new_channel + (ComputeWeight = ComputeWeight(_)),
 	continue_waiting;
 
     Schedule ? new_channel(ChannelName, Channel, ComputeWeight, BaseRate),
     tuple(ComputeWeight), arity(ComputeWeight) > 1 |
+	index_channel_name(ChannelName, Ordinal, ChannelName', Ordinal'),
 	new_channel,
 	continue_waiting;
 
@@ -460,7 +470,8 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     /* Start a transmission process. */
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
     arg(PSI_POST, PsiOffsets, PsiOffset),
-    PsiOffset =?= unbound :
+    PsiOffset =?= unbound,
+    string(PId) :
       Record ! start(PId),
       Debug ! start(PId) |
 	execute(Offset, post(PId, OpList, Value, Chosen, Reply)),
@@ -468,9 +479,28 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
     arg(PSI_POST, PsiOffsets, PsiOffset),
-    PsiOffset =\= unbound :
+    PsiOffset =?= unbound,
+    tuple(PId), arg(1, PId, PName) :
+      Record ! start(PName),
+      Debug ! start(PId) |
+	execute(Offset, post(PId, OpList, Value, Chosen, Reply)),
+	continue_waiting;
+
+    Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    arg(PSI_POST, PsiOffsets, PsiOffset),
+    PsiOffset =\= unbound,
+    string(PId) :
       execute(PsiOffset, {PSI_POST, PId, OpList, Value, Chosen, Reply}),
       Record ! start(PId),
+      Debug ! start(PId) |
+	continue_waiting;
+
+    Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    arg(PSI_POST, PsiOffsets, PsiOffset),
+    PsiOffset =\= unbound,
+    tuple(PId), arg(1, PId, PName) :
+      execute(PsiOffset, {PSI_POST, PId, OpList, Value, Chosen, Reply}),
+      Record ! start(PName),
       Debug ! start(PId) |
 	continue_waiting;
 
@@ -553,7 +583,7 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
 			Uniform', NegativeExponential'),
 	self;
 
-    Wakeup = done,
+    Wakeup =?= done,
     arg(PSI_STEP, PsiOffsets, PsiOffset),
     PsiOffset =\= unbound :
       Waiting = _,
@@ -561,13 +591,109 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
       Waiting' = false |
 	self;
 
-    Wakeup =?= true(PId1, CId1, PId2, CId2) :
+/*
+ * RCId refers to Request Channel Id (as of now, a string).
+ * CNID refers to Channel Name Id (as of now a string or a 2-tuple).
+ * CH refers to a psi-channel (as of now, a vector with 12 sub-channels).
+ * PName refers to a process name (the originator of a request).
+ */
+
+    Wakeup =?= true(PName1, RCId1, PName2, RCId2),
+    string(PName1), string(PName2) :
       Waiting = _,
       Wakeup' = _,
       Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
-      Record = [Now, end(PId1(CId1)), end(PId2(CId2)) | Record'?],
-      Debug ! done(PId1(CId1), PId2(CId2)) |
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1), PName2(RCId2)) |
+	self;
+
+    Wakeup =?= true(PId1, RCId1, PName2, RCId2),
+    tuple(PId1), arg(1, PId1, PName1),
+    string(PName2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1), PName2(RCId2)) |
+	self;
+
+    Wakeup =?= true(PName1, RCId1, PId2, RCId2),
+    string(PName1),
+    tuple(PId2), arg(1, PId2, PName2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1), PId2(RCId2)) |
+	self;
+
+    Wakeup =?= true(PId1, RCId1, PId2, RCId2),
+    tuple(PId1), arg(1, PId1, PName1),
+    tuple(PId2), arg(1, PId2, PName2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1), PId2(RCId2)) |
+	self;
+
+    Wakeup =?= true(PName1, RCId1, CH1, PName2, RCId2, CH2),
+    string(PName1), string(PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1, CNId1), PName2(RCId2, CNId2)) |
+	self;
+
+    Wakeup =?= true(PId1, RCId1, CH1, PName2, RCId2, CH2),
+    tuple(PId1), arg(1, PId1, PName1),
+    string(PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1, CNId1), PName2(RCId2, CNId2)) |
+	self;
+
+    Wakeup =?= true(PName1, RCId1, CH1, PId2, RCId2, CH2),
+    string(PName1),
+    tuple(PId2), arg(1, PId2, PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+	self;
+
+    Wakeup =?= true(PId1, RCId1, CH1, PId2, RCId2, CH2),
+    tuple(PId1), arg(1, PId1, PName1),
+    tuple(PId2), arg(1, PId2, PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
 	self;
 
     Wakeup =?= true :
@@ -586,6 +712,7 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
       InstantaneousAnchor = _,
       NegativeExponential = _,
       Offset = _,
+      Ordinal = _,
       PsiOffsets = _,
       Schedule = _,
       Scheduler = _,
@@ -604,12 +731,84 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     known(Done) |
 	self#reset.
 
-continue_waiting(Schedule, Offset, PsiOffsets, Waiter,
+continue_waiting(Schedule, Offset, Ordinal, PsiOffsets, Waiter,
 		NegativeExponential, Uniform,
 		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
 		DefaultWeighter, Cutoff, Start_real_time, Reply) :-
+
+    Reply =?= true(PName1, RCId1, PName2, RCId2),
+    string(PName1), string(PName2) :
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1), PName2(RCId2)) |
+	scheduling;
+
+    Reply =?= true(PId1, RCId1, PName2, RCId2),
+    tuple(PId1), arg(1, PId1, PName1),
+    string(PName2) :
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1), PName2(RCId2)) |
+	scheduling;
+
+    Reply =?= true(PName1, RCId1, PId2, RCId2),
+    string(PName1),
+    tuple(PId2), arg(1, PId2, PName2) :
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1), PId2(RCId2)) |
+	scheduling;
+
+    Reply =?= true(PId1, RCId1, PId2, RCId2),
+    tuple(PId1), arg(1, PId1, PName1),
+    tuple(PId2), arg(1, PId2, PName2) :
+      Record = [Now, end(PName1(RCId1)), end(PName2(RCId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1), PId2(RCId2)) |
+	scheduling;
+
+    Reply =?= true(PName1, RCId1, CH1, PName2, RCId2, CH2),
+    string(PName1), string(PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1, CNId1), PName2(RCId2, CNId2)) |
+	scheduling;
+
+    Reply =?= true(PId1, RCId1, CH1, PName2, RCId2, CH2),
+    tuple(PId1), arg(1, PId1, PName1),
+    string(PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1, CNId1), PName2(RCId2, CNId2)) |
+	scheduling;
+
+    Reply =?= true(PName1, RCId1, CH1, PId2, RCId2, CH2),
+    string(PName1),
+    tuple(PId2), arg(1, PId2, PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PName1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+	scheduling;
+
+    Reply =?= true(PId1, RCId1, CH1, PId2, RCId2, CH2),
+    tuple(PId1), arg(1, PId1, PName1),
+    tuple(PId2), arg(1, PId2, PName2),
+    read_vector(PSI_CHANNEL_NAME, CH1, CNId1),
+    read_vector(PSI_CHANNEL_NAME, CH2, CNId2) :
+      Record = [Now, end(PName1(RCId1, "->", CNId1)),
+		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+	scheduling;
+
+    otherwise,
+    Reply =\= true :
+      Debug ! Reply |
+	fail(continue_waiting - Reply),
+	scheduling;
 
     Waiting =?= true, Reply =?= true |
 	scheduling;
@@ -618,16 +817,6 @@ continue_waiting(Schedule, Offset, PsiOffsets, Waiter,
       Wakeup = _,
       Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true |
-	scheduling;
-
-    Reply =?= true(PId1, CId1, PId2, CId2) :
-      Record = [Now, end(PId1(CId1)), end(PId2(CId2)) | Record'?],
-      Debug ! done(PId1(CId1), PId2(CId2)) |
-	scheduling;
-
-    Reply =\= true, Reply =\= true(_, _, _, _) :
-      Debug ! Reply |
-	fail(Reply),
 	scheduling;
 
     /* check for paused. */
@@ -685,6 +874,34 @@ pause_scheduling(Continue,
       ResetWaiting = Waiting,
       Wakeup = ResetWakeup.
 
+index_channel_name(Name, Ordinal, Name', Ordinal') :-
+
+    unknown(Name) :
+      Name' = Name,
+      Ordinal' = Ordinal;
+
+    string(Name),
+    string_to_dlist(Name, CS1, []),
+    string_to_dlist("global.", CS2, _Tail) :
+      CS1 = CS2,
+      Ordinal' = Ordinal,
+      Name' = Name;
+
+    string(Name),
+    otherwise,
+    integer(Ordinal),
+    Ordinal'^ := Ordinal + 1 :
+      Name' = Name(Ordinal);
+
+    string(Name),
+    otherwise,
+    real(Ordinal),
+    Ordinal'^ := Ordinal + 0.000001 :
+      Name' = Name(Ordinal);
+
+    otherwise :
+      Name' = Name,
+      Ordinal' = Ordinal.
 
 psifunctions(List, PsiOffset, Close, Post, Step) :-
 
@@ -966,7 +1183,7 @@ close_channels(Channels, N, Reply) :-
 post_pass1(OpList, Common, Ok) :-
 
     OpList ? Operation,
-    Operation = {MessageType, _CId, Channel , Multiplier, _Tags},
+    Operation = {MessageType, _RCId, Channel , Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -976,7 +1193,7 @@ post_pass1(OpList, Common, Ok) :-
 	do_instantaneous_transmit + (MTX = PSI_RECEIVE_TAG, Message = Anchor);
 
     OpList ? Operation,
-    Operation = {MessageType, _CId, Channel , Multiplier, _Tags},
+    Operation = {MessageType, _RCId, Channel , Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -986,7 +1203,7 @@ post_pass1(OpList, Common, Ok) :-
 	do_instantaneous_transmit + (MTX = PSI_SEND_TAG, Message = Anchor);
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel , Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -996,7 +1213,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel , Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1006,7 +1223,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel , Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1016,7 +1233,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel, Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1026,7 +1243,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel, Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1036,7 +1253,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    Operation =?= {MessageType, _RCId, Channel, Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1046,7 +1263,7 @@ post_pass1(OpList, Common, Ok) :-
 	self;
 
     OpList ? Operation,
-    Operation =?= {_MessageType, _CId, Channel, Multiplier, _Tags},
+    Operation =?= {_MessageType, _RCId, Channel, Multiplier, _Tags},
     vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
     read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
@@ -1066,7 +1283,7 @@ post(OpList, Reply, Common, Messages, AddMessages, Ok) :-
 
     Ok =?= true,
     OpList ? Operation,
-    Operation =?= {MessageType, CId, Channel, Multiplier, Tags},
+    Operation =?= {MessageType, RCId, Channel, Multiplier, Tags},
     read_vector(PSI_CHANNEL_TYPE, Channel, Type),
     Type =\= PSI_SINK :
       AddMessages ! Message? |
@@ -1075,7 +1292,7 @@ post(OpList, Reply, Common, Messages, AddMessages, Ok) :-
 
     Ok =?= true,
     OpList ? Operation,
-    Operation =?= {_MessageType, _CId, Channel, _Multiplier, _Tags},
+    Operation =?= {_MessageType, _RCId, Channel, _Multiplier, _Tags},
     read_vector(PSI_CHANNEL_TYPE, Channel, Type),
     Type =?= PSI_SINK |
 	self;
@@ -1094,7 +1311,10 @@ post(OpList, Reply, Common, Messages, AddMessages, Ok) :-
       Reply = Ok,
       AddMessages = [].
 
-
+/*
+ * Suffix Q refers to a channel queue element.
+ * Suffix R refers to a message request element.
+ */ 
 do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
 					Ok) :-
 
@@ -1108,17 +1328,17 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
     arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
     read_vector(PSI_NEXT_MS, MessageLinks, Message'),
     Message' =\= Anchor,
-    Message' =?= {_, CIdQ, _, _, _, _, CommonQ, _},
+    Message' =?= {_, RCIdQ, _, _, _, _, CommonQ, _},
     arg(MTX, Message', MessageTag),
     CommonQ = {PIdQ, MsList, ValueQ, ChosenQ},
-    Common = {PIdT, _MsList, ValueT, ChosenT},
-    Operation =?= {_, CIdT, _, _, OperationTag} :
+    Common = {PIdR, _MsList, ValueR, ChosenR},
+    Operation =?= {_, RCIdR, _, _, OperationTag} :
       Anchor = _,
       OpList = _,
-      ValueQ = ValueT,
+      ValueQ = ValueR,
       ChosenQ = MessageTag,
-      ChosenT = OperationTag,
-      Ok = true(PIdQ, CIdQ, PIdT, CIdT) |
+      ChosenR = OperationTag,
+      Ok = true(PIdQ, RCIdQ, PIdR, RCIdR) |
 	discount(MsList);
 
     % This can happen (to the monitor). 
@@ -1137,7 +1357,8 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
       MTX = _ |
 	post_pass1;
 
-    % This Message has the same Chosen as the Operation - mixed communication. 
+    % This Message has the same Chosen as the Operation -
+    % mixed communications which ARE NOT homodimerized.
     arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
     read_vector(PSI_NEXT_MS, MessageLinks, Message'),
     Message' =?= {_, _, _, _, _, _, CommonQ, _},
@@ -1285,7 +1506,6 @@ select_channel(Residue, Channel, Reply) :-
     MsType =\= PSI_MESSAGE_ANCHOR,
     read_vector(PSI_CHANNEL_RATE, Channel', Rate),
     read_vector(PSI_DIMER_WEIGHT, Channel', DimerWeight),
-
     Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
     Residue' > 0 |
 	self;
@@ -1308,8 +1528,8 @@ do_bimolecular_transmit(Channel, Reply) :-
 
 do_bimolecular_send(Channel, Reply, Send, Receive) :-
 
-    Send =?= {PSI_SEND, SendCId, _, _, SendTag, _, SendCommon, _},
-    Receive =?= {PSI_RECEIVE, ReceiveCId, _, _, _,
+    Send =?= {PSI_SEND, SendRCId, _, _, SendTag, _, SendCommon, _},
+    Receive =?= {PSI_RECEIVE, ReceiveRCId, _, _, _,
 					ReceiveTag, ReceiveCommon, _},
     SendCommon =?= {SendPId, SendList, SendValue, SendChosen},
     ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen} :
@@ -1317,12 +1537,14 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
       SendChosen = SendTag,
       ReceiveChosen = ReceiveTag,
       ReceiveValue = SendValue?,
-      Reply = true(SendPId, SendCId, ReceivePId, ReceiveCId) |
+      Reply = true(SendPId, SendRCId, ReceivePId, ReceiveRCId) |
 	discount(SendList),
 	discount(ReceiveList);
 
     Send =?= {PSI_SEND, _, _, _, _, _, SendCommon, SendLinks},
     Receive =?= {PSI_RECEIVE, _, _, _, _, _, ReceiveCommon, _},
+    % This Send has the same Chosen as the Receive -
+    % mixed communications which ARE NOT homodimerized.
     SendCommon =?= {_, _, _, Chosen},
     ReceiveCommon =?= {_, _, _, Chosen},
     read_vector(PSI_NEXT_MS, SendLinks, Send') |
@@ -1351,8 +1573,9 @@ do_homodimerized_transmit(Channel, Reply) :-
 
 do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
 
-    Receive =?= {PSI_DIMER, ReceiveCId, _, _, _, ReceiveTag, ReceiveCommon, _},
-    Dimer =?= {PSI_DIMER, DimerCId, _, _, DimerTag, _, DimerCommon, _},
+    Receive =?= {PSI_DIMER, ReceiveRCId, _, _, _,
+					ReceiveTag, ReceiveCommon, _},
+    Dimer =?= {PSI_DIMER, DimerRCId, _, _, DimerTag, _, DimerCommon, _},
     ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen},
     we(ReceiveChosen),
     DimerCommon =?= {DimerPId, DimerList, DimerValue, DimerChosen},
@@ -1361,12 +1584,14 @@ do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
       ReceiveChosen = ReceiveTag,
       DimerChosen = DimerTag,
       DimerValue = ReceiveValue?,
-      Reply = true(ReceivePId, ReceiveCId, DimerPId, DimerCId) |
+      Reply = true(ReceivePId, ReceiveRCId, DimerPId, DimerRCId) |
 	discount(ReceiveList),
 	discount(DimerList);
 
     Receive =?= {PSI_DIMER, _, _, _, _, _, ReceiveCommon, _},
     Dimer =?= {PSI_DIMER, _, _, _, _, _, DimerCommon, Links},
+    % This Receive has the same Chosen as the Send -
+    % communications which ARE homodimerized AND mixed.
     ReceiveCommon =?= {_, _, _, Chosen},
     DimerCommon =?= {_, _, _, Chosen},
     arg(PSI_MESSAGE_LINKS, Links, NextLink),
@@ -1437,7 +1662,7 @@ show#stuff(channel, Channel),
 	true.
 
 
-queue_message(MessageType, CId, Channel, Multiplier, Tags,
+queue_message(MessageType, RCId, Channel, Multiplier, Tags,
 			Common, Message) :-
 
     MessageType =?= PSI_SEND,
@@ -1445,7 +1670,7 @@ queue_message(MessageType, CId, Channel, Multiplier, Tags,
     read_vector(PSI_SEND_WEIGHT, Channel, Weight),
     Weight += Multiplier :
       store_vector(PSI_SEND_WEIGHT, Weight', Channel),
-      Message = {MessageType, CId, Channel, Multiplier,
+      Message = {MessageType, RCId, Channel, Multiplier,
 			Tags, 0, Common, Links?} |
 	queue_to_anchor;
 
@@ -1454,7 +1679,7 @@ queue_message(MessageType, CId, Channel, Multiplier, Tags,
     read_vector(PSI_RECEIVE_WEIGHT, Channel, Weight),
     Weight += Multiplier :
       store_vector(PSI_RECEIVE_WEIGHT, Weight', Channel),
-      Message = {MessageType, CId, Channel, Multiplier,
+      Message = {MessageType, RCId, Channel, Multiplier,
 			0, Tags, Common, Links?} |
 	queue_to_anchor;
 
@@ -1464,7 +1689,7 @@ queue_message(MessageType, CId, Channel, Multiplier, Tags,
     read_vector(PSI_DIMER_WEIGHT, Channel, Weight),
     Weight += Multiplier :
       store_vector(PSI_DIMER_WEIGHT, Weight', Channel),
-      Message = {MessageType, CId, Channel, Multiplier,
+      Message = {MessageType, RCId, Channel, Multiplier,
 			SendTag, ReceiveTag, Common, Links?} |
 	queue_to_anchor.
 

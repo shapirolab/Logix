@@ -1,17 +1,33 @@
 The psi_record process can run a Stochastic Pi Calculus (psifcp) process
 and record its behavior.
 
-    psi_record#run(<call program>, <time limit>)
+   psi_record#run(<call program>, <time limit>)
 or
-    psi_record#run(<call program>, <file_name>, <time limit>)
+   psi_record#run(<call program>, <file_name>, <time limit>)
 or
-    psi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+   psi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+or
+   psi_record#run(<call program>, <file_name>, <time limit>, <format>)
+or
+   psi_record#run(<call program>, <file_name>, <time limit>, <format>, <scale>)
+or
+   psi_record#run(<call program>, <file_name>, <time limit>, <scale>, <format>)
+
 
 The time limit forces termination of the run, after that much internal
-time has elapsed.
+time has elapsed.  If the run terminates before the the time limit is
+reached, you will usually want to abort the run (enter: abort<cr>).
 
 When the internal times are very small, or very large, you can scale 
 the output - this does not effect process behavior.
+
+You may also format the output, which is written to the named file,
+specifying one of the strings:
+
+   none, process, creator, full
+
+The default is "none".  The others add information to the formatted
+output.
 
 You may also use the macros:
 
@@ -20,6 +36,14 @@ or
     record(<quantified process set>, <file_name>, <time limit>)
 or
     record(<quantified process set>, <file_name>, <time limit>, <scale>)
+or
+    record(<quantified process set>, <file_name>, <time limit>, <format>)
+or
+    record(<quantified process set>, <file_name>, <time limit>,
+           <scale>, <format>)
+or
+    record(<quantified process set>, <file_name>, <time limit>,
+           <format>, <scale>)
 
 See repeat.txt for the definitition of <quantified process set>.
 
@@ -42,13 +66,31 @@ Examples:
    does the same thing, and records the events of the run on file 
    fff with time values scaled times 10.
 
+4. record(hysteresis#"MODULE", fff, 100, full)
+
+   does the same thing as 2, recording on fff with fully annotated
+   output.
+
 The elements of the file are lines which have one of three forms.
 
    a. A positive real-valued time.
 
-   b. +<procedure name>, which records the start of a procedure.
+   b. +<process name>, which records the start of a procedure.
 
-   c. -<procedure name>, which records the termination of a procedure.
+   c. -<process name>, which records the termination of a procedure.
+
+Annotation appears on c lines:
+
+1. The "process" format includes an arrow, indicating whether the
+   process sent (->) or received (<-) a message, followed by the name
+   within the process of the channel which transmitted the message.
+
+2. The "creator" format is similar, but with the global identifier of
+   the channel instead of its name - this includes a unique index for
+   each instance of a local channel.
+
+3. The "full" format is similar, providing both the name and the global
+   identifier,  separated by a colon (:).
 
 To analyze the file, producing a table suitable for plotting with
 Matlab, use the PERL program "psi2t" - e.g.
@@ -92,5 +134,11 @@ use the PERL program "t2xys" - e.g.
   % gnuplot
   gnuplot> plot "fff.3" smooth unique
 
-A short shell script, psixys, combines the functions with a call to gnuplot.
+A short shell script, psixys, combines the functions with a call to
+gnuplot.
+
+
+Please note that the current version of psi2t does not accept
+annotation.
+
 

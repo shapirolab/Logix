@@ -1,3 +1,21 @@
+/* Characters */
+
+CHAR_EOL => 10.
+CHAR_SPACE => 32.
+CHAR_LEFT_BRACKET => 40.
+CHAR_RIGHT_BRACKET => 41.
+CHAR_ASTERISK => 42.
+CHAR_PLUS => 43.
+CHAR_MINUS => 45.
+CHAR_COLON => 58.
+CHAR_LESS => 60.
+CHAR_GREATER => 62.
+CHAR_QUERY => 63.
+
+/* Bounds */
+
+MAXINT => 33554431.
+
 /* From the Emulator */
 
 FALSE => 0.
