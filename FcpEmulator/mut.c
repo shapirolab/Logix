@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mut.c,v 1.2 2003/12/22 09:09:42 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mut.c,v 1.3 2003/12/22 09:09:47 bill Exp $ */
 
 #include	<stdio.h>
 #include	<string.h>
