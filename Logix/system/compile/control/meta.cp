@@ -4,9 +4,9 @@ Precompiler for FCP - meta-interpreter plus clause form
 Bill Silverman, 20 May, 1987
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:36 $
+		       	$Date: 2000/01/23 09:35:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/compile/control/meta.cp,v $
 
 Copyright (C) 1987, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -42,11 +42,11 @@ Output:	Program' = [ControlCode ... procedure(Ident',[Clause', ... ]) ];
  *
  *	Clause' = {H',{A,T},[]} : H' has the form :
  *
- *			Name(Arguments,I,B',T)
- *				I is the ordinal of the clause (input/output)
- *				  or anything else (input)
+ *			Name(Arguments,B',I,T)
  *				B' is a body-goal conjunction
  *				   ( [] ~ true; [p,q] ~ (p,q) )
+ *				I is the ordinal of the clause (input/output)
+ *				  or anything else (input)
  *				T is the time of reduction (output), or
  *				  "failed" (output), or "abort" (input)
  */
