@@ -4,9 +4,9 @@ Precompiler for compound procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/13 13:20:33 $
+		       	$Date: 1999/12/15 13:46:21 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -17,43 +17,71 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 % -mode(trust).
 -language(compound).
 
-Source ::= [Any].
-
-Term ::= Any.
-Terms ::= [Term].
-Errors ::= [Any].
-TermList ::= [Any | Terms].
-
-procedure transform(Any, Terms, Any, Terms, Errors).
+/*
+** Transform/5
+**
+** Transform pifcp module to compound Fcp.
+**
+** This module should be integrated with the transform application.
+**
+** Input:
+**
+**   Attributes1 - Source attributes.
+**   Source      - Pifcp code, minus attributes.
+**
+** Output:
+**
+**   Attributes2 - Attributes1 augmented by exported Fcp procedures.
+**   Terms       - Compound Fcp code.
+**   Errors      - Diagnostice in the form:  Name - comment(ARgument)
+*/
 
 transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
 	/* Exclude declared export from Attributes. */ 
-	Attributes2 = [-export(Exports?) | Attributes1],
+	Attributes2 = [export(Exports?) | Attributes1],
 	program.
 
-
-Tree ::= {Any, Tree, Tree} ; [].
-LookupTree ::= {String(Any), Any, Any}.
-Server, AddClauses ::= true ; false.
-PID ::= String/Integer.
-Predicate ::= Tuple ; String.
-Variable ::= {`"`", Any}.
-Descriptor ::= {Integer, VTree}.
-FindVReply ::= found(VData) ; [].
-FindReply ::= FindVReply.
-FindDescriptor ::= Descriptor ; [].
-VTree ::= {String(VData), VTree, VTree} ; [].
-VData ::= Integer.
-Duped ::= unique(VTree) ; ambiguous(VTree).
-Defs ::= Refs ; [lookup(String, Duped, Duped, (new ; old)) | Defs].
-Refs ::= [member(String, Duped, (true ; false))].
+/*
+** serve_empty_scope/3+3
+**
+** Serve requests from first-level processes.  See serve_process_scope/6+6
+**
+** Input:
+**
+**   In is the request input stream:
+**
+**      error(Diagnostic) - copy Diagnostic to Errors stream.
+**
+**      lookup_functor(Functor, CallType, CallDefinition)
+**
+**          Lookup process Functor and return:
+**               CallType in {none, outer, inner}
+**               CallDefinition = {Name, Arity, Channels, OuterAtom, InnerAtom)
+**
+**      process(LHS, ProcessScope)
+**
+**          Analyze LHS (Left-hand-side) of process declaration and return
+**               ProcessScope - a stream to a process context handler.
+**
+** Output:
+**
+**   Exports is a list of functor/arity for all first level procedures.
+**
+**   Errors is a list of error diagnostics.
+**
+** Local:
+**
+**   Progeny is a list of child ProcessDefinitions.
+**
+**   Refs, AddRef is a list of deferred lookup_functor/3 requests.
+*/
 
 serve_empty_scope(In, Exports, Errors) +
 		(Progeny = [], Refs = AddRef?, AddRef) :-
 
-    In ? error(Name, Error) :
-      Errors ! (Name + Error) |
+    In ? error(Error) :
+      Errors ! Error |
 	self;
 
     In ? lookup_functor(Functor, CallType, CallDefinition) :
@@ -73,6 +101,175 @@ serve_empty_scope(In, Exports, Errors) +
       Exports = [] |
 	find_process_refs(Refs, Progeny, [], []).
 
+/*
+** serve_process_scope/6+3
+**
+** Serve requests from first-level processes.  See serve_process_scope/6+6
+**
+** Input:
+**
+**   In is the request input stream:
+**
+**      atoms(Outer, Inner) - return ProcessDefinition OuterAtom and InnerAtom.
+**
+**      body_receive(Channel, Body) - verify channel; construct body.
+**
+**      body_send(Message, Channel, PiChannel, PiMessage)
+**
+**          
+**
+**      error(Diagnostic) - add  Name-Diagnostic  to Errors stream.
+**
+**      lookup_functor(Functor, CallType, CallDefinition)
+**
+**          Lookup process Functor and return:
+**               CallType in {none, outer, inner}
+**               CallDefinition = {Name, Arity, Channels, OuterAtom, InnerAtom)
+**
+**      process(LHS, ProcessScope)
+**
+**          Analyze LHS (Left-hand-side) of process declaration and return
+**               ProcessScope - a stream to a process context handler.
+**
+**   EndOut, NextErrors are continuation streams.
+**
+** Output:
+**
+**   Out is a list of lookup_functor/3 requests which cannot be satisfied
+**   at this level.
+**
+**   Errors is defined in serve_empty_scope.
+**
+** Local: see serve_empty_scope/3+3 above.
+*/
+
+serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
+		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
+		 Refs = AddRef?, AddRef) :-
+
+    In ? atoms(Outer, Inner),
+    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} :
+      Outer = OuterAtom,
+      Inner = InnerAtom |
+	self;
+
+    In ? body_receive(Channel, Body),
+    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
+	make_body_receive,
+	self;
+
+    In ? body_send(Message, Channel, Channel', PiMessage),
+    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+      PiMessage = {Sender?, ChannelList?, 1, `"_"} |
+	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
+	message_to_channels(ProcessDefinition, Message, MessageChannels,
+				Errors', Errors''?),
+	/* Check channels */
+	make_sender,
+	channels_to_variables(MessageChannels?, Variables, N),
+	make_channel_list,
+	self;
+
+    In ? call(Body1, Body2),
+    Body1 =\= (_#_) |
+	make_local_call(ProcessDefinition, Body1, Body2,
+			In'', In'?, Errors, Errors'?),
+	self;
+
+    In ? channels(Cs),
+    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+      Cs = Channels |
+	self;
+
+    In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+      Locals = _, Primes = _ |
+	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
+	parse_message(ProcessDefinition, Message, ChannelList,
+			Locals', Primes', Errors', Errors''?),
+	make_guard_receive,
+	self;
+
+    In ? error(Description),
+    arg(1, ProcessDefinition, Name) :
+      Errors ! (Name - Description) |
+	self;
+
+    In ? lookup_functor(Functor, CallType, CallDefinition),
+    arg(1, ProcessDefinition, Functor) :
+      CallType = inner,
+      CallDefinition = ProcessDefinition |
+	self;
+
+    In ? lookup_functor(Functor, CallType, CallDefinition),
+    arg(1, ProcessDefinition, Name), Name =\= Functor :
+      AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
+	self;
+
+    In ? new_scope_id(Id),
+    arg(1, ProcessDefinition, Name),
+    string_to_dlist(Name, DL, Tail),
+    string_to_dlist(".", Dot, Suffix),
+    convert_to_string(IdIndex, SI),
+    IdIndex++,
+    string_to_dlist(SI, SCs, []) :
+      Tail = Dot,
+      Suffix = SCs |
+	list_to_string(DL, Id),
+	self;
+
+    In ? process(LHS, ProcessScope),
+    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+	concatenate(Locals, Channels, GlobalList),
+	make_process_scope(LHS, ProcessScope, GlobalList,
+			In'', In'?, CallDefinition, Errors, Errors'?),
+	add_process_definition(CallDefinition?, Progeny, Progeny'),
+	self;
+
+    In ? remote_call(Call1, Call2),
+    arg(1, ProcessDefinition, Name) |
+	extract_arguments_or_substitutes(Name, Call1, Arguments, _Substitutes,
+			Errors, Errors'?, 2, channels),
+	complete_remote_call(ProcessDefinition, Call1, Arguments, Call2,
+				Errors', Errors''?),
+	self;
+	
+    In ? status(Status),
+    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} |
+	compute_status,
+	self;
+
+    In = [] :
+      ProcessDefinition = _,
+      IdIndex = _,
+      Locals = _,
+      Primes = _,
+      AddRef = [],
+      Errors = NextErrors |
+	find_process_refs(Refs, Progeny, Out, EndOut).
+
+
+/*
+** find_process_refs/4
+**
+** Search for referenced processes, as part of a scope server
+** termination.
+**
+** Input:
+**
+**    Refs is a stream of lookup_functor requests which have deferred until
+**    the scope's definition has been completed.
+**
+**    Progeny is a list of child ProcessDefinitions.
+**
+**    EndOut is a continuation stream.
+**
+** Output:
+**
+**    Out is a stream of requests which cannot be satisfied at this level.
+*/
+
 find_process_refs(Refs, Progeny, Out, EndOut) :-
 
     Refs ? lookup_functor(Functor, CallType, CallDefinition) |
@@ -82,6 +279,22 @@ find_process_refs(Refs, Progeny, Out, EndOut) :-
     Refs = [] :
       Progeny = _,
       Out = EndOut.
+
+/*
+** search_progeny/6
+**
+** Search Progeny for a process whose Name is Functor.
+**
+** Input: Functor, Progeny, NextOut
+**
+** Output:
+**
+**   CallType is in {none, outer, inner}
+**
+**   CallDefinition is the ProcessDefinition of the found process.
+**
+**   Out relays unsatisied request, except at the base level.
+*/
 
 search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 
@@ -105,6 +318,31 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
       CallType = none,
       CallDefinition = [],
       NextOut = [].
+
+/*
+** make_process_scope/8
+**
+** Analyze LHS, producing a ProcessDefinition and a process scope server,
+** serve_process_scope.
+**
+** Input:
+**
+**   LHS is from a process/2 request.
+**
+**   GlobalList is a list of channel names which are global to the process.
+**
+**   NextOut, NextErrors are continuation streams.
+**
+** Output:
+**
+**   ProcessScope is a stream to serve_process_scope.
+**
+**   Out is a stream to relay lookup_functor/3 requests.
+**
+**   ProcessDefinition is defined in make_process_definition.
+**
+**   Errors is defined in serve_empty_scope.
+*/
 
 make_process_scope(LHS, ProcessScope, GlobalList,
 		Out, NextOut, ProcessDefinition, Errors, NextErrors) :-
@@ -299,15 +537,15 @@ make_atom(N, Name, Channels, Atom) :-
     arg(1, Tuple, Name) |
 	channels_to_atom(Channels, Tuple, 2, Atom).
 
-make_channel_list(N, Channels, ChannelList) :-
+make_channel_list(N, Variables, ChannelList) :-
 
     N =< 0 :
       ChannelList = [],
-      Channels = _;
+      Variables = _;
     
     N > 0,
     make_tuple(N, Tuple) |
-	channels_to_atom(Channels, Tuple, 1, ChannelList).
+	channels_to_atom(Variables, Tuple, 1, ChannelList).
 
 channels_to_atom(Cs, T, I, Atom) :-
 
@@ -321,123 +559,6 @@ channels_to_atom(Cs, T, I, Atom) :-
       I = _,
       Atom = T.
 
-
-serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
-		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
-		 Refs = AddRef?, AddRef) :-
-
-    In ? atoms(Outer, Inner),
-    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} :
-      Outer = OuterAtom,
-      Inner = InnerAtom |
-	self;
-
-    In ? body_receive(Channel, Body),
-    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
-	identify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
-	make_body_receive,
-	self;
-
-    In ? body_send(Message, Via, Channel, PiMessage) :
-      PiMessage = {Sender?, ChannelList?, 1, `"_"} |
-	communication_channel(ProcessDefinition, Via, Channel,
-				Errors, Errors'?),
-	message_to_channel_list(ProcessDefinition, Message, Channels,
-				Errors', Errors''?),
-	/* Check channels */
-	make_sender(ProcessDefinition, Channel, Sender),
-	channels_to_variables(Channels?, Variables, N),
-	make_channel_list(N?, Variables?, ChannelList),
-	self;
-
-    In ? call(Body1, Body2),
-    Body1 =\= (_#_) |
-	make_local_call(ProcessDefinition, Body1, Body2,
-			In'', In'?, Errors, Errors'?),
-	self;
-
-    In ? channels(Cs),
-    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
-      Cs = Channels |
-	self;
-
-    In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
-      Locals = _, Primes = _ |
-	identify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
-	parse_message(ProcessDefinition, Message, ChannelList,
-			Locals', Primes', Errors', Errors''?),
-	make_guard_receive,
-	self;
-
-    In ? error(Description),
-    arg(1, ProcessDefinition, Name) :
-      Errors ! (Name - Description) |
-	self;
-
-    In ? lookup_functor(Functor, CallType, CallDefinition),
-    arg(1, ProcessDefinition, Functor) :
-      CallType = inner,
-      CallDefinition = ProcessDefinition |
-	self;
-
-    In ? lookup_functor(Functor, CallType, CallDefinition),
-    arg(1, ProcessDefinition, Name), Name =\= Functor :
-      AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
-	self;
-
-    In ? new_scope_id(Id),
-    arg(1, ProcessDefinition, Name),
-    string_to_dlist(Name, DL, Tail),
-    string_to_dlist(".", Dot, Suffix),
-    convert_to_string(IdIndex, SI),
-    IdIndex++,
-    string_to_dlist(SI, SCs, []) :
-      Tail = Dot,
-      Suffix = SCs |
-	list_to_string(DL, Id),
-	self;
-
-    In ? process(LHS, ProcessScope),
-    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
-	concatenate(Locals, Channels, GlobalList),
-	make_process_scope(LHS, ProcessScope, GlobalList,
-			In'', In'?, CallDefinition, Errors, Errors'?),
-	add_process_definition(CallDefinition?, Progeny, Progeny'),
-	self;
-
-    In ? remote_call(Call1, Call2),
-    arg(1, ProcessDefinition, Name) |
-	extract_arguments_or_substitutes(Name, Call1, Arguments, _Substitutes,
-			Errors, Errors'?, 2, channels),
-	complete_remote_call(ProcessDefinition, Call1, Arguments, Call2,
-				Errors', Errors''?),
-	self;
-	
-    In ? status(Status),
-    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} |
-	compute_status,
-	self;
-
-    In = [] :
-      ProcessDefinition = _,
-      IdIndex = _,
-      Locals = _,
-      Primes = _,
-      AddRef = [],
-      Errors = NextErrors |
-	find_process_refs(Refs, Progeny, Out, EndOut).
-
-communication_channel(Name, Via, Channel, Errors, NextErrors) :-
-
-    string(Via), Via =\= "_" :
-      Name = _,
-      Channel = Via,
-      Errors = NextErrors;
-
-    otherwise :
-      Channel = "_",
-      Errors = [Name - invalid_channel(Via) | NextErrors].
 
 make_guard_receive(Channel, ChannelList, SendId, Iterates, Consume) :-
 
@@ -475,37 +596,36 @@ make_guard_receive(Channel, ChannelList, SendId, Iterates, Consume) :-
       ExcludeSender = (`SendId =\= `Sender, TestWe).
 
 
-make_sender(ProcessDefinition, Channel, Sender) :-
+make_sender(Name, Channel, Sender) :-
 
-    arg(1, ProcessDefinition, Name),
     string_to_dlist(Name, NL, NC),
     string_to_dlist(Channel, CL, []) :
       NC = [46 | CL] |
 	list_to_string(NL, Sender).
 
-message_to_channel_list(ProcessDefinition, Message, ChannelList,
-				Errors, NextErrors) + (Index = 1) :-
+message_to_channels(ProcessDefinition, Message, Channels,
+		Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
       ProcessDefinition = _,
       Index = _,
-      ChannelList = [],
+      Channels = [],
       Errors = NextErrors;
 
     arg(Index, Message, Channel), string(Channel), Channel =\= "",
     Index++ :
-      ChannelList ! Channel |
+      Channels ! Channel |
 	self;
 
     arg(Index, Message, `Anonymous), Anonymous =?= "_",
     Index++ :
-      ChannelList ! Anonymous |
+      Channels ! Anonymous |
 	self;
 
     Index > arity(Message) :
       ProcessDefinition = _,
       Message = _,
-      ChannelList = [],
+      Channels = [],
       Errors = NextErrors;
 
     otherwise,
@@ -513,17 +633,20 @@ message_to_channel_list(ProcessDefinition, Message, ChannelList,
     arg(1, ProcessDefinition, Name),
     Index++ :
       Errors ! (Name - invalid_channel_in_message(Message, Channel)),
-      ChannelList ! [] |
+      Channels ! [] |
 	self;
 
     otherwise,
     arg(1, ProcessDefinition, Name) :
       Index = _,
-      ChannelList = [],
+      Channels = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
 
 
-identify_channel(Name, Channel, Channels, OkChannel, Errors, NextErrors) :-
+verify_channel(Name, Channel, Channels, OkChannel, Errors, NextErrors) :-
+
+    Channels ? Other, Channel =\= Other |
+	self;
 
     Channels ? Channel :
       Channels' = _,
@@ -562,20 +685,17 @@ parse_message(ProcessDefinition, Message, ChannelList, Locals, Primes,
       Errors = NextErrors;
 
     tuple(Message),
-    arg(1, ProcessDefinition, Name) :
-      Index = 1 | /*,
-      LocalsTail = Locals,
-      PrimesTail = Primes | */
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtoms, _InnerAtoms} :
+      Index = 1 |
 	extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
 					Errors, Errors'?),
-	check_for_duplicates(Strings, _UniqueStrings,
+	check_for_duplicates(Strings, UniqueStrings,
 		{Name, duplicate_receive_channel}, Errors', NextErrors),
-Locals = [],
-Primes = [],
-	channels_to_variables(ChannelNames, Channels, N),
+	instantiate_channels(UniqueStrings, Channels, Locals, Primes),
+	channels_to_variables(ChannelNames, Variables, N),
 	make_channel_list.
 
-extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
+  extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
 				Errors, NextErrors) :-
 
     arg(Index, Message, Channel), string(Channel),
@@ -601,7 +721,37 @@ extract_receive_channels(Index, Message, Name, Strings, ChannelNames,
       Errors ! (Name - invalid_receive_channel(Channel)) |
 	self.
 
+  instantiate_channels(UniqueStrings, Channels, Locals, Primes) :-
 
+    UniqueStrings ? Channel |
+	locals_primes(Channel, Channels, Locals, Locals'?, Primes, Primes'?),
+	self;
+
+    UniqueStrings = [] :
+      Channels = _,
+      Locals = [],
+      Primes = [];
+
+    Channels = [] :
+      UniqueStrings = _,
+      Locals = [],
+      Primes = [].
+
+  locals_primes(Channel, Channels, Locals, NextLocals, Primes, NextPrimes) :-
+
+    Channels ? Channel :
+      Channels' = _,
+      Locals = NextLocals,
+      Primes = [Channel | NextPrimes];
+
+    Channels ? Other, Other =\= Channel |
+	self;
+
+    Channels = [] :
+      Locals = [Channel | NextLocals],
+      Primes = NextPrimes.
+
+      
 make_local_call(ProcessDefinition, Body1, Body2,
 		In, NextIn, Errors, NextErrors) :-
 
