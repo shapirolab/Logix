@@ -1,0 +1,169 @@
+#!/usr/local/bin/perl
+$| = 1;
+
+my $BLANKS = "                                                               ";
+my $sum_acct = "/home/system/bin/sum_acct";
+
+my $Column_Width =  8;
+my $Name_Width   = 20;
+my $Total_Width  = 12;
+my $Total_Index  =  2;
+my $First_Month  = 9710;
+my $Last_Month   = 9809;
+#my $First_Month  = 9902;
+#my $Last_Month   = 9903;
+my $Platform     = "bina";
+
+my @Users;
+my @Totals;
+my @Months;
+
+sub format_output
+{
+  my $user = shift;
+  my $ix = shift;
+  my $type = $user[0];
+  my $line = "";
+  my $item = "";
+
+  while ($ix <= $Total_Index) {
+    if (++$ix == 1) {
+      # Left-justify name.
+      $item = $user->[$ix] .
+	      substr($BLANKS, 0, $Name_Width-length($user->[$ix]));
+    }
+    elsif ($ix < $Total_Index) {
+      # Right-justify column entry.
+      $item = substr($BLANKS, 0, $Column_Width-length($user->[$ix])) .
+	      $user->[$ix];
+    }
+    else {
+      # Right-justify total.
+      $item = substr($BLANKS, 0, $Total_Width-length($user->[$ix])) .
+	      $user->[$ix];
+    }
+    if (length($line) + length($item) > 80 && $line) {
+      --$ix;
+      last;
+    }
+    $line .= $item;
+  }
+  if ($user->[$Total_Index] ne "0:00" || !$user->[0]) {
+    print "$line\n";
+  }
+  return $ix;
+}
+
+
+sub format_hours_and_minutes
+{
+  my $user = shift;
+  my $ix;
+  for ($ix = 2; $ix <= $Total_Index; $ix++) {
+    my $minutes = $user->[$ix];
+    $user->[$ix] = int($minutes/60) . ':' . substr(($minutes % 60)+100, 1, 2);
+  }
+}
+
+
+sub read_data
+{
+  while(<USERS>) {
+    @line = split /\s+/;
+    if (scalar(@line) < 2) {
+      next;
+    }
+    my $id = shift @line;
+    my $name = join ' ', @line;
+    if (length($name) > $Name_Width) {
+      $Name_Width++
+    }
+    push @Users, [$id, $name];
+  }
+}
+
+
+sub make_months
+{
+  my $date = $First_Month;
+  my $item;
+
+  while ($date <= $Last_Month) {
+    $item = ($date %100) . "-" . int($date/100);
+    $Months[$Total_Index++] = $item;
+    if (++$date % 100 > 12) {
+      $date += 88;
+    }
+  }
+}
+
+sub cumulate_usage
+{
+  my $user = shift;
+  my $total = 0;
+  my $id = $user->[0];
+
+  if ($id) {
+    my $ix = 2;
+    my $date;
+    for ($date = $First_Month; $date <= $Last_Month; $date++, $ix++) {
+      my $acct = `$sum_acct -H$Platform -U$id -D$date`;
+      if ($acct) {
+	my $header;
+	($header, $acct) = split /\n/, $acct;
+	my ($a, $b, $usage) = split /\s+/, $acct;
+	$usage =~ s/^(\d+)\D+$/$1/;
+	$user->[$ix] = $usage;
+	$Totals[$ix] += $usage;
+	$total += $usage;
+      }
+      $date += 88 if ($date %100 == 12);
+    }
+    $user->[$Total_Index] = $total;
+    $Totals[$Total_Index] += $total;
+  }
+  print STDERR ".";
+}
+
+
+sub initialize
+{
+  my @line2;
+
+  unshift @Months, "", "User Name";
+  make_months();
+  push @Months, "Total";
+  read_data();
+
+  unshift @Users, \@Months, \@line2;
+  unshift @Totals, "", "Total";
+}
+
+
+# main <file-name>
+
+open(USERS, shift) or die "Can't open input";
+initialize();
+
+my $user;
+my $ix;
+for ($ix = 2; $ix < scalar @Users; $ix++) {
+  cumulate_usage($Users[$ix]);
+  format_hours_and_minutes($Users[$ix]);
+}
+format_hours_and_minutes(\@Totals);
+push @Users, \@Totals;
+
+print STDERR "\n\n";
+
+my $ax = 0;
+while (1) {
+  foreach $user (@Users) {
+    $ix = format_output($user, $ax);
+  }
+  if ($ix > $Total_Index) {
+    last;
+  }
+  print "\n\n";
+  $ax = $ix;
+}
