@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/02/10 16:05:12 $
+		       	$Date: 2003/03/04 15:42:06 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -140,14 +140,13 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
-      ascii('.', Period),
       Entries ! export(OuterLHS, Initializer?, []),
       NextEntries = Entries',
       Optimize ! procedure([call(Name'?)], Arity, OuterLHS, _Value),
       NextOptimize = Optimize',
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
       NewLHS = {OuterLHS'?, InnerLHS'?} |
-	list_to_string([Period|NL], Name'),
+	list_to_string([CHAR_DOT | NL], Name'),
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
 	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
@@ -886,7 +885,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName,
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     WeightRate =?= SPI_DEFAULT_WEIGHT_NAME(BaseRate) :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
@@ -894,7 +894,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName,
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     WeightRate = Weighter(BaseRate),
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       ChannelList ! ChannelName,
@@ -902,7 +903,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 	self;
 
     Channels ? `VariableName,
-    nth_char(1, VariableName, C), ascii('A') =< C, C =< ascii('Z'),
+    nth_char(1, VariableName, C),
+    CHAR_A =< C, C =< CHAR_Z,
     string(VariableName), VariableName =\= "_", VariableName =\= "" :
       ChannelList ! VariableName,
       NewChannelList ! VariableName |
@@ -910,7 +912,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     number(BaseRate), BaseRate >= 0,
     WeightRate = SPI_DEFAULT_WEIGHT_NAME(_BaseRate) :
       ChannelList ! ChannelName,
@@ -919,7 +922,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     number(BaseRate), BaseRate >= 0,
     WeightRate = Weighter(_BaseRate),
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
@@ -929,7 +933,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     BaseRate =?= infinite :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
@@ -937,7 +942,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     BaseRate =?= `_ :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
@@ -945,7 +951,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate, Weighter),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     number(BaseRate), BaseRate >= 0 :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
@@ -954,7 +961,8 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
     Channels ? ChannelName(BaseRate, Weighter),
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z,
     BaseRate = `_ :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
@@ -975,20 +983,20 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
   validate_new_weighter(Weighter, NewWeighter, Errors, NextErrors) :-
 
     string(Weighter), nth_char(1, Weighter, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       NewWeighter = Weighter,
       Errors = NextErrors;
 
     Weighter = `Name,
     string(Name), nth_char(1, Name, C),
-    ascii('A') =< C, C =< ascii('Z') :
+    CHAR_A =< C, C =< CHAR_Z :
       NewWeighter = Weighter(`"_"),
       Errors = NextErrors;
 
     tuple(Weighter),
     arg(1, Weighter, Name),
     string(Name), nth_char(1, Name, C),
-    ascii('a') =< C, C =< ascii('z') |
+    CHAR_a =< C, C =< CHAR_z |
 	utils#tuple_to_dlist(Weighter, [Name | Args], []),
 	validate_new_weighter_params,
 	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);

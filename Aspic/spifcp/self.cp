@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/02/19 07:36:10 $
+		       	$Date: 2003/03/04 15:42:06 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -189,7 +189,8 @@ complete_spifcp_attributes(Exported, Defaults, GlobalDescriptors, Controls) :-
 validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
 
     New ? `String,
-    nth_char(1, String, C), ascii('A') =< C, C =< ascii('Z') :
+    nth_char(1, String, C),
+    CHAR_A =< C, C =< CHAR_Z :
       Exports ! String |
 	self;
 
@@ -245,7 +246,7 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     Defaults = {DefaultWeighter, _DefaultRate},
     we(DefaultWeighter),
     string(Weighter), nth_char(1, Weighter, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       DefaultWeighter = Weighter,
       NewDefaults = Defaults,
       Errors = NextErrors;
@@ -254,7 +255,7 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     we(DefaultWeighter),
     tuple(Weighter), arg(1, Weighter, Name),
     string(Name), nth_char(1, Name, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       DefaultWeighter = NewWeighter?,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
@@ -271,27 +272,31 @@ validate_globals(GlobalDescriptors, Defaults, Old, New,
 			(Head = Tail?, Tail) :-
 
     GlobalDescriptors ? Global, string(Global),
-    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Global, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, Rate} :
       Tail ! Global(Rate) |
 	self;
 
     GlobalDescriptors ? Global, string(Global),
-    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Global, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       Tail ! Global(Rate, Weighter) |
 	self;
 
     GlobalDescriptors ? Global(Rate), string(Global),
-    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Global, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, _Rate} :
       Tail ! Global(Rate'?) |
 	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	self;
 
     GlobalDescriptors ? Global(Rate), string(Global),
-    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    nth_char(1, Global, C),
+    CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, _Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       Tail ! Global(Rate'?, Weighter) |
@@ -299,7 +304,8 @@ validate_globals(GlobalDescriptors, Defaults, Old, New,
 	self;
 
     GlobalDescriptors ? Global(Rate, Weighter), string(Global),
-    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z) :
+    nth_char(1, Global, C),
+    CHAR_a =< C, C =< CHAR_z :
       Tail ! Global(Rate'?, Weighter'?) |
 	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	validate_global_channel_weighter(Weighter, Defaults, Weighter',
@@ -372,13 +378,14 @@ validate_global_channel_weighter(Weighter, Defaults, NewWeighter,
 					Errors, NextErrors) :-
 
     string(Weighter), nth_char(1, Weighter, C),
-    ascii('a') =< C, C =< ascii('z') :
+    CHAR_a =< C, C =< CHAR_z :
       Defaults = _,
       NewWeighter = Weighter,
       Errors = NextErrors;
 
     tuple(Weighter), arg(1, Weighter, Name),
-    nth_char(1, Name, C), ascii(a) =< C, C =< ascii(z) :
+    nth_char(1, Name, C),
+    CHAR_a =< C, C =< CHAR_z :
       Defaults = _ |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
 	validate_global_weighter_params,
