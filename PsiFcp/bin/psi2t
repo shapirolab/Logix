@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 
-my $PERIOD = 1; # This should be a non-negative integer.
+my $PERIOD = 1;
 
 my %Processes = ();
 
@@ -28,8 +28,8 @@ open RECORD, "$record" or die "Can't open input $record\n";
 
 my $substitute;
 while ($substitute = shift(@ARGV)) {
-  if (int $substitute > 0) {
-    $PERIOD = int $substitute;
+  if ($substitute > 0) {
+    $PERIOD = $substitute;
   }
   else {
     $substitute =~ s/\s+//;
@@ -81,6 +81,9 @@ while ($line = <RECORD>) {
     next if $item == $lastitem;
     $lastitem = $item;
     $nexttime = int($lastitem) + $PERIOD;
+    if ($nexttime <= $lastitem) {
+      $nexttime = $lastitem + $PERIOD;
+    }
     $type = "00";
   }
   elsif (line =~ /^\s*$/) {
