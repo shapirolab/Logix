@@ -13,12 +13,12 @@ CHAR_SPACE => 32.
 CHAR_BANG => 33.
 CHAR_DOUBLE_QUOTE => 34.
 CHAR_HASH => 35.
+CHAR_DOLLAR => 36.
 CHAR_PRIME => 39.
 CHAR_LEFT_PAREN => 40.
 CHAR_RIGHT_PAREN => 41.
 CHAR_ASTERISK => 42.
 CHAR_PLUS => 43.
-CHAR_DOLLAR => 44.
 CHAR_MINUS => 45.
 CHAR_DOT => 46.
 CHAR_ZERO => 48.
@@ -137,3 +137,40 @@ SPI_OP_VALUE =>        3.
 SPI_OP_CHOSEN =>       4.
 
 SPI_COMMON_SIZE =>     4.
+
+/* Clause Tests */
+
+EXCLUDE_CLAUSE_TESTS(Goal, Action) =>
+
+  (
+    Goal =?= spi_monitor#_ |
+	Action;
+
+    /* Obsolescent */
+    Goal =?= global_channels(_,_) |
+	Action;
+
+    Goal =?= public_channels(_,_) |
+	Action;
+
+    Goal =?= spi_update_channel_refs(_,_,_) |
+	Action
+  )
+.
+
+MACRO_CLAUSE_TESTS(Goal, Action) =>
+
+  (
+    Goal =?= randomize_messages(_,_) |
+	Action;
+
+    Goal =?= serialize_messages(_,_) |
+	Action;
+
+    Goal =?= set_base_rate(_,_,_) |
+	Action;
+
+    Goal =?= get_channel_status(_,_,_) |
+	Action
+  )
+.
