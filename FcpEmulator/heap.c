@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/heap.c,v 1.2 2000/02/15 12:19:26 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/heap.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
 /*
 **	heap.c  -  kernel predicates dealing with the entire heap
 **
@@ -10,9 +10,9 @@
 **	Avshalom Houri		21 Sivan 5745, 10 Jun 1985
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2000/02/15 12:19:26 $
+**		       	     $Date: 2001/11/29 11:19:58 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.2 $
+**			     $Revision: 1.3 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/heap.c,v $
 */
 
@@ -26,6 +26,7 @@ extern	FILE *DbgFile;
 #include	"macros.h"
 #include	<sys/file.h>
 #include	<sys/time.h>
+#include	<time.h>
 #include	<sys/resource.h>
 
 heapP LostProcesses;

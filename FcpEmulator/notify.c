@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.3 2000/02/15 12:19:26 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.4 2001/11/29 11:19:59 bill Exp $ */
 
 #include	<stdio.h>
 extern	FILE *DbgFile, *OutFile;
@@ -8,6 +8,7 @@ extern	FILE *DbgFile, *OutFile;
 #include	<errno.h>
 #include	<sys/file.h>
 #include	<sys/time.h>
+#include	<time.h>
 #ifdef	SUNOS4d1d3
 #include	<sys/vadvise.h>
 #endif

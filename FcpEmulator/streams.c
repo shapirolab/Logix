@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/streams.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/streams.c,v 1.2 2001/11/29 11:19:59 bill Exp $ */
 /*
  **	streams.c  -  produce and handle streams.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 1999/07/01 07:15:10 $
+ **		       	     $Date: 2001/11/29 11:19:59 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.1 $
+ **			     $Revision: 1.2 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/streams.c,v $
  */
 
@@ -20,6 +20,7 @@ extern	FILE *DbgFile;
 #include	<errno.h>
 #include	<sys/file.h>
 #include	<sys/time.h>
+#include	<time.h>
 
 #include	"fcp.h"
 #include	"codes.h"

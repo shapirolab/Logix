@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.2 2000/02/15 12:19:25 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
 /*
  **	extern.c  -  errors handling, and reporting procedures.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 2000/02/15 12:19:25 $
+ **		       	     $Date: 2001/11/29 11:19:58 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.2 $
+ **			     $Revision: 1.3 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/externs.c,v $
  */
 
@@ -17,6 +17,7 @@ extern	FILE *DbgFile, *OutFile;
 #include	<errno.h>
 #include	<sys/file.h>
 #include	<sys/time.h>
+#include	<time.h>
 #include	<sys/resource.h>
 
 #include	"fcp.h"

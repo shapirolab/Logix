@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/kernels.c,v 1.2 2000/01/16 06:55:18 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/kernels.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
 /*
 **	kernels.c  -  kernel predicates.
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2000/01/16 06:55:18 $
+**		       	     $Date: 2001/11/29 11:19:58 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.2 $
+**			     $Revision: 1.3 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/kernels.c,v $
 */
 
@@ -29,6 +29,7 @@ extern	FILE *DbgFile, *OutFile;
 #include	<signal.h>
 #include	<sys/file.h>
 #include	<sys/time.h>
+#include	<time.h>
 
 #include	"fcp.h"
 #include	"codes.h"

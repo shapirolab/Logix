@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.3 2000/01/16 06:55:17 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.4 2001/11/29 11:19:58 bill Exp $ */
 /*
 **	interface.c - unix interface functions.
 **
 **	Michael Hirsch and Bill Silverman		February 1986
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2000/01/16 06:55:17 $
+**		       	     $Date: 2001/11/29 11:19:58 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.3 $
+**			     $Revision: 1.4 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
 **
 */
@@ -42,6 +42,7 @@ Interface accepts the following commands:
 #include	<sys/types.h>
 #include	<sys/stat.h>
 #include	<sys/time.h>
+#include	<time.h>
 #include	<sys/file.h>
 #include	<sys/param.h>
 

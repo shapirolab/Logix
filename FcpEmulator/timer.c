@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/timer.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/timer.c,v 1.2 2001/11/29 11:19:59 bill Exp $ */
 /*
 **	timer.c - a device for generating time signals.
 **
@@ -38,6 +38,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include "fcp.h"
 #include "codes.h"
