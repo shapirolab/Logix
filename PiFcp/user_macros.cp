@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/15 13:47:27 $
+		       	$Date: 1999/12/21 12:20:55 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -41,20 +41,49 @@ expand(Command, Cs) :-
 
 % add your macros here....
 
-    Command = cpf(N) :
+% Pi Calculus macros
+
+    Command = cpf(N, Options) :
       Cs = [to_context([computation # display(stream,Results,[type(unparse)]),
-	  		pi_requests # transform_and_wait(N, N', Results)]),
-	    compile(N'?) |Commands]\Commands;
+	  		pi_macros # transform_and_wait(N, N', Results)]),
+	    compile(N'?, Options) |Commands]\Commands;
     Command = cpf(N) :
       Command' = cpf(N, []) |
 	expand;
 
-    Command = mpc(N) :
+    Command = pc(N) :
       Cs = [to_context(pi_utils # make_channel(N))|Commands]\Commands;
 
-    Command = pf(N) :
+    Command = ph :
+      CL = [	" a / a(No)          - abort computation No",
+		" cpf(Module)        - compile Module.pi -> Module.cp -> Module.bin",
+		" d(It)              - debug(It) (Goal or RPC)",
+		" i(File)            - input file",
+		" pc(C)              - make pifcp channel C",
+		" ph                 - get this list",
+		" pr(C,M)            - receive M from pifcp channel C",
+		" ps(M,C)            - send M on pifcp channel C",
+		" r / r(No)          - resolvent of computation No",
+		" r(Ids) / r(No, Ids)- extract Ids of resolvent of computation No",
+		" re / re(No)        - resume computation No",
+		" s / s(No)          - suspend computation No",
+		" tpf(N)             - Transform pifcp module N to fcp: N.pi -> N.cp",
+		" tpf(Module)        - Transform Module.pi -> Module.cp",
+		" Service - Goal     - call Service#Goal",
+		" - Goal             - call Current#Goal",
+		" {String}           - invoke UNIX shell sh with String"
+	 ],
+      Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
+
+    Command = pr(M, C) :
+      Cs = [to_context(pi_utils # receive(M, C)) |Commands]\Commands;
+
+    Command = ps(M, C) :
+      Cs = [to_context(pi_utils # send(M, C)) |Commands]\Commands;
+
+    Command = tpf(N) :
       Cs = [to_context(computation # display(stream,Results, [type(unparse)])),
-	    pi_requests # transform(N, Results) |Commands]\Commands;
+	    pi_macros # transform(N, Results) |Commands]\Commands;
 
 % To retain system-macro and normal shell capabilities, forward generated
 % commands to the shell via the  Commands  difference list.
@@ -111,7 +140,6 @@ expand(Command, Cs) :-
       CL = [	" a / a(No)          - abort computation No",
 		" at / at(Service)   - attributes(Service)",
 		" c / c(Module)      - compile(Module)",
-		" cpf(N)             - compile pifcp to fcp - N.pi -> N.bin",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" goal / goal(No)    - goal of computation No",
 		" h                  - get this list",
@@ -119,14 +147,11 @@ expand(Command, Cs) :-
 		" l / l(Module)      - lint(Module)",
 		" less(Service)      - activate:  less Service.cp",
 		" more(Service)      - activate:  more Service.cp",
-		" mpc(N)             - make pifcp channel",
-		" pf(N)              - Transform pifcp to fcp - N.pi -> N.cp",
 		" quit               - quit logix system",
 		" r / r(No)          - resolvent of computation No",
 		" r(Ids) / r(No, Ids)- extract Ids of resolvent of computation No",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
-		" t                  - trace",
 		" vi / vi(Module)    - edit Module",
 		" O/V                - set screen option O to V",
 		" N|X                - assign numbered variable to X",
