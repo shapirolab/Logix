@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/07 11:52:27 $
+		       	$Date: 2000/03/14 13:40:45 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export(transform/5).
--mode(interrupt).
+-mode(failsafe).
 -language(compound).
 
 /*
@@ -22,7 +22,10 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **
 ** Transform pifcp module to compound Fcp.
 **
-** This module should be integrated with the transform application.
+** This module should be integrated with the transform application,
+** which should recognize pifcp alone and translate it to:
+**
+**    [evaluate,pifcp,compound,colon]
 **
 ** Input:
 **
@@ -33,20 +36,17 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **
 **   Attributes2 - Attributes1 augmented by exported Fcp procedures.
 **   Terms       - Compound Fcp code.
-**   Errors      - Diagnostice in the form:  Name - comment(ARgument)
+**   Errors      - Diagnostics in the form:  Name - comment(ARgument)
 */
 
 transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
-	/* Extract Global channel declarations, and get Exported list. */
-	filter_attributes(Attributes1, Attributes1', Controls, Delay,
-				Errors, Errors'?),
+	/* Get Exported list. */
+	filter_attributes(Attributes1, Attributes1', Exported),
 	Attributes2 = [export(Exports?) | Attributes1'?],
 	program.
 
-  filter_attributes(In, Out, Controls, Delay, Errors, NextErrors) +
-	(Exported = _, GlobalDescriptors = [],
-	 Means = _Delay(_Receive, _Send)) :-
+  filter_attributes(In, Out, Exported) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
@@ -60,51 +60,93 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
       Exported = Es |
 	self;
 
-    In ? global(Gs) |
-	validate_globals(Gs, Means, GlobalDescriptors, GlobalDescriptors',
-				Errors, Errors'?),
-	self;
-
-    In ? stochastic :
-      Means = _(Receive, Send),
-      Means' = stochastic(Receive, Send) |
-	self;
-
-    In ? stochastic(Both) :
-      Means' = stochastic(_Receive, _Send) |
-	validate_means(Both, Both, Means, Means', Errors, Errors'),
-	update_means(Means, Means', Means''),
-	self + (Means = Means''?);
-
-    In ? stochastic(Receive, Send) :
-      Means' = stochastic(_Receive, _Send) |
-	validate_means(Receive, Send, Means, Means', Errors, Errors'),
-	update_means(Means, Means', Means''),
-	self + (Means = Means''?);
-
     In ? Other,
-    Other =\= export(_), Other =\= global(_),
-    Other =\= stochastic, Other =\= stochastic(_), Other =\= stochastic(_, _) :
+    Other =\= export(_) :
       Out ! Other |
 	self;
 
-    In = [], Means =?= stochastic(_Receive, _Send) :
-      Out = [stochastic],
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Means?},
-      Delay = stochastic,
+    In =?= [] :
+      Out = [] |
+	unify_without_failure(Exported, all).
+
+
+program(Source, Exported, Exports, Terms, Errors) :-
+
+	filter_pifcp_attributes(Source, Exported, Controls, Delay, Source',
+					Errors, Errors'?),
+	servers#serve_empty_scope(Scope?, Controls?, Exports,
+					NextTerms, Errors'),
+	process_definitions+(Processes = [], NextScope = []),
+	spc#output(Terms'?, Delay, Terms).
+
+
+/* Extract Global channel declarations and Stochastic means. */
+filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
+			Errors, NextErrors) +
+	(GlobalDescriptors = [], Means = _Delay(_Receive, _Send)) :-
+
+    Source ? String, string(String) |
+	pifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
+				Means, Means', Errors, Errors'),
+	self;
+
+    Source ? Tuple, Tuple =\= (_ :- _) |
+	pifcp_attribute(Tuple, GlobalDescriptors, GlobalDescriptors',
+				Means, Means', Errors, Errors'),
+	self;
+
+    otherwise :
+      NextSource = Source,
       Errors = NextErrors |
+	complete_pifcp_attributes.
+
+  pifcp_attribute(Attribute, OldDescriptors, NewDescriptors,
+			Means1, Means, Errors, Errors') :-
+
+    Attribute = global(Gs) :
+      Means = Means1 |
+	validate_globals(Gs, Means, OldDescriptors, NewDescriptors,
+				Errors, Errors');
+
+    Attribute = stochastic :
+      Errors' = Errors,
+      NewDescriptors = OldDescriptors,
+      Means1 = _(Receive, Send),
+      Means = stochastic(Receive, Send);
+  
+    Attribute = stochastic(Both) :
+      NewDescriptors = OldDescriptors,
+      Means3 = stochastic(_Receive, _Send),
+      Means = Means3 |
+	validate_means(Both, Both, Means1, Means2, Errors, Errors'),
+	update_means;
+
+    Attribute = stochastic(Receive, Send) :
+      NewDescriptors = OldDescriptors,
+      Means2 = stochastic(_Receive, _Send),
+      Means = Means3? |
+	validate_means(Receive, Send, Means1, Means2, Errors, Errors'),
+	update_means;
+
+    otherwise :
+      NewDescriptors = OldDescriptors,
+      Means = Means1,
+      Errors ! invalid_pifcp_attribute(Attribute).
+
+  complete_pifcp_attributes(Exported, Means, Delay, GlobalDescriptors,
+					Controls) :-
+
+    Means =?= stochastic(_Receive, _Send) :
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Means?},
+      Delay = stochastic |
 	extract_global_names,
-	unify_without_failure(Exported, all),
 	unify_without_failure(Means, _(0, 0));
 
-    In = [] :
-      Out = [],
+    true :
       Means = none(0, 0),
       Controls = {Exported?, GlobalDescriptors, GlobalNames?, Means},
-      Delay = none,
-      Errors = NextErrors |
-	extract_global_names,
-	unify_without_failure(Exported, all).
+      Delay = none |
+	extract_global_names.
 
   update_means(Means1, Means2, Means3) :-
 
@@ -158,11 +200,11 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
     GlobalDescriptors =?= [] :
       Means = _,
-      Tail = Old,
+      Tail = [],
       Errors = NextErrors |
-	piutils#sort_out_duplicates([Head], New, Reply),
+	piutils#sort_out_duplicates([Old], Old', Reply),
+	piutils#sort_out_duplicates([Old'?, Head], New, _Reply),
 	diagnose_duplicates + (Diagnostic = duplicate_global_channel).
-
 
   diagnose_duplicates(Reply, Diagnostic, Errors, NextErrors) :-
 
@@ -178,7 +220,7 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
       Reply = _,
       Errors = [Diagnostic | NextErrors].
 
-  validate_means(ReceiveMean, SendMean, Means, Global, Errors, NextErrors) :-
+validate_means(ReceiveMean, SendMean, Means, Global, Errors, NextErrors) :-
 
     integer(ReceiveMean), 0 =< ReceiveMean,
     integer(SendMean), 0 =< SendMean :
@@ -192,13 +234,6 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
       Errors = [invalid_means(ReceiveMean, SendMean) | NextErrors].
 
 /************************* Program Transformations ***************************/
-
-program(Source, Controls, Delay, Exports, Terms, Errors) :-
-
-	servers#serve_empty_scope(Scope?, Controls, Exports,
-					NextTerms, Errors),
-	process_definitions+(Processes = [], NextScope = []),
-	spc#output(Terms'?, Delay, Terms).
 
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
@@ -361,7 +396,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       SendProcedure = (ChoiceAtom? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
-	make_choice_name(PName, ".sends", SendChoices),
+	make_choice_name(PName, ".send", SendChoices),
 	piutils#make_predicate_list(';', ClauseList, FcpClauses),
 	sends_to_writes(Sends, Writes),
 	make_choice_atom+(Name = SendChoices, ChoiceVars = [`pifcp(chosen)]);
@@ -381,8 +416,8 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 
     /* receive, compared, logix, none */
     Mode =\= send, Mode =\= mixed, Mode =\= compare, Mode =\= conflict :
-      Sends = [],
       SendId = "_",
+      Sends = [],
       RHS2 = FcpClauses?,
       SendProcedure = [],
       Scope = NextScope |
@@ -398,11 +433,11 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 
     Mode =?= conflict :
       SendId = "_",
-      ClauseList = [],
-      Sends = [],
+      ClauseList = _,
       RHS2 = true,
       SendProcedure = [],
-      Scope = [error("conflicting_guards") | NextScope].
+      Scope = [error("conflicting_guards") | NextScope] |
+	unify_without_failure(Sends, []).
       
 
   sends_to_writes(Sends, Writes) +
@@ -577,7 +612,7 @@ compare_channels(Guard, BodyGuard, Channels, NextChannels, Scope, NextScope) :-
 	compare_channels(Compares, Comparers, Channels'?, NextChannels,
 				Scope', NextScope);
 
-    Guard =\= (_ =?= _), Guard =\= (_ =\= _) :
+    Guard =\= (_ & _), Guard =\= (_ =?= _), Guard =\= (_ =\= _) :
       BodyGuard = true,
       NextChannels = Channels,
       Scope = [error(invalid_compare_guard(Guard)) | NextScope];
