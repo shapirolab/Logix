@@ -7,9 +7,9 @@ Revised By William Silverman, 05-08-85
 Additions by Eli Biham & William Silverman, 07-03-85
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/29 08:11:05 $
+		       	$Date: 2004/06/22 12:21:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
     			$Source: /home/qiana/Repository/Logix/system/terms_to_string.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -671,6 +671,15 @@ prefix_operator( '~' ,220^, 219^, true^).
 prefix_operator( '`' ,210^, 210^, true^).
 prefix_operator( '?' ,210^, 209^, true^).
 prefix_operator( 'procedure', 100^, 99^, true^).
+/* Added for ambients */
+prefix_operator( 'p2c', 98^, 97^, true^).
+prefix_operator( 'c2p', 98^, 97^, true^).
+prefix_operator( 's2s', 98^, 97^, true^).
+prefix_operator( 'local', 98^, 97^, true^).
+prefix_operator( 'enter', 98^, 97^, true^).
+prefix_operator( 'accept', 98^, 97^, true^).
+prefix_operator( 'exit', 98^, 97^, true^).
+prefix_operator( 'expel', 98^, 97^, true^).
 /* error */
 prefix_operator( _, _, _, false^) :-
     otherwise |
