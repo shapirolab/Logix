@@ -6,7 +6,7 @@ processes.
 where:
 
     <quantified process set> ::=
-	<external call>
+	<external_call>
         (<process set>)
         <repetition> * (<process set>)
 
@@ -21,28 +21,18 @@ A negative <repetition> is treated as zero.
 (See BNF for the definition of <external_call>.)
 
 
-The repeat macro can run the processes, and it can also measure
-and record their behavior.
-
 Examples:
 
-1. repeat(64*(dimerization#"A_PROTEIN"))
+1. repeat#run(64*(dimerization#"A_PROTEIN"))
 
-2. repeat([6*(activator#"A_PROTEIN"),activator#"A_GENE",repressor#"R_GENE"])
+2. repeat#run([6*(activator#"A_PROTEIN"),activator#"A_GENE",
+                  repressor#"R_GENE"])
 
-3. repeat([2*[activator#A_GENE,3*(repressor#R_GENE)],hysteresis#module])
-
-4. repeat(4*(dimerization#"A_PROTEIN"), 100)
-
-5. repeat(4*(dimerization#"A_PROTEIN"), file, 100)
+3. repeat#run([2*[activator#"A_GENE",3*(repressor#"R_GENE")],
+               hysteresis#"MODULE"])
 
 Note that the parentheses are necessary in the case of:
 
     <repetition>*(<external_call>)
 
-Examples 4 and 5 terminate after 100 units of events, like record/run.
-
-Example 5 records the behavior of 4*(dimerization#"A_PROTEIN")  on
-file, like record.
-
-
+This process is used by the run and record macros (see record.txt).
