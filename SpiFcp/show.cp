@@ -1,7 +1,6 @@
 -language([evaluate,compound,colon]).
-
+-mode(interrupt).
 -export([based/0, channels/0, channels/1, instantaneous/0, stuff/2]).
-
 -include(spi_constants).
 
 based :-
@@ -122,20 +121,20 @@ format_channel(Channel, CH, Left, Right) :-
     read_vector(SPI_SEND_WEIGHT,      Channel, WeightS),
     read_vector(SPI_RECEIVE_ANCHOR,   Channel, Receives),
     read_vector(SPI_RECEIVE_WEIGHT,   Channel, WeightR),
+/*
     read_vector(SPI_NEXT_CHANNEL,     Channel, Next),
 	read_vector(SPI_CHANNEL_NAME, Next, NameN),
 	read_vector(SPI_CHANNEL_TYPE, Next, TypeN),
     read_vector(SPI_PREVIOUS_CHANNEL, Channel, Prev),
 	read_vector(SPI_CHANNEL_NAME, Prev, NameP),
 	read_vector(SPI_CHANNEL_TYPE, Prev, TypeP),
+*/
     read_vector(SPI_CHANNEL_NAME,     Channel, Name) :
-      CH = Name(TypeRate, Send, Receive, P < "", "" > N) - BlockedRefs |
+      CH = Name(TypeRate, Send, Receive) - BlockedRefs |
 	format_typerate(Type, Rate, TypeRate, Mid1, Right),
 	format_blockedrefs(Blocked, Refs, BlockedRefs, Mid2, Mid1),
 	format_send(Sends, WeightS, Send, Mid3, Mid2),
-	format_receive(Receives, WeightR, Receive, Mid4, Mid3),
-	format_link(NameN, TypeN, N, Mid5, Mid4),
-	format_link(NameP, TypeP, P, Left, Mid5);
+	format_receive(Receives, WeightR, Receive, Left, Mid3);
 
     otherwise :
       CH = Channel,
@@ -143,43 +142,60 @@ format_channel(Channel, CH, Left, Right) :-
 
 format_typerate(Type, Rate, TypeRate, Left, Right) :-
 
-    Type =?= SPI_CHANNEL_ANCHOR :
-      Rate = _,
-      TypeRate = anchor,
-      Left = Right;
+    bitwise_and(Type, SPI_TYPE_MASK, BasicType),
+    bitwise_and(Type, SPI_PRIME_FLAG, Primed),
+    bitwise_and(Type, SPI_RANDOM_FLAG, Randomized) |
+	list_randomized,
+	list_basic_type,
+	list_primed,
+	format_typelist_rate.
 
-    Type =?= SPI_UNKNOWN :
-      TypeRate = unknown(Rate),
-      Left = Right;
+  list_randomized(Randomized, TypeList, BasicList) :-
+    Randomized =?= 0 :
+      TypeList = BasicList;
+    Randomized =\= 0 :
+      TypeList = [CHAR_HASH | BasicList].
 
-    Type =?= SPI_BIMOLECULAR :
-      TypeRate = bimolecular(Rate),
-      Left = Right;
+   list_basic_type(BasicType, BasicList, PrimeTail) :-
 
-    Type =?= SPI_BIMOLECULAR_PRIME :
-      TypeRate = "bimolecular'"(Rate),
-      Left = Right;
+    BasicType =?= SPI_CHANNEL_ANCHOR,
+    string_to_dlist(anchor, L, PrimeTail) :
+      BasicList = L;
 
-    Type =?= SPI_HOMODIMERIZED :
-      TypeRate = homodimerized(Rate),
-      Left = Right;
+    BasicType =?= SPI_UNKNOWN,
+    string_to_dlist(unknown, L, PrimeTail) :
+      BasicList = L;
 
-    Type =?= SPI_HOMODIMERIZED_PRIME :
-      TypeRate = "homodimerized'"(Rate),
-      Left = Right;
+    BasicType =?= SPI_BIMOLECULAR,
+    string_to_dlist(bimolecular, L, PrimeTail) :
+      BasicList = L;
 
-    Type =?= SPI_INSTANTANEOUS :
-      Rate = _,
-      TypeRate = instantaneous,
-      Left = Right;
+    BasicType =?= SPI_HOMODIMERIZED,
+    string_to_dlist(homodimerized, L, PrimeTail) :
+      BasicList = L;
 
-    Type =?= SPI_SINK :
-      Rate = _,
-      TypeRate = sink,
-      Left = Right;
+    BasicType =?= SPI_INSTANTANEOUS,
+    string_to_dlist(instantaneous, L, PrimeTail) :
+      BasicList = L;
 
-    otherwise :
-      TypeRate = other(Type, Rate),
+    BasicType =?= SPI_SINK,
+    string_to_dlist(sink, L, PrimeTail) :
+      BasicList = L;
+
+    otherwise,
+    convert_to_string(BasicType, S),
+    string_to_dlist(S, L, PrimeTail) :
+      BasicList = L.
+
+  list_primed(Primed, PrimeTail) :-
+    Primed =?= 0 :
+      PrimeTail = [];
+    Primed =\= 0 :
+      PrimeTail = [CHAR_PRIME].
+
+  format_typelist_rate(TypeList, Rate, TypeRate, Left,Right) :-
+    list_to_string(TypeList, TypeName) :
+      TypeRate = TypeName(Rate),
       Left = Right.
 
 format_blockedrefs(Blocked, Refs, BlockedRefs, Left, Right) :-
@@ -225,6 +241,7 @@ format_receive(Receives, Weight, Receive, Left, Right) :-
       Receive = no_receives,
       Left = Right.
 
+/*
 format_link(Name, Type, Out, Left, Right) :-
 
     Type =?= SPI_CHANNEL_ANCHOR :
@@ -235,6 +252,7 @@ format_link(Name, Type, Out, Left, Right) :-
     Type =\= SPI_CHANNEL_ANCHOR :
       Out = Name,
       Left = Right.
+*/
 
 format_list(ListIn, ListOut, Left, Right) :-
 
