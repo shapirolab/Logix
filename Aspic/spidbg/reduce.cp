@@ -4,9 +4,9 @@ Meta-Interpreter of Stochastic Pi Calculus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 
 Last update by          $Author: bill $
-			$Date: 2002/05/15 08:10:08 $
+			$Date: 2003/04/01 13:02:34 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/reduce.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -342,10 +342,11 @@ reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	Channels   = {_IO, User, _Spi},
 	Depth =\= 0,
 	Goal =\= _#_, Goal =\= (_,_), Goal =\= true,
-	Goal =\= [],  Goal =\= [_|_] |
-		write_channel(pre(Signals, Goal_Info, Debug_Info, Debug_Info',
-				  Id, Done1), User),
-		perform(Done1, Signals, Circuit, Goal_Info, Debug_Info',
+	Goal =\= [],  Goal =\= [_|_] :
+	    write_channel(pre(Signals, Goal_Info, Debug_Info', Debug_Info'',
+				  Id, Done1), User) |
+		pre_goal(Goal, Debug_Info, Debug_Info'),
+		perform(Done1, Signals, Circuit, Goal_Info, Debug_Info'',
 			Trace_Info, Id);
 
 	unknown(Signals),
@@ -417,6 +418,17 @@ reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 		module_name(Goal,Module'),
 		close(NewRc, Signals, Context'),
 		reduce.
+
+  pre_goal(Goal, Debug_Info, NewDebug_Info) :-
+
+	tuple(Goal), arg(1,Goal, Functor),
+	nth_char(1, Functor, C), ascii(a) =< C, C =< ascii(z),
+	Debug_Info = {Breaks, Depth, _Execute_or_Interpret, Channels} :
+	    NewDebug_Info = {Breaks, Depth, execute, Channels};
+
+	otherwise :
+	    Goal = _,
+	    NewDebug_Info = Debug_Info.
 
 /*************************************************************************/
 procedure suspend(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info,
@@ -574,7 +586,7 @@ perform(Done, Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Id) :-
 	known(Done),
 	unknown(Signals),
 	Circuit    = L - R,
-	Debug_Info = {_Breaks, _Depth, execute, {IO, _User}},
+	Debug_Info = {_Breaks, _Depth, execute, {IO, _User, _Spi}},
 	Goal_Info  = {Goal, {_Module, Context-Context^, Lc-Rc}},
 	Trace_Info = {Trace,_} :
 	    Id = _,
@@ -586,6 +598,18 @@ perform(Done, Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Id) :-
 				    widgets # vanilla #
 						trace(SId, Goal, _) | Is],
 				   Events),
+		reduce_goal_in_subcomputation(Signals, Goal, IO, Is, Events).
+
+  reduce_goal_in_subcomputation(Signals, Goal, IO, Is, Events) :-
+
+	tuple(Goal), arg(1,Goal, Functor),
+	nth_char(1, Functor, C), ascii(a) =< C, C =< ascii(z) :
+	    Signals = _,
+	    Events = _,
+	    IO = _,
+	    Is = [];
+
+	otherwise |
 		monitor_subcomputation(Signals, {Goal, IO, Is}, Events).
 		
 /*************************************************************************/
@@ -754,6 +778,7 @@ close_cntx(Context) :-
 procedure monitor_subcomputation(Signals,SubComputation,SubComputation_Events).
 monitor_subcomputation(Signals,SubComputation,SubComputation_Events) :-
 	Signals = [],
+	unknown(SubComputation_Events),
 	SubComputation    = {Goal, IO, In_Stream} :
 	    SubComputation_Events = _,
 	    In_Stream ! abort, In_Stream' = _ |
@@ -764,8 +789,8 @@ monitor_subcomputation(Signals,SubComputation,SubComputation_Events) :-
 	Signals?_Signal |
 		monitor_subcomputation;
 
-	unknown(Signals),
 	SubComputation_Events = [] :
+	    Signals = _,
 	    SubComputation = _ |
 		true;
 

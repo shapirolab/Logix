@@ -4,9 +4,9 @@ User interface of Stochastic Pi Calculus algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 
 Last update by          $Author: bill $
-			$Date: 2002/05/15 08:10:08 $
+			$Date: 2003/04/01 13:02:34 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -154,8 +154,8 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    Done = done, 
 	    NewDebug_Info = Debug_Info | true;
 
+	Answer =\= dont_ask,
 	Debug_Info = {_Breaks, _Depth, execute, _Channels} :
-	    Answer  = _,
 	    Answer' = dont_ask |
 		ask;
 
@@ -234,6 +234,7 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 
     BodyIn =?= (Goal, BodyIn'),
     Goal =\= (spi_monitor#_),
+    Goal =\= (spi_update_channel_refs(_,_,_)),
     Goal =\= (_ = _) :
 	BodyOut = (Goal, BodyOut') |
 		self;
@@ -242,13 +243,14 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
     otherwise |
 		self;
 
-	BodyIn =\= (_, _),
-	BodyIn =\= (spi_monitor#_),
-	BodyIn =\= (_ = _) :
-	    BodyOut = BodyIn;
+    BodyIn =\= (_, _),
+    BodyIn =\= (spi_monitor#_),
+    BodyIn =\= (spi_update_channel_refs(_,_,_)),
+    BodyIn =\= (_ = _) :
+	BodyOut = BodyIn;
 
-	BodyIn =\= (_, _),
-	otherwise :
+    BodyIn =\= (_, _),
+    otherwise :
 	    BodyOut = 0.
 
   write_user_goal(Goal, Notation, Done, IO) :-
