@@ -2,11 +2,12 @@ Representations and transformations of the PsiFcp language to Compound Fcp
 
 <message>        ::~ <psi_message>
 
-  <psi_message>     ::= <direction>(<sender>, <message_content>,
+  <psi_message>     ::= <direction>(<sender>, <message_variable>,
                                     <choice_tag>, <multiplier>, <choice>)
 
   <sender> identifies the process which sent the <message> and the channel
            on which it was sent.
+  <message_variable> is `"Message." .
   <message_content> is [] or a tuple of <psi_channel>s.
   <choice_tag> is an integer.
   <multiplier> is a positive integer.
@@ -43,8 +44,9 @@ offered, they share the same <choice> variable.  The <process> then waits
 in a generated procedure for a <psi_message> to be matched to a <receive>
 or <send>; the <choice_tag> and the <choice> of each matched (received or
 sent) <psi_message>, are unified, effectively withdrawing all other offered
-<message>s.  The procedure commits the clause corresponding to the chosen
-<message>.
+<message>s - the <message_variable>s of the <send> and <receive> are also
+unified.  The procedure commits the clause corresponding to the chosen
+<message>, unifying <message_variable> with <message_content>.
 
 Each <process> is represented by an Fcp procedure.  Each <communicator> which
 is a parameter or an added <communicator> of the <process> is represented by a
