@@ -1,0 +1,102 @@
+The psi_trace process can run a Stochastic Pi Calculus (psifcp) process
+and trace its behavior.
+
+   psi_trace#run(<call program>, <file_name>, <time limit>)
+or
+   psi_trace#run(<call program>, <file_name>, <time limit>, <scale>)
+or
+   psi_trace#run(<call program>, <file_name>, <time limit>, <format>)
+or
+   psi_trace#run(<call program>, <file_name>, <time limit>, <format>, <scale>)
+or
+   psi_trace#run(<call program>, <file_name>, <time limit>, <scale>, <format>)
+
+
+The time limit forces termination of the run, after that much internal
+time has elapsed.  If the run terminates before the the time limit is
+reached, you will usually want to abort the run (enter: abort<cr>).
+
+When the internal times are very small, or very large, you can scale 
+the output - this does not effect process behavior.
+
+You may also format the output, which is written to the named file,
+specifying one of the strings:
+
+   none, process, creator, full
+
+The default is "none".  The others add information to the formatted
+output.
+
+You may also use the macros:
+
+    trace(<quantified process set>, <file_name>, <time limit>)
+or
+    trace(<quantified process set>, <file_name>, <time limit>, <scale>)
+or
+    trace(<quantified process set>, <file_name>, <time limit>, <format>)
+or
+    trace(<quantified process set>, <file_name>, <time limit>,
+           <scale>, <format>)
+or
+    trace(<quantified process set>, <file_name>, <time limit>,
+           <format>, <scale>)
+
+See repeat.txt for the definitition of <quantified process set>.
+
+Examples:
+
+1. trace(hysteresis#"MODULE", fff, 100)
+
+   starts the process  MODULE  in program module  hysteresis  and
+   terminates the run after 100 time units have elapsed.  To 
+   terminate the run prematurely, suspend the Logix computation
+   or enter  <control>C  to kill the Logix system; it traces the
+   events of the run on file fff.
+
+2. trace(hysteresis#"MODULE", fff, 100, 10)
+
+   does the same thing, and traces the events of the run on file 
+   fff with time values scaled times 10.
+
+3. trace(hysteresis#"MODULE", fff, 100, creator)
+
+   does the same thing as 1, tracing to fff with annotations
+   indicating which channels transmitted messages.
+
+The elements of the file are lines which have one of three forms.
+
+   a. A positive real-valued time.
+
+   b. +<process signature>, which traces the start of a procedure.
+
+   c. -<process signature>, which traces the termination of a procedure.
+
+A process signature is the name of a process instance and its channel
+identifiers in functional format.  Channels which have been closed
+are wrapped in square brackets.
+
+Annotation appears on c lines:
+
+1. The "process" format includes an arrow, indicating whether the
+   process sent (->) or received (<-) a message, followed by the name
+   within the process of the channel which transmitted the message.
+
+2. The "creator" format is similar, but with the global identifier of
+   the channel instead of its name - this includes a unique index for
+   each instance of a local channel.
+
+3. The "full" format is similar, providing both the name and the global
+   identifier,  separated by a colon (:).
+
+The output of trace is very similar to the output of record (see
+record.txt); the trace annotations include spaces around their
+separators.  However, tracing is an much slower than recording, due
+to the overhead of producing the process signature.
+
+
+You may start tracing at any time from the console or
+dynamically from a program, for example, while running
+a program, enter or call:
+
+   psi_trace#trace(screen#display(hi),xxx,1000)
+
