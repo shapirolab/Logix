@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2004/10/24 10:17:00 $
+		       	$Date: 2004/12/24 15:31:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -85,7 +85,6 @@ expand(Command, Cs) :-
 		" pdb(RPC)           - debug(RPC)",
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from spi channel C",
-		" prgcs              - reset Spi public channels",
 		" ps(M,C)            - send M on spifcp channel C",
 		" randomize          - set all new channels to randomize",
 		" serialize          - set all new channels to serialize",
@@ -93,13 +92,13 @@ expand(Command, Cs) :-
 		" s / s(No)          - suspend computation No",
 		" spc(C)             - Spi channel",
 		" spg / spg(No)      - Spi goal of computation No",
-		" spgcs              - Spi public channels",
 		" spr / spr(No)      - Spi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Spi execution tree",
 		" record(GS, F, L)   - run Goals, record to File until Limit.",
 		" record(GS,F,L,S,O) - run Goals, record to File until Limit,",
 		"                      scaled by Scale, with format Option.",
+		" reset              - reset Spi monitor",
 		" run(GS)            - run Goals.",
 		" run(GS, L)         - run Goals until Limit.",
 		" trace(GS, F, L)    - run Goals, trace to File until Limit.",
@@ -126,13 +125,6 @@ expand(Command, Cs) :-
 
     Command = pr(C, M, N) :
       Cs = [to_context(spi_utils # receive(C, M, N)) | Commands]\Commands;
-
-    Command = prgcs :
-      Command' = prgcs(_) |
-	expand;
-
-    Command = prgcs(Channels) :
-      Cs = [to_context(spi_monitor # reset(Channels)) | Commands]\Commands;
 
     Command = ps(M, C) :
       Cs = [to_context(spi_utils # send(M, C)) | Commands]\Commands;
@@ -176,18 +168,6 @@ expand(Command, Cs) :-
 			computation # display(term, Term, known(Term))]) 
 	   | Commands]\Commands;
 
-    Command = spgcs :
-      Cs = [to_context([spi_monitor # [options(O, O),get_public_channels(Gs)], 
-			spi_utils # show_value(Gs, O?, Gs'),
-			computation # display(stream, Gs', [])]) 
-	   | Commands]\Commands;
-
-    Command = spgcs(Options) :
-      Cs = [to_context([computation # display(stream, Gs', []),
-			spi_monitor # get_public_channels(Gs),
-			spi_utils # show_value(Gs, Options, Gs')]) 
-	   | Commands]\Commands;
-
     Command = spr :
       Command' = spr(_) |
 	expand;
@@ -228,6 +208,9 @@ expand(Command, Cs) :-
     Command = record(Goals, File, Limit, Scale, Format) |
 	spi_run(Goals, Run,
 		    spi_record#run(Run, File, Limit, Scale, Format), Cs);
+
+    Command = reset :
+      Cs = [to_context(spi_monitor # reset) | Commands]\Commands;
 
     Command = run(Goals) |
 	spi_run(Goals, Run, Run, Cs);
