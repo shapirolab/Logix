@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/ctl.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/ctl.c,v 1.1.1.1 1999/07/01 07:15:09 bill Exp $ */
 /*
 **	ctl.c - ctl modules creation and handling.
 */

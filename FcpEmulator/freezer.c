@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/freezer.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/freezer.c,v 1.1.1.1 1999/07/01 07:15:10 bill Exp $ */
 /*
 **	freezer.c  -  freeze/melt  a term. 
 **

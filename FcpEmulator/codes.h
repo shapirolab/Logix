@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/codes.h,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/codes.h,v 1.1.1.1 1999/07/01 07:15:09 bill Exp $ */
 /*
 **	codes.h	 -  operation codes
 **
 **	Last update by		$Author: bill $
 **				$Date: 1999/07/01 07:15:09 $
 **	Currently locked by	$Locker:  $
-**				$Revision: 1.1 $
+**				$Revision: 1.1.1.1 $
 **				$Source: /home/qiana/Repository/FcpEmulator/codes.h,v $
 */
 

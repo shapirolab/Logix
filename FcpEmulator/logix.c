@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/logix.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/logix.c,v 1.1.1.1 1999/07/01 07:15:10 bill Exp $ */
 /*
 **  logix.c  -   logix fcp emulator main program.
 */

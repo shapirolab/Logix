@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/freeze_term.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/freeze_term.c,v 1.1.1.1 1999/07/01 07:15:10 bill Exp $ */
 /*
 
 Yossie Lichenstein - 1986

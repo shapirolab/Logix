@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/tty.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/tty.c,v 1.1.1.1 1999/07/01 07:15:09 bill Exp $ */
 /*
 **	tty.c - a device for reading from keyboard.
 **

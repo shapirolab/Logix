@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/global.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/global.c,v 1.1.1.1 1999/07/01 07:15:09 bill Exp $ */
 /*
 **  global.c  -  declaration and initialisation of global variables
 **		 This is the one file which does NOT include global.h
@@ -6,7 +6,7 @@
 **	Last update by 	     $Author: bill $
 **		       	     $Date: 1999/07/01 07:15:09 $
 **	Currently locked by  $Locker:  $
-**			     $Revision: 1.1 $
+**			     $Revision: 1.1.1.1 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/global.c,v $
 */
 
