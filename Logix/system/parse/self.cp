@@ -4,9 +4,9 @@ FCP parser
 Michael Hirsch, Marc Rosen, Muli Safra, Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:09 $
+		       	$Date: 1999/11/28 12:41:29 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/parse/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -190,12 +190,16 @@ prefix_term(String, Tokens, Priority1, Term, Priority2, Rest,
 	build_tuple('}', ',', 999, Tokens, Rest, Term, _Arg0, 0,
 			Result, Os1,Os2
 	);
-
+/*
     String = '<<' : Priority1 = _,
       Priority2 = 0 |
 	build_tuple('>>', '.', 1200, Tokens, Rest, Term, _Arg0, 0,
 			Result, Os1,Os2
 	);
+*/
+    String = '<<' : Priority1 = _,
+      Priority2 = 0 |
+	build_list(ok, ['.' | Tokens], Rest, Term, Result, Os1,Os2);
 
     otherwise,			% kluge to reduce look-ups
     string_length(String) > 2, String =\= 'procedure',
@@ -701,9 +705,28 @@ rlist(_, Tokens, Tokens^, _, list_error^, Os,Os^) :-
     otherwise |
 	true.
 
-
 rest_nil(ok, [']' | Rest], Rest^, ok^).
 rest_nil(_, Tokens, Tokens^, term_error^) :-
+    otherwise |
+	true.
+
+
+build_list(Result1, Tokens, Rest, Term, Result2, Os1,Os2) :-
+
+    Result1 = ok,
+    Tokens ? '.' :
+      Term = [Car? | Term'?] |
+	term(Tokens', Tokens'', Car, 1200, '.', Result1', Os1,Os1'),
+	build_list;
+
+    Result1 = ok,
+    Tokens = ['>>' | Rest^] :
+      Term = [],
+      Result2 = ok,
+      Os1 = Os2 |
+	true.
+
+build_list(_, Tokens, Tokens^, _, list_error^, Os,Os^) :-
     otherwise |
 	true.
 
@@ -765,6 +788,7 @@ procedure infix_operator_1(Op, PLeft, Pop, PRight, Reply).
 infix_operator_1( ';' ,1069^, 1070^, 1070^, true^).
 infix_operator_1( '|' ,1059^, 1060^, 1060^, true^).
 infix_operator_1( ':' ,1049^, 1050^, 1049^, true^).
+infix_operator_1( '&' , 999^, 1000^, 1000^, true^).	 
 infix_operator_1( ',' , 999^, 1000^, 1000^, true^).	 
 infix_operator_1( '!' , 899^,  900^,  900^, true^).	 
 infix_operator_1( '?' , 900^,  900^,  899^, true^).	 
