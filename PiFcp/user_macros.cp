@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/03 13:15:48 $
+		       	$Date: 2000/01/05 15:10:24 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -54,17 +54,23 @@ expand(Command, Cs) :-
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from pifcp channel C",
 		" ps(M,C)            - send M on pifcp channel C",
-		" r / r(No)          - resolvent of computation No",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
 		" spc(C)             - show Pi channel",
+		" spr / spr(No)      - resolvent of computation No",
 		" spg / spg(No)      - show Pi goal No",
                 " ctree(Tree)        - Close a vanilla tree",
                 " ptree(Tree)        - Show Pi execution tree",
                 " vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" Service - Goal     - call Service#Goal",
 		" - Goal             - call Current#Goal",
-		" {String}           - invoke UNIX shell sh with String"
+		" {String}           - invoke UNIX shell sh with String",
+                "",
+                "           options for sp* and ptree:",
+		" Integer            - depth of channel display",
+		" none/active/all    - type of messages displayed",
+		" sender/no_sender   - show name of message sender",
+		" prefix/execute     - order of tree display"
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
 
@@ -90,13 +96,27 @@ expand(Command, Cs) :-
 
     Command = spg(No) :
       Cs = [state(No, Goal, _, _),
-	    to_context([computation # display(stream,Results,[type(ground)]),
-			pi_utils # show_goal(Goal, [], Results)]) 
+	    to_context([computation # display(term, Term,[type(ground)]),
+			pi_utils # show_goal(Goal, [], Term)]) 
 	   | Commands]\Commands;
 
     Command = spg(Goal, Options) :
-      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
-			pi_utils # show_goal(Goal, Options, Results)]) 
+      Cs = [to_context([computation # display(stream,Term,[type(ground)]),
+			pi_utils # show_goal(Goal, Options, Term)]) 
+	   | Commands]\Commands;
+
+    Command = spr :
+      Command' = spr(_, []) |
+	expand;
+
+    Command = spr(No) :
+      Command' = spr(No, []) |
+	expand;
+
+    Command = spr(No, Options) :
+      Cs = [resolvent(No, Resolvent),
+	    to_context([computation # display(stream, Stream, [type(ground)]),
+			pi_utils # show_resolvent(Resolvent, Options, Stream)])
 	   | Commands]\Commands;
 
     Command = ctree(Tree) :
@@ -107,12 +127,13 @@ expand(Command, Cs) :-
 	expand;
 
     Command = ptree(Tree, Options) :
-      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
-			pi_utils # show_tree(Tree, Options, Results)]) 
+      Cs = [to_context([computation # display(stream, Stream, [type(ground)]),
+			pi_utils # show_tree(Tree, Options, Stream)]) 
 	   | Commands]\Commands;
 
     Command = vtree(Context, Conjunction, Tree) :
-      Cs = [vtree(Context, Conjunction, Tree, 1) | Commands]\Commands;
+      Cs = [widgets # vanilla # tree(Context, Conjunction, Tree) 
+	   | Commands]\Commands;
 
     Command = vtree(Context, Conjunction, Tree, Depth) :
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree, Depth) 
