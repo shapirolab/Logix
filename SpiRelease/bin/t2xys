@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 my $source = shift @ARGV;
 open SOURCE, "$source.table" or die "Can't open input $source.table\n";
