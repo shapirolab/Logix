@@ -1,0 +1,48 @@
+The spi_record process (see Spi-release/Documentation/record.txt)
+may also be used to run an Ambient Calculus process and record its
+behavior.
+
+An <ambient identifier> has the form:
+
+   <ambient name>(<unique identifier>)
+
+where <unique identifier> is a positive integer, which is unique
+within the ambient tree.
+
+Every <process name> is compounded from the ambient identifier and
+the actual process name - e.g.
+
+      -molecule(2):LBD
+      -cell(3):EC
+      +molecule(2):Bound_LBD
+
+  A fourth form of file element is:
+
+   d. !<ambient identifier>, which indicates termination (usually
+      via merge- ) of the ambient - e.g.
+
+      !molecule(9)
+
+Inter-ambient communications in annotated output include a locus or
+capability indicator - e.g.
+
+   from record(receptor_endo#"System",rrr,20,process) :
+
+      -molecule(2):LBD -> s2s bind
+      -cell(3):EC <- s2s bind
+
+      -cell(3):EC.1 -> p2c recbb
+      -molecule(6):IC <- c2p recbb
+
+   from record(porin#"System",ppp,10,creator) :
+
+      -molecule(3):Molecule.0 -> enter public.cell1
+      -cell(6):Porin.0 <- accept public.cell1
+
+      -molecule(2):Molecule.0 -> exit public.cell2
+      -cell(6):Porin.0 <- expel public.cell2
+
+   from record(complex_merge#"System",mmm,10,full) :
+
+      -molecule(4):Domain1A.1.1.1 -> merge- pa: ProteinA.0.pa(1)
+      -molecule(5):Domain1B.1 <- merge+ pa: ProteinA.0.pa(1)
