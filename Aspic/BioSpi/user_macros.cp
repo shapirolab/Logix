@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2004/10/24 10:16:07 $
+		       	$Date: 2004/12/24 16:27:54 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.16 $
+			$Revision: 1.17 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -98,6 +98,7 @@ expand(Command, Cs) :-
  		" record(GS, F, L)   - run Goals, record to File until Limit.",
 		" record(GS,F,L,S,O) - run Goals, record to File until Limit,",
 		"                      scaled by Scale, with format Option.",
+                " reset              - reset Spi monitor",
 		" run(GS)            - run Goals.",
 		" run(GS, L)         - run Goals until Limit.",
 		" trace(GS, F, L)    - run Goals, trace to File until Limit.",
@@ -123,13 +124,6 @@ expand(Command, Cs) :-
 
     Command = pr(C, M, N) :
       Cs = [to_context(spi_utils # receive(C, M, N)) | Commands]\Commands;
-
-    Command = prgcs :
-      Command' = prgcs(_) |
-	expand;
-
-    Command = prgcs(Channels) :
-      Cs = [to_context(spi_monitor # reset(Channels)) | Commands]\Commands;
 
     Command = ps(M, C) :
       Cs = [to_context(spi_utils # send(M, C)) | Commands]\Commands;
@@ -182,6 +176,9 @@ expand(Command, Cs) :-
     Command = record(Goals, File, Limit, Scale, Format) |
 	ambient_run(Goals, Run,
 		    spi_record#run(Run, File, Limit, Scale, Format), Cs);
+
+    Command = reset :
+      Cs = [to_context(spi_monitor # reset) | Commands]\Commands;
 
     Command = run(Goals) |
 	ambient_run(Goals, Run, Run, Cs);
