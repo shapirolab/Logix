@@ -33,32 +33,32 @@ rm -f Spi-release/BioSpi/Bin/user_macros.bin
 cp -p BioSpi/Bin/user_macros.bin Spi-release/BioSpi/Bin
 
 rm -f Spi-release/Documentation/BNF.txt
-cp -p Doc/BNF.txt Spi-release/Documentation
+cp -p Documentation/BNF.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/attributes.txt
-cp -p Doc/attributes.txt Spi-release/Documentation
+cp -p Documentation/attributes.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/global.txt
-cp -p Doc/global.txt Spi-release/Documentation
+cp -p Documentation/global.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/program_macros.txt
-cp -p Doc/program_macros.txt Spi-release/Documentation
+cp -p Documentation/program_macros.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/record.txt
-cp -p Doc/record.txt Spi-release/Documentation
+cp -p Documentation/record.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/repeat.txt
-cp -p Doc/repeat.txt Spi-release/Documentation
+cp -p Documentation/repeat.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/stochastic.txt
-cp -p Doc/stochastic.txt Spi-release/Documentation
+cp -p Documentation/stochastic.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/trace.txt
-cp -p Doc/trace.txt Spi-release/Documentation
+cp -p Documentation/trace.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/user_macros.txt
-cp -p Doc/user_macros.txt Spi-release/Documentation
+cp -p Documentation/user_macros.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/weighter.txt
-cp -p Doc/weighter.txt Spi-release/Documentation
+cp -p Documentation/weighter.txt Spi-release/Documentation
 
 rm -f Spi-release/BioSpi/Documentation/BNF.txt
-cp -p BioSpi/Doc/BNF.txt Spi-release/BioSpi/Documentation
+cp -p BioSpi/Documentation/BNF.txt Spi-release/BioSpi/Documentation
 rm -f Spi-release/BioSpi/Documentation/user_macros.txt
-cp -p BioSpi/Doc/user_macros.txt Spi-release/BioSpi/Documentation
+cp -p BioSpi/Documentation/user_macros.txt Spi-release/BioSpi/Documentation
 rm -f Spi-release/BioSpi/Documentation/record.txt
-cp -p BioSpi/Doc/record.txt Spi-release/BioSpi/Documentation
+cp -p BioSpi/Documentation/record.txt Spi-release/BioSpi/Documentation
 
 rm -f Spi-release/Examples/boolean/band.cp
 cp -p Examples/boolean/band.cp Spi-release/Examples/boolean/band.cp
