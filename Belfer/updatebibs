@@ -1,5 +1,7 @@
 #!/usr/local/bin/perl
 
+my $PSZ_PATH = "/WWW/public_html/Papers/CSreports/reps";
+
 my $Bib_Path = shift;
 my $Doc_Path = shift;
 
@@ -26,7 +28,10 @@ while (scalar(@BibDirs)) {
       unshift @DocDirs, $doc;
       !`cp -r $Bib_Path/$new $Doc_Path` and $? == 0 or
 	die "Can't create $Doc_Path/$new";
-      print "Created $Doc_Path/$new - please add $new.ps.Z .\n";
+      $new =~ /[a-zA-Z]+(\d+)-(\d+)/;
+      my $year = $1; my $index = $2;
+      `ln -s $PSZ_PATH$year/$year-$index.ps.Z $Doc_Path/$new/$new.ps.Z`;
+      print "Created $Doc_Path/$new .\n";
       $changes += 1;
       last;
     }
