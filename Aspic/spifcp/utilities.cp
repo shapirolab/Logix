@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/12 14:32:35 $
+		       	$Date: 2004/12/24 15:41:25 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -331,7 +331,9 @@ verify_communication_channel(Name, ChannelName, ChannelNames, Locals,
 verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
 		Errors, NextErrors) :-
 
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "" |
+    string(ChannelName),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z |
 	defined_channel;
 
     ChannelName = `ChannelName',

@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:58:11 $
+		       	$Date: 2004/12/24 15:41:24 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -91,7 +91,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
-	make_prefix_call(Export, ParameterNames, Prefix),
+	make_prefix_call(Export, Prefix),
 	create_entry(Parameters, ParameterNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
 			Entries, Entries'?, Optimize, Optimize'?),
@@ -115,19 +115,13 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 	/* sum_procedures. */
 	call#sum_procedures(Summed, Entries, Optimize, [/*develope*/], Errors).
 
-  make_prefix_call(Export, ParameterNames, Prefix) :-
+  make_prefix_call(Export, Prefix) :-
 
-    Export =?= true,
-    ParameterNames = [] |
-      Prefix = scheduler(`"Scheduler.");
-
-    Export =?= true,
-    ParameterNames =\= [] |
+    Export =?= true |
       Prefix = public_channels(_PublicPairList, `"Scheduler.");
 
     otherwise :
       Export = _,
-      ParameterNames = _,
       Prefix = [].
 
 
@@ -328,7 +322,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
     Guard =?= {Operator, C1, C2},
     ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
       Notes ! variables(List?) |
-	message_to_channels({C1, C2}, Name, ChannelNames, Locals, false, List,
+	message_to_channels({C1, C2}, Name, ChannelNames, Locals, List,
 				Errors, Errors'?),
 	compare_channels_ok,
 	self;
@@ -341,8 +335,10 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
 	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
 				Errors', Errors''?),
-	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
-				ChannelName, Errors'', Errors'''?),
+	utilities#verify_communication_channel(Name, Channel,
+						ChannelNames, Locals,
+						ChannelName,
+						Errors'', Errors'''?),
 	parse_message(Name, ChannelNames, Message'?, MsChannelNames,
 			Locals', Primes', Errors''', Errors''''?),
 	call#prime_local_channels(Primes'?, MsChannelNames?, MsChannelNames'),
@@ -357,9 +353,11 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
 	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
 				Errors', Errors''?),
-	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
-				ChannelName, Errors'', Errors'''?),
-	message_to_channels(Message'?, Name, ChannelNames, Locals, false,
+	utilities#verify_communication_channel(Name, Channel, 
+						ChannelNames, Locals,
+						ChannelName,
+						Errors'', Errors'''?),
+	message_to_channels(Message'?, Name, ChannelNames, Locals,
 				MsChannelNames, Errors''', Errors''''?),
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
@@ -1122,27 +1120,26 @@ make_communication_guard(Type, ChannelName, Multiplier, Index, Guard) :-
 		request(Type, ChannelName, Multiplier, Index)}.
 
 
-message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
+message_to_channels(Message, Name, ChannelNames, Locals,
 			MsChannelNames, Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
       Name = _,
       ChannelNames = _,
       Locals = _,
-      Underscore = _,
       Index = _,
       MsChannelNames = [],
       Errors = NextErrors;
 
     arg(Index, Message, Channel),
-    Underscore =\= true, Index++ :
+    Index++ :
       MsChannelNames ! OkChannelName? |
 	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
 				OkChannelName, Errors, Errors'),
 	self;
 
     arg(Index, Message, _),
-    Underscore =?= true, Index++ :
+    Index++ :
       MsChannelNames ! "_" |
 	self;
 
@@ -1151,7 +1148,6 @@ message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
       Name = _,
       ChannelNames = _,
       Locals = _,
-      Underscore = _,
       MsChannelNames = [],
       Errors = NextErrors;
 
@@ -1165,7 +1161,6 @@ message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
     otherwise :
       ChannelNames = _,
       Locals = _,
-      Underscore = _,
       Index = _,
       MsChannelNames = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
