@@ -1,9 +1,9 @@
 /*
 ** PiFcp
 **
-**   Mix(a, b, c) :- 
-**      a ! [] | c ! {a};
-**      b ? [] | c ! {b}.
+**   Mix(A, B, C) ::=
+**      A ! [] , C ! {A};
+**      B ? [] , C ! {B}.
 **
 ** Compound Fcp
 */
@@ -33,7 +33,7 @@ testin(A, B, C) :-
     /* Get the receive stream of B. */
     B = _(VB, _),
     read_vector(2, VB, MsB) :
-      /* Offer a message on channel a. */
+      /* Offer a message on channel A. */
       write_vector(1, Sender?([], 1, Chosen), VA) |
         pi_monitor#unique_sender("Mix", Sender),
         "Mix.mixed".
@@ -63,4 +63,4 @@ testin(A, B, C) :-
       /* Withdraw the offered message. */
       Chosen = 0 |
 
-        pi_send("Mix.c", {A}, C).
+        pi_send("Mix.C", {A}, C).

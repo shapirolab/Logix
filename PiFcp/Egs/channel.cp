@@ -1,17 +1,20 @@
 /*
 ** PiFcp
 **
-**   make(a) :- screen#display(`a, [known(`a)]).
+**   Make+A ::= pi_utils#SPC(A).
 **
 ** Compound Fcp
 */
 
 -language(compound).
 
-  make(A) :-
+  "Make" :-
     true :
       make_vector(2, VA, Streams),
       Streams = {MsA, _},
       store_vector(2, MsA, VA),
-      A = "pichannel.a"(VA, {0, 0}) |
-	screen#display(A, [known(A)]).
+      A = "Make.A"(VA, {0, 0}) |
+	"Make.".
+
+  "Make." :-
+	pi_utils#SPC(A).

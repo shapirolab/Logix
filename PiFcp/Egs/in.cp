@@ -1,7 +1,7 @@
 /*
 ** PiFcp
 **
-**  P(a,b) :- a?[] | b![].
+**  P(A,B) ::= A?[] , B![].
 **
 **Compound Fcp
 */
@@ -21,11 +21,11 @@ sends(A, B, N) + (Counter = 0, HoldA = A):-
 	self;
   Counter >= N |
 	pi_utils#send([], A),
-	p(HoldA, B).
+	"P"(HoldA, B).
 
 /*************************************************/
 
-  p(A, B) :-
+  "P"(A, B) :-
     A = _(VA, _),
     read_vector(2, VA, MsA) |
 	"P.receive"(A,B,MsA).

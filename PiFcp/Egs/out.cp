@@ -1,7 +1,7 @@
 /*
 ** PiFcp
 **
-**   main(A) :- A![].
+**   Main(A) ::= A![].
 **
 ** Compound Fcp
 */
@@ -11,10 +11,10 @@
 
 test(A) :-
 	pi_utils#make_channel(A, "test.A"),
-	main.
+	"Main".
 
 /*************************************************/
 
-  main(A) :-
+  "Main"(A) :-
 	/* A send in the body is not synchronized. */
-	pi_send("main.a", [], A).
+	pi_send("Main.A", [], A).
