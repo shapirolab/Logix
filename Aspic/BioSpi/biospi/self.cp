@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/11/16 12:32:15 $
+		       	$Date: 2003/02/19 07:41:31 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -266,6 +266,22 @@ validate_default_base_rate(Rate, Defaults, NewDefaults, Errors, NextErrors) :-
 
     Defaults = {_DefaultWeighter, DefaultRate},
     we(DefaultRate),
+    string(Rate),
+    convert_to_integer(Rate, IntegerRate), 0 =< IntegerRate :
+      DefaultRate = IntegerRate,
+      NewDefaults = Defaults,
+      Errors = NextErrors;
+
+    Defaults = {_DefaultWeighter, DefaultRate},
+    we(DefaultRate),
+    string(Rate), otherwise,
+    convert_to_real(Rate, RealRate), 0 =< RealRate :
+      DefaultRate = RealRate,
+      NewDefaults = Defaults,
+      Errors = NextErrors;
+
+    Defaults = {_DefaultWeighter, DefaultRate},
+    we(DefaultRate),
     Rate =?= infinite :
       DefaultRate = Rate,
       NewDefaults = Defaults,
@@ -381,6 +397,18 @@ validate_public_channel_rate(Rate, Defaults, Rate', Errors, NextErrors) :-
       Rate' = Rate,
       Errors = NextErrors;
 
+    string(Rate),
+    convert_to_integer(Rate, IntegerRate), 0 =< IntegerRate :
+      Defaults = _,
+      Rate' = IntegerRate,
+      Errors = NextErrors;
+
+    string(Rate), otherwise,
+    convert_to_real(Rate, RealRate), 0 =< RealRate :
+      Defaults = _,
+      Rate' = RealRate,
+      Errors = NextErrors;
+
     Rate =?= infinite :
       Defaults = _,
       Rate' = Rate,
@@ -418,6 +446,16 @@ validate_public_weighter_params(Args, Params, Errors, NextErrors) :-
 
     Args ? Arg, number(Arg) :
       Params ! Arg |
+	self;
+
+    Args ? Arg, string(Arg),
+    convert_to_integer(Arg, Arg') :
+      Params ! Arg' |
+	self;
+
+    Args ? Arg, string(Arg), otherwise, 
+    convert_to_real(Arg, Arg') :
+      Params ! Arg' |
 	self;
 
     Args ? Arg, otherwise :
