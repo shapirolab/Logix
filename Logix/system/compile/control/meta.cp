@@ -4,9 +4,9 @@ Precompiler for FCP - meta-interpreter plus clause form
 Bill Silverman, 20 May, 1987
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/23 09:35:13 $
+		       	$Date: 2004/07/22 16:26:09 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Logix/system/compile/control/meta.cp,v $
 
 Copyright (C) 1987, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,8 +14,13 @@ Copyright (C) 1987, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export([interpret/3]).
--mode(trust).
--language(compound).
+-language([evaluate, compound, colon]).
+
+/* 
+**This is only generated (so far) by biospi.
+*/
+SECOND_PHASE_SUFFIX => 39. % Prime (')
+
 
 /*
  * interpret transforms the procedures of Program, adding three arguments to
@@ -64,10 +69,10 @@ interpret(ExportImport, Program1, Program2) :-
     ExportImport = {ExportedIds, _Importing} :
       Program2 = [ procedure('_select' / 2, Select) | Procedures] |
 	select_resume(ExportedIds, Program1, SelectIds),
-	select_meta(SelectIds,
-		    { [], [`'Controls' = meta(`'Body',`'Ident',`'Result')] },
-		    Select
-	),
+	select_resume(ExportedIds, Program1, SelectIds),
+	reduce_suspend(Program1, Type),
+	stream#hash_table(PIds?),
+	select_meta(Type, SelectIds, Select, PIds, PIds'?, PIds'),
 	transform(Program1, Procedures).
 
 
@@ -85,7 +90,7 @@ select_resume(ExportedIds, Resumes, SelectIds) :-
 reduce_resume(Id, Resumes1, Resumes2) :-
 
     Resumes1 ? procedure(Id, _) :
-      Resumes1' = Resumes2 ;
+      Resumes1' = Resumes2;
 
     otherwise,
     Resumes1 ? Procedure :
@@ -96,36 +101,93 @@ reduce_resume(Id, Resumes1, Resumes2) :-
       Resumes2 = [] .
 
 
-select_meta(SelectIds, Guard, Selects) :-
+reduce_suspend(Procedures, Type) :-
 
-    SelectIds ? SId :
+    Procedures ? procedure(Name/_Args, _),
+    string_length(Name, N), nth_char(N, Name, SECOND_PHASE_SUFFIX) :
+      Procedures' = _,
+      Type = meta_suspend;
+
+    Procedures ? _Procedure,
+    otherwise |
+	self;
+
+    Procedures =?= [] :
+      Type = meta.
+
+
+select_meta(Type, SelectIds, Selects, SIds, TIds, PIds) :-
+
+    SelectIds ? SId,
+    Type =?= meta :
       Selects ! {'_select'({Function?, External?}, `'Controls'),
-			Guard,
+			{ [],
+			  [`'Controls' = Type(`'Body',`'Ident',`'Result')]
+			},
 			[ Internal? ]
 		} |
 	select_meta,
 	factor_ident(SId, Function, Functor, Alias, Arguments),
 	generate_heads(Functor?, Alias?, Arguments?, External, Internal);
 
-    SelectIds = [] : Guard = _,
-      Selects = [ {'_select'(`'_', `'Controls'),
-			{ [ otherwise ], 
-			  [`'Controls' = meta(`'_', `'_', unknown) ]
+    SelectIds ? SId,
+    Type =?= meta_suspend :
+      PIds ! member(Functor?, Value, Ok),
+      SIds ! lookup(SecondPhaseFunctor?, External?, External?, _Status),
+/**** Selects ! {'_select'({Function?, External?}, `'Controls'), ****/
+      Selects ! {'_select'({`'_', External?}, `'Controls'),
+			{ [],
+			  [`'Controls' = Type(`'Body',`'Ident',`'Result',
+			  			Suspend?)
+			  ]
 			},
+			[ Internal? ]
+		} |
+	select_meta,
+	factor_ident(SId, _Function, Functor, Alias, Arguments),
+	generate_heads(Functor?, Alias?, Arguments?, External, Internal),
+	string_to_dlist(Functor?, FL, [SECOND_PHASE_SUFFIX]),
+	list_to_string(FL?, SecondPhaseFunctor),
+	suspend_alias(Ok?, External?, Value, Suspend);
+
+    SelectIds = [] :
+      SIds = TIds,
+      PIds = [],
+      Selects = [ {'_select'(`'_', `'Controls'),
+			{ [ otherwise ], [ Unknown ] },
 			[]
 		  },
 		  {'_select'(`'_', `'Controls'),
-			{ [`'Controls' =?= meta(`'_', `'_', abort) ], [] },
+			{ [ Abort ], [] },
 			[]
 		  }
-		] .
+		]
+      |
+	select_failed(Type, unknown, Unknown),
+	select_failed(Type, abort, Abort).
+
+  suspend_alias(Ok, External, Value, Suspend) :-
+
+    Ok =?= true :
+    /* An exported procedure cannot be a communication procedure. */ 
+      External = _,
+      Value = Suspend;
+
+    Ok =?= false :
+      Value = _,
+      Suspend = External.
+
+  select_failed(meta, Signal,
+		(`'Controls' = meta(`'_', `'_', Signal))^).
+  select_failed(meta_suspend, Signal,
+		(`'Controls' = meta_suspend(`'_', `'_', Signal, `'_'))^).
 
 
 transform(Program, Procedures) :-
     Program ? procedure(Id, Clauses) :
       Procedures ! procedure(Alias? / Augmented?, Transformed?) |
 	transform,
-	factor_ident(Id, _Functor, _Function, Alias, Arguments),
+	factor_ident(Id, _Function, _Functor, Alias, Arguments),
 	Augmented := Arguments + 3,
 	clauses(Clauses, Alias?, Arguments, 1, Transformed).
 transform([], []^).
