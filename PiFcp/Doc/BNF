@@ -160,14 +160,24 @@ The additive definition of <left_hand_side> is syntactic sugar - e.g.
 
 is equivalent to:
 
-    P :- << <channel_list> . P1; P1 :- <right_hand_side> >> .
+    P :- << <channel_list> . P1 . P1 :- <right_hand_side> >> .
 
 The recursive definition of <right_hand_side> is syntactic sugar - e.g.
 
-    P :- <communication1> | {<logix_guard_list>} | Q;
+    P :- <communication1> | ({<logix_guard_list>} | Q;
          <communication2> | (<comparison> | R; otherwise | S).
 
 is equivalent to:
 
     P :- <communication1> | << P1 . P1 :- {<logix_guard_list>} | Q >>;
          <communication2> | << P2 . P2 :- <comparison> | R ; otherwise | S >>.
+
+and
+
+    P :- <communication> | ( {<logix_guard_list1>} | Q ;
+                             {<logix_guard_list2>} | R ) .
+
+is equivalent to:
+
+    P :- <communication> | << P1 . P1 :- {<logix_guard_list1>} | Q ;
+                                         {<logix_guard_list2>} | R >> .
