@@ -1,19 +1,20 @@
-BNF for AmbFcp
+BNF for BioFcp
 
-<program>              ::= <amb_attributes> . <process_definitions> .
+<program>              ::= <bio_attributes> . <process_definitions> .
                            <process_definitions> .
 
-<amb_attributes>       ::= <amb_attribute>
-                           <amb_attribute> . <amb_attributes>
+<bio_attributes>       ::= <bio_attribute>
+                           <bio_attribute> . <bio_attributes>
 
-<amb_attribute>        ::= <export_declaration>
-                           <global_declaration>
+<bio_attribute>        ::= <export_declaration>
+                           <public_declaration>
                            <default_base_rate_declaration>
                            <default_weighter_declaration>
 
 <export_declaration>   ::= export(<process_name_list>)
 
-<global_declaration>   ::= global(<global_declaration_list>)
+<public_declaration>   ::= public(<channel_declaration_list>)
+                           global(<channel_declaration_list>)
 
 <default_baserate_declaration>
                        ::= baserate(<base_rate>)
@@ -31,9 +32,9 @@ BNF for AmbFcp
                        ::= <real number>
                            <real number> , <weighter_parameter_list>
 
-<global_declaration_list>
+<channel_declaration_list>
                        ::= <channel_declaration>
-                           <channel_declaration> , <global_declaration_list>
+                           <channel_declaration> , <channel_declaration_list>
 
 <channel_declaration>  ::= <channel>
                            <channel>(<base_rate>)
@@ -201,7 +202,7 @@ of a <channel>.  When the <base_rate> of a <channel> is 0, the
 channel acts as a sink - all messages on that channel are discarded.
 
 A <base_rate> may be specified by a logix variable for a new channel,
-but not for the default nor for a global channel.  The logix variable
+but not for the default nor for a public channel.  The logix variable
 should be instantiated to a number.
 
 
@@ -210,11 +211,11 @@ alphabetic character; the string may contain underscore (_)
 characters.
 
 A <weighter> may be specified by a logix variable for a new channel,
-but not for the default nor for a global channel.  The logix variable
+but not for the default nor for a public channel.  The logix variable
 should be instantiated to a string.
 
 Any <weighter_parameter_list> element may be specified by a logix
-variable for a new channel, but not for the default nor for a global
+variable for a new channel, but not for the default nor for a public
 channel.  The logix variable should be instantiated to a string as
 above (for the <weighter> name) or to a number (for any other parameter).
 
@@ -235,7 +236,7 @@ a <message> or within a <logix_guard>, a <logix_ask_guard> or a <logix_goal>.
 
 WARNING:  when the single underscore character <logix_variable> appears in a
 <message>, it should not appear in place of a <channel>, unless the
-corresponding sent <channel> is defined by a <global_declaration>.
+corresponding sent <channel> is defined by a <channel_declaration>.
 
 
 A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
@@ -291,19 +292,19 @@ variable names all begin with a capital letter or underscore; to reference a
 A <logix_variable> may have a value which is an arbitrary logix term.  Such
 values may be tested by a <logix_ask_guard> or manipulated by a <logix_goal>
 or by a <logix_tell_guard>.  An arbitrary <logix_term> may be sent in a
-<message> by the library <logix_goal> psi_send/2, or received by the logix
-goal, psi_receive/2:
+<message> by the library <logix_goal> spi_send/2, or received by the logix
+goal, spi_receive/2:
 
-    psi_send(<message_content>, <channel>)
-    psi_receive(<channel>, <message_content>)
+    spi_send(<message_content>, <channel>)
+    spi_receive(<channel>, <message_content>)
 
 e.g.
 
-    psi_send({"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
+    spi_send({"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
 
-    psi_receive('var'(another_channel), {Arg1, String(f(x)), Arg3})
+    spi_receive('var'(another_channel), {Arg1, String(f(x)), Arg3})
 
-The library <logix_goal>s psi_send/3, psi_receive/3, psi_send/4, psi_receive/4
+The library <logix_goal>s spi_send/3, spi_receive/3, spi_send/4, spi_receive/4
 may be used as well, where the third argument is a multiplier (default 1), and
 the fourth argument is an identifier (default sender or receiver).
 
