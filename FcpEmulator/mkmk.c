@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.4 2000/09/26 08:57:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.5 2000/11/06 11:09:03 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -31,7 +31,7 @@
    linux:
      builds makefile for linux kernel 2.2.12, redhat 6.1
    math:
-     foreign function - mathamatical functions
+     foreign function - mathematical functions
    opt:
      compiles with -O flag
    o2:
@@ -42,7 +42,7 @@
      links with -Bstatic as required by certain computers to enable dynamic
        linkning
    psi:
-     foreign function PsiFcp requests
+     foreign function - PsiFcp requests
    sgi_irix_5d2:
      builds makefile for Silicon Graphics Irix 5.2
    sun4_solaris_2d3:
@@ -95,6 +95,7 @@ static char *o2S = "-O2";
 static char *o4S = "-O4";
 static char *os41S = "-Bstatic";
 static char *psiS = "psicomm";
+static char *psiwS = "psiweight";
 static char *sgi_5d2S = "sgi_irix_5d2";
 static char *solaris_2d3S = "sun4_solaris_2d3";
 static char *sunos_4d1d3S = "sun4_sunos_4d1d3";
@@ -121,6 +122,7 @@ static char *optV = "";
 static char *o4V = "";
 static char *os41V = "";
 static char *psiV = "";
+static char *psiwV = "";
 static char *sgi_5d2V = "";
 static char *solaris_2d3V = "";
 static char *sunos_4d1d3V = "";
@@ -335,6 +337,7 @@ main(argc, argv)
     case 'p':
       /* psi */
       psiV = LinkFunc[LinkFuncNum] = psiS;
+      psiwV = psiwS;
       LinkFuncNum++;
       if (LinkFuncNum == MaxLinkFunc) {
 	printf("mkmk: Too many foreign functions\n");
@@ -501,6 +504,7 @@ main(argc, argv)
   Pos = cond_print(MakeFd, mathV, "", ".o", Pos);
   Pos = cond_print(MakeFd, "notify", "", ".o", Pos);
   Pos = cond_print(MakeFd, psiV, "", ".o", Pos);
+  Pos = cond_print(MakeFd, psiwV, "", ".o", Pos);
   Pos = cond_print(MakeFd, "streams", "", ".o", Pos);
   Pos = cond_print(MakeFd, timerV, "", ".o", Pos);
   Pos = cond_print(MakeFd, ttyV, "", ".o", Pos);
@@ -668,6 +672,12 @@ main(argc, argv)
     fprintf(MakeFd, "psicomm.o: \\\n");
     fprintf(MakeFd, "	$(BASICH)\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) psicomm.c\n");
+  }
+
+  if (strcmp(psiwV, NullS) != 0) {
+    fprintf(MakeFd, "psiweight.o: \\\n");
+    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) psiweight.c\n");
   }
 
   fprintf(MakeFd, "streams.o : \\\n");

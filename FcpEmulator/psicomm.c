@@ -13,24 +13,25 @@
 #define PSI_POST            1
 #define PSI_CLOSE           2
 #define PSI_STEP            3
+#define PSI_INDEX           4
 
 /* Sub-Channel Indices */
 
-#define PSI_BLOCKED	    1		// TRUE iff non-empty queue and
-                                        // no transmission is possible
-#define PSI_CHANNEL_TYPE    2		// see below
-#define PSI_CHANNEL_RATE    3		// Real
-#define PSI_CHANNEL_REFS    4		// Reference counter
-#define PSI_SEND_ANCHOR     5		// Head of SendQueue
-#define PSI_DIMER_ANCHOR    5		// Head of DimerQueue
-#define PSI_SEND_WEIGHT     6		// Sum of Send Multipliers
-#define PSI_DIMER_WEIGHT    6		// Sum of Dimer Multipliers
-#define PSI_RECEIVE_ANCHOR  7		// Head of ReceiveQueue
-#define PSI_RECEIVE_WEIGHT  8	        // Sum of Receive Multipliers
-#define PSI_AVAILABLE       9		// Unused sub-channel
-#define PSI_NEXT_CHANNEL   10		// (circular) channel list
-#define PSI_PREV_CHANNEL   11		// (circular) channel list
-#define PSI_CHANNEL_NAME   12		// (constant) Created Channel name
+#define PSI_BLOCKED	    1	// TRUE iff non-empty queue and
+				// no transmission is possible
+#define PSI_CHANNEL_TYPE    2	// see below
+#define PSI_CHANNEL_RATE    3	// Real
+#define PSI_CHANNEL_REFS    4	// Reference counter
+#define PSI_SEND_ANCHOR     5	// Head of SendQueue
+#define PSI_DIMER_ANCHOR    5	// Head of DimerQueue
+#define PSI_SEND_WEIGHT     6	// Sum of Send Multipliers
+#define PSI_DIMER_WEIGHT    6	// Sum of Dimer Multipliers
+#define PSI_RECEIVE_ANCHOR  7	// Head of ReceiveQueue
+#define PSI_RECEIVE_WEIGHT  8	// Sum of Receive Multipliers
+#define PSI_WEIGHT_TUPLE    9	// (constant) Weight computation parameters
+#define PSI_NEXT_CHANNEL   10	// (circular) Channel list
+#define PSI_PREV_CHANNEL   11	// (circular) Channel list
+#define PSI_CHANNEL_NAME   12	// (constant) Created Channel name
 
 #define CHANNEL_SIZE       12
 
@@ -42,6 +43,11 @@
 #define PSI_HOMODIMERIZED   3
 #define PSI_INSTANTANEOUS   4
 #define PSI_SINK            5
+
+/* Weight Index Computation Values */
+
+#define PSI_DEFAULT_WEIGHT_INDEX 0
+#define PSI_DEFAULT_WEIGHT_NAME "default"
 
 /* Message Types */
 
@@ -80,6 +86,11 @@
 #define QUEUE               2
 #define BLOCKED             3
 
+/* Index Request */
+
+#define PSI_WEIGHTER_NAME   1
+#define PSI_WEIGHTER_INDEX  2
+
 /* Internal named values */
 
 #define TUPLE               1
@@ -92,7 +103,7 @@ heapP cdr_down_list();
 int psi_post(heapP PId,heapP OpList,heapP Value,heapP Chosen,heapP Reply);
 int psi_close(heapP Channels,heapP Reply);
 int psi_step(heapP Now,heapP Anchor,heapP NowP,heapP Reply);
-int psi_index(heapP Name,heapP Index);
+int psi_index(heapP Name,heapP Index,heapP Reply);
 
 //*************************** Post Functions **********************************
 
@@ -110,25 +121,34 @@ int make_message_tuple(heapP OpEntry,heapP ChP,heapP ComShTpl);
 int insert_message_at_end_queue(heapP ChP,heapP Link,heapP Message,int Offset);
 heapP add_mess_to_messtail(heapP Message,heapP MessageTail);
 heapP set_opentry(heapP OpList);
-int set_reply_to(int Type,char *Arg,heapP Reply);
+int set_reply_to(char *Arg,heapP Reply);
 int set_reply_trans(heapP PId1,heapP CId1,heapP PId2,heapP CId2,heapP Reply);
 
+int psi_weight_index(char *name);
+/*
 double psi_compute_bimolecular_weight(int method,
 				      double rate, int sends, int receives);
 double psi_compute_homodimerized_weight(int method, double rate, int dimers);
+*/
+double psi_compute_bimolecular_weight(int method,
+				      double rate, int sends, int receives,
+				      int argn, double argv[]);
+double psi_compute_homodimerized_weight(int method, double rate, int dimers,
+				      int argn, double argv[]);
+
 
 //************************* Step Functions ************************************
 
 int transmit_biomolecular(heapP ChP,heapP Reply);
 int transmit_homodimerized(heapP ChP,heapP Reply);
-int not_equale(heapP ChP);
-double get_sum_weight(int Type,heapP ChP,heapP Reply);
-double get_selector(heapP ChP,int Type);
+int more_than_one_ms(heapP ChP);
+int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply);
+int get_selector(heapP ChP, int Type, double *Result);
 int set_nowp(heapP Now,heapP NowP,double SumWeights);
 int set_blocked(heapP ChP,heapP Reply);
 
 
-psicomm(Tpl)   //The Tuple is {Request , <Areguments> }
+psicomm(Tpl)   //The Tuple is {Request , <Arguments> }
 heapP Tpl;  
 {
  heapP Request , Arg; 
@@ -154,6 +174,10 @@ heapP Tpl;
                     }
                     return(True);
     case PSI_STEP  :if (!psi_step(Arg,Arg+1,Arg+2,Arg+3)){
+			return(False);
+		    }
+                    return(True);
+    case PSI_INDEX :if (!psi_index(Arg,Arg+1,Arg+2)){
 			return(False);
 		    }
                     return(True);
@@ -190,7 +214,7 @@ psi_post( PId ,OpList ,Value ,Chosen ,Reply)
    if (!unify(Ref_Word(Chosen),Word(0,IntTag))){
        return(False);
    }
-   return(set_reply_to(STRING,"true",Reply));
+   return(set_reply_to("true",Reply));
  }
  
  Pa=Pb=OpList;
@@ -222,17 +246,17 @@ psi_post( PId ,OpList ,Value ,Chosen ,Reply)
           case PSI_INSTANTANEOUS:
 		  if (!(MsType==PSI_SEND||MsType==PSI_RECEIVE))
 		    return
-		      set_reply_to(TUPLE,"Error - Wrong Message Type",Reply);
+		      set_reply_to("Error - Wrong Message Type",Reply);
 		  break;
           case PSI_HOMODIMERIZED:
                   if (!(MsType==PSI_DIMER))
 		    return
-		      set_reply_to(TUPLE,"Error - Wrong Message Type",Reply);
+		      set_reply_to("Error - Wrong Message Type",Reply);
 		  break; 
           case    PSI_SINK: 
 	          break;
           default:
-                return(set_reply_to(TUPLE,"Error - Wrong channel type",Reply));
+                return(set_reply_to("Error - Wrong channel type",Reply));
 		
      } /* End Switch */
    
@@ -270,7 +294,7 @@ psi_post( PId ,OpList ,Value ,Chosen ,Reply)
    }while(!IsNil(*OpList));  /* End Pass 1 */
   
  MessageTail=HP;
- *HP=(0,NilTag); //The start of the list
+ *HP=Word(0,NilTag); //The start of the list
  *HP++;
  MessageList=HP;
  *MessageList=Word(0,WrtTag);
@@ -316,7 +340,7 @@ psi_post( PId ,OpList ,Value ,Chosen ,Reply)
  if (!unify(Ref_Word(MessageList),Ref_Word(MessageTail))){
      return(False);
  }
- return(set_reply_to(STRING,"true",Reply));
+ return(set_reply_to("true",Reply));
  
 } /* End psi_post */
 
@@ -405,36 +429,17 @@ heapP PId,OpCId,MaCoPId,MaCId,T;
 
 //********************************************************************
 
-set_reply_to(Type,Arg,Reply)
-int Type;
+set_reply_to(Arg,Reply)
 char *Arg;
 heapP Reply;
 {
   heapP Pa;
+  built_fcp_str(Arg);
+  if (!unify(Ref_Word(Reply),KOutA)){
+    return(False);
+  }
+  return(True);
 
- switch (Type)
- {
-  case TUPLE: 
-    if (!do_make_tuple(Word(1,IntTag))){
-      return(False);
-    }
-    deref(KOutA,Pa);
-    built_fcp_str(Arg);
-    if (!unify(Ref_Word((++Pa)),KOutA)){
-      return(False);
-    }
-    if (!unify(Ref_Word(Reply),Ref_Word(Pa-1))){
-      return(False);  
-    }
-    return(True);
-  case STRING :
-   built_fcp_str(Arg);
-   if (!unify(Ref_Word(Reply),KOutA)){
-     return(False);
-   }
-   return(True);
-   //case LIST :
- }
 }
 
 //*********************************************************************
@@ -595,7 +600,7 @@ heapP MsList;
       } 
      deref(KOutA,Pa); 
      if (!IsReal(*Pa)||real_val(Pa+1)<0) {
-     //set_reply_to(TUPLE,"Error-Base Rate sot a Positive Real Number",Reply);
+     //set_reply_to("Error-Base Rate not a Positive Real Number",Reply);
        return(False);
      }
      Offset=set_offset(Mes);	
@@ -836,7 +841,7 @@ int MsType;
   }
   deref(KOutA,Pa); 
   if (!IsReal(*Pa)||real_val(Pa+1)<0) {
-    set_reply_to(TUPLE,"Error - Base Rate not a Positive Real Number",Reply);
+    set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
     return(True);
   }
   if (MsType==PSI_SEND||MsType==PSI_RECEIVE)
@@ -914,7 +919,7 @@ int psi_close(ChT ,Reply)
     return(False);
  }
  
- *HP=(0,NilTag); //The start of the list
+ *HP=Word(0,NilTag); //The start of the list
  Lp=HP;
  *HP++;
   
@@ -941,7 +946,7 @@ int psi_close(ChT ,Reply)
     RefCount=Int_Val(V0);
     
     if (!IsInt(V0)||(RefCount <= 0)){ 
-      return(set_reply_to(TUPLE,"Error - Problem In ReferenceCount",Reply));
+      return(set_reply_to("Error - Problem In ReferenceCount",Reply));
     }
 
     if (!do_read_vector(Word(PSI_PREV_CHANNEL,IntTag),Ref_Word(ChP))){
@@ -951,9 +956,7 @@ int psi_close(ChT ,Reply)
     deref(KOutA,ChPrev);
 
     if (!vctr_var_s(ChPrev,CHANNEL_SIZE)){
-      return(set_reply_to(TUPLE,
-			  "Error - PSI_PREV_CHANNEL - not a Channel",
-			  Reply));
+      return(set_reply_to("Error - PSI_PREV_CHANNEL - not a Channel",Reply));
     }
     
     if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
@@ -963,9 +966,7 @@ int psi_close(ChT ,Reply)
     deref(KOutA,ChNext);
     
     if (!vctr_var_s(ChNext,CHANNEL_SIZE)){
-      return(set_reply_to(TUPLE,
-			  "Error - PSI_NEXT_CHANNEL - not a Channel",
-			  Reply));
+      return(set_reply_to("Error - PSI_NEXT_CHANNEL - not a Channel",Reply));
     }
     RefCount--;
     if (!do_store_vector(Word(PSI_CHANNEL_REFS,IntTag),
@@ -980,8 +981,7 @@ int psi_close(ChT ,Reply)
           }
          deref(KOutA,ChPrevNext)
 	 if (!vctr_var_s(ChPrevNext,CHANNEL_SIZE)){
-	   return(set_reply_to(TUPLE,
-			       "Error - PSI_PREV_NEXT_CHANNEL - not a Channel",
+	   return(set_reply_to("Error - PSI_PREV_NEXT_CHANNEL - not a Channel",
 			       Reply));
 	 }
 	 if (!do_read_vector(Word(PSI_PREV_CHANNEL,IntTag),Ref_Word(ChNext))){
@@ -989,8 +989,7 @@ int psi_close(ChT ,Reply)
 	 }
 	 deref(KOutA,ChNextPrev);
 	 if (!vctr_var_s(ChNextPrev,CHANNEL_SIZE)){
-	   return(set_reply_to(TUPLE,
-			       "Error - PSI_NEXT_PREV_CHANNEL - not a Channel",
+	   return(set_reply_to("Error - PSI_NEXT_PREV_CHANNEL - not a Channel",
 			       Reply));
 	 }
 	 if (!do_store_vector(Word(PSI_PREV_CHANNEL,IntTag),
@@ -1076,149 +1075,140 @@ int psi_step(Now ,Anchor ,NowP ,Reply )
                //the tuple contain 4 arguments -{Now ,Anchor , Now' ,Reply'}
 heapP Now ,Anchor ,NowP ,Reply ;
 {
- int  i,ChannelType,SendWeight ,ReceiveWeight ,DimerWeight ,TranS=0 ,Ret;
- double SumWeights=0,Selector,NowVal,BaseRate,j=0,Val,Set ; 
+ int  i,ChannelType,SendWeight ,ReceiveWeight ,DimerWeight ,TranS=False ,Ret;
+ double SumWeights=0,Selector,NowVal,BaseRate,j=0,Val ; 
  heapP NextChannel ,ChP ,Pa ;
  heapT V0;
 
- deref_ptr(Now);
- deref_ptr(Anchor);
- deref_ptr(NowP);
- deref_ptr(Reply);
+ deref_ptr(Now);		/* Assumed Real */
+ deref_ptr(Anchor);		/* Assumed Vector */
+ deref_ptr(NowP);		/* Assumed Var */
+ deref_ptr(Reply);		/* Assumed Var */
 
  if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(Anchor))){
    return(False);
  }
  deref(KOutA,NextChannel);
- if (NextChannel!=Anchor)
- {
-  do
-  {
-    ChP=NextChannel;
-    if (!do_read_vector(Word(PSI_BLOCKED,IntTag),Ref_Word(ChP))){
-      return(False);	
-    }
-    deref_val(KOutA); 
-    if (!Int_Val(KOutA))                 /* not blocked */
-    {
-      ChannelType=which_channel_type(ChP);
-      switch(ChannelType)
-      {     
-       case PSI_BIMOLECULAR :
-	 if ((Set=get_sum_weight(PSI_BIMOLECULAR,ChP,Reply))<0){
-	   return(False);
-	 }
-	 SumWeights+=Set;
-	 break;
-       case PSI_HOMODIMERIZED:
-	 if (not_equale(ChP))
-         {  
-	   if ((Set=get_sum_weight(PSI_HOMODIMERIZED,ChP,Reply))<0){
-	     return(False);
-	   }
-	   SumWeights += Set;
-	   break;
-	 }
-	 break;
-      case    PSI_UNKNOWN: 
-      case    PSI_SINK: 
-	break;
-      default: 
-	 return(set_reply_to(TUPLE,"Wrong Channel Type",Reply));  
-      }                  /* End Switch */ 
-    }
-    if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
-      return(False);
-    }
-    deref(KOutA,NextChannel);
-  } while(NextChannel!=Anchor);   /* End While - Pass 1 */
-  
-  if  (SumWeights != 0)
-  {
-    j=((random())/2147483647.0);
-    Selector =j*SumWeights;
+ if (NextChannel!=Anchor) {
+   do {
+     ChP=NextChannel;
+     if (!do_read_vector(Word(PSI_BLOCKED,IntTag),Ref_Word(ChP))){
+       return(False);	
+     }
+     deref_val(KOutA); 
+     if (!Int_Val(KOutA)) {                /* not blocked */
+       double Result = 0.0;
 
-    if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(Anchor))){
-      return(False);
-    }
-    deref(KOutA,NextChannel);
-    
-    do                       /* Pass 2 */
-    {
-      ChP=NextChannel;
-      if (!do_read_vector(Word(PSI_BLOCKED,IntTag),Ref_Word(ChP))){
-	return(False);	
-      }
-      deref_val(KOutA);
-      if (!Int_Val(KOutA))
-      {
-	ChannelType=which_channel_type(ChP);
-	switch(ChannelType)
-	{     
-	 case PSI_BIMOLECULAR :	 
-	   if ((Set=get_selector(ChP,PSI_BIMOLECULAR))<0){
+       ChannelType=which_channel_type(ChP);
+       switch(ChannelType)
+	 {     
+	 case PSI_BIMOLECULAR :
+	   if (!get_sum_weight(ChP, PSI_BIMOLECULAR, &Result, Reply))
 	     return(False);
-	   }        
-	   Selector -=Set;
-	   if (Selector<=0)
-	   {
-	     Ret=transmit_biomolecular(ChP,Reply);
-	     TranS=1;
-	   }
+	   if (!IsVar(*Reply))
+	     return(True);
+	   SumWeights += Result;
 	   break;
 	 case PSI_HOMODIMERIZED:
-	   if (not_equale(ChP))
-	   {  
-	     if ((Set=get_selector(ChP,PSI_HOMODIMERIZED))<0){
+	   if (more_than_one_ms(ChP)) {  
+	     if (!get_sum_weight(ChP, PSI_HOMODIMERIZED, &Result, Reply))
 	       return(False);
-	     }        
-	     Selector -=Set;
-	     if (Selector<=0)
-	     {
-	       Ret=transmit_homodimerized(ChP,Reply);
-	       TranS=1;
-	     }
-	   }               /* End if not_equal */
-	}            /* End Switch  */
-      }          /* End if Not Blocked */
-
-      if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
-	return(False);
-      }
-      deref(KOutA,NextChannel);
-    }while((NextChannel!=Anchor)&&(!TranS));      /* End While  Pass 2 */
-
-   if (TranS==True)
-   {
-     if (Ret==True)
-     { 
-       if (!set_nowp(Now,NowP,SumWeights)){
-	 return(False);
-       } 
-       return(True);
+	     if (!IsVar(*Reply))
+	       return(True);
+	     SumWeights += Result;
+	   }
+	   break;
+	 case    PSI_UNKNOWN: 
+	 case    PSI_SINK: 
+	   break;
+	 default: 
+	   return(set_reply_to("Wrong Channel Type",Reply));  
+	 }                  /* End Switch */ 
      }
-     else
-       if (Ret==BLOCKED) {
-	 if (!unify(Ref_Word(NowP),Ref_Word(Now))){
-	   return(False);
-	 }
-	 return(set_blocked(ChP,Reply));
+     if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
+       return(False);
+     }
+     deref(KOutA,NextChannel);
+   } while(NextChannel!=Anchor);   /* End While - Pass 1 */
+
+   if  (SumWeights != 0) {
+     j=((random())/2147483647.0);
+     Selector =j*SumWeights;
+
+     if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(Anchor))){
+       return(False);
+     }
+     deref(KOutA,NextChannel);
+
+     do {                      /* Pass 2 */
+       ChP=NextChannel;
+       if (!do_read_vector(Word(PSI_BLOCKED,IntTag),Ref_Word(ChP)))
+	 return(False);	
+       deref_val(KOutA);
+       if (!Int_Val(KOutA)) {                /* not blocked */
+
+	 double Result = 0.0;
+
+	 ChannelType=which_channel_type(ChP);
+	 switch(ChannelType)
+	   {     
+	   case PSI_BIMOLECULAR :	 
+	     if (!get_selector(ChP, PSI_BIMOLECULAR, &Result))
+	       return(False);
+	     Selector -= Result;
+	     if (Selector <= 0) {
+	       Ret=transmit_biomolecular(ChP,Reply);
+	       TranS=True;
+	     }
+	     break;
+	   case PSI_HOMODIMERIZED:
+	     if (more_than_one_ms(ChP)) {
+	       if (!get_selector(ChP, PSI_HOMODIMERIZED, &Result))
+		 return(False);
+	       Selector -= Result;
+	       if (Selector <= 0) {
+		 Ret=transmit_homodimerized(ChP,Reply);
+		 TranS=True;
+	       }
+	     }               /* End if more_than_one */
+	   }            /* End Switch  */
+       }          /* End if Not Blocked */
+
+       if (!do_read_vector(Word(PSI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
+	 return(False);
        }
-     return(False);//Ret==False
-   }
-  } /* End if (SumWeight != 0)*/
+       deref(KOutA,NextChannel);
+     } while((NextChannel!=Anchor) && (!TranS));      /* End While  Pass 2 */
+
+     if (TranS==True) {
+       if (Ret==True) { 
+	 if (!set_nowp(Now,NowP,SumWeights)){
+	   return(False);
+	 } 
+	 return(True);
+       }
+       else
+	 if (Ret==BLOCKED) {
+	   if (!unify(Ref_Word(NowP),Ref_Word(Now))){
+	     return(False);
+	   }
+	   return(set_blocked(ChP,Reply));
+	 }
+       return(False);//Ret==False
+     }
+   } /* End if (SumWeight != 0)*/
  } /* End if(NextChannel!=Anchor) */  
 
  if (!unify(Ref_Word(NowP),Ref_Word(Now))){
    return(False);
  }
- return(set_reply_to(STRING,"true",Reply));
+ return(set_reply_to("true",Reply));
 }    /* End psi_step function */ 
  
 
 //************************** Step Functions ***********************************
 
-int not_equale(ChP)
+int more_than_one_ms(ChP)
 heapP ChP;
  {
    heapP MesLink,NextMes,PrevMes,MesAnchor;
@@ -1238,105 +1228,180 @@ return(MesAnchor!=NextMes);
                
 //********************************************************************
 
-double get_sum_weight(Type,ChP,Reply)
-int Type;
-heapP ChP,Reply;
+int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
 {
   double BaseRate;
-  int SendWeight,ReceiveWeight,DimerWeight;
+  int SendWeight,ReceiveWeight,DimerWeight,WeightIndex;
   heapP Pa;
+  int argn;
+  double argv[100];
   
-  if (!do_read_vector(Word(PSI_CHANNEL_RATE,IntTag),Ref_Word(ChP))){
-    return(-1);
-  }
-  deref(KOutA,Pa);
-  if(!IsReal(*Pa)||(BaseRate=real_val(Pa+1))<=0) {
-    set_reply_to(TUPLE,"Error - Base Rate not a Positive Real Number",Reply);
-    return(-1);
-  }
-  if (!do_read_vector(Word(PSI_SEND_WEIGHT,IntTag),Ref_Word(ChP))){
-    return(-1);
-  }
-  deref_val(KOutA);
-  if (!IsInt(KOutA)||(SendWeight=Int_Val(KOutA))<0) {
-    set_reply_to(TUPLE,"Error - Send Weight not a Positive Integer",Reply);
-    return(-1);
-  }
-  switch (Type)
-    {
-     case PSI_BIMOLECULAR:
-       if (!do_read_vector(Word(PSI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP))){
-	 return(False);
-       }
-       deref_val(KOutA);
-       if (!IsInt(KOutA)||(ReceiveWeight=Int_Val(KOutA))<0) {
-	 set_reply_to(TUPLE,
-		      "Error - Receive Weight not a Positive Integer",
-		      Reply);
-	 return(-1);
-       }
-       return(BaseRate*SendWeight*ReceiveWeight); 
-    case PSI_HOMODIMERIZED:
-       DimerWeight=SendWeight;         
-       return ((BaseRate*DimerWeight*(DimerWeight-1))/2); 
-   }
-}
-
-//********************************************************************
-
-double get_selector(ChP,Type)
-heapP ChP;
-int Type;
-{  
-  int SendWeight,ReceiveWeight,DimerWeight;
-  double BaseRate; 
-  heapP Pa;
-
   if (!do_read_vector(Word(PSI_CHANNEL_RATE,IntTag),Ref_Word(ChP))){
     return(False);
   }
   deref(KOutA,Pa);
-  BaseRate=real_val(Pa+1);
+  if(!IsReal(*Pa)||(BaseRate=real_val(Pa+1))<=0) {
+    set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
+    return(False);
+  }
   if (!do_read_vector(Word(PSI_SEND_WEIGHT,IntTag),Ref_Word(ChP))){
-    return(-1);
+    return(False);
   }
   deref_val(KOutA);
-  SendWeight=Int_Val(KOutA); 
-  if (SendWeight>0) {
-
+  if (!IsInt(KOutA)||(SendWeight=Int_Val(KOutA))<0) {
+    set_reply_to("Error - Send Weight not a Positive Integer",Reply);
+    return(False);
+  }
+  if (!do_read_vector(Word(PSI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP))) {
+    return(False);
+  }
+  if (IsRef(KOutA)) {
+    deref_ref(KOutA, Pa);
+    if (IsTpl(KOutA)) {
+      heapP Pb;
+      int Arity = Arity_of(KOutA);
+      if (Arity == 1)
+	return(False);
+      Pb = Pa += 2;
+      deref_ptr(Pb);
+      KOutA = *Pb;
+      for (argn = 0; argn < Arity-2; argn++) {
+	Pb = ++Pa;
+	deref_ptr(Pb);
+	if (IsReal(*Pb))
+	  argv[argn] = real_val(Pb+1);
+	else if (IsInt(*Pb))
+	  argv[argn] = Int_Val(*Pb);
+	else
+	  return False;
+      }
+    }
+    else
+      argn = 0;
+  }
+  if (!IsInt(KOutA) || (WeightIndex=Int_Val(KOutA)) < 0)
+    return set_reply_to("Error - Invalid Weight Index", Reply);
+  if (SendWeight > 0)
     switch (Type)
       {
-      case PSI_BIMOLECULAR: 
-	if (!do_read_vector(Word(PSI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP))){
-	  return(-1);
-	}
+      case PSI_BIMOLECULAR:
+	if (!do_read_vector(Word(PSI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
+	  return(False);
 	deref_val(KOutA);
-	ReceiveWeight=Int_Val(KOutA);
-	if (ReceiveWeight>0)
-	  return (BaseRate*SendWeight*ReceiveWeight); 
-	break;
+	if (!IsInt(KOutA) || (ReceiveWeight = Int_Val(KOutA))<0)
+	  return set_reply_to("Error - Receive Weight not a Positive Integer",
+			      Reply);
+	if (WeightIndex != PSI_DEFAULT_WEIGHT_INDEX) {
+	  if (ReceiveWeight > 0)
+	    *Result = psi_compute_bimolecular_weight(WeightIndex, BaseRate,
+						     SendWeight, ReceiveWeight,
+                                                     argn, argv);
+	  else
+	    *Result = 0.0;
+	}
+	else
+	  *Result = BaseRate*SendWeight*ReceiveWeight;
+	return True;
       case PSI_HOMODIMERIZED:
-	DimerWeight = SendWeight;
-	return ((BaseRate*DimerWeight*(DimerWeight-1))/2);
+	DimerWeight=SendWeight;         
+	if (WeightIndex != PSI_DEFAULT_WEIGHT_INDEX)
+	  *Result = psi_compute_homodimerized_weight(WeightIndex, BaseRate,
+						     DimerWeight,
+                                                     argn, argv);
+	else
+	  *Result = (BaseRate*DimerWeight*(DimerWeight-1))/2; 
+	return True;
       }
-  }
-  return(0);
+  *Result = 0;
+  return True;
 }
 
 //********************************************************************
 
-set_nowp(Now,NowP,SumWeights)
-heapP Now,NowP;
-double SumWeights;
+int get_selector(heapP ChP, int Type, double *Result)
+{  
+  int SendWeight,ReceiveWeight,DimerWeight,WeightIndex;
+  double BaseRate; 
+  heapP Pa;
+  int argn;
+  double argv[100];
+
+  if (!do_read_vector(Word(PSI_CHANNEL_RATE,IntTag),Ref_Word(ChP)))
+    return(False);
+  deref(KOutA,Pa);
+  BaseRate=real_val(Pa+1);
+  if (!do_read_vector(Word(PSI_SEND_WEIGHT,IntTag),Ref_Word(ChP)))
+    return(False);
+  deref_val(KOutA);
+  SendWeight=Int_Val(KOutA); 
+  if (SendWeight > 0) {
+    if (!do_read_vector(Word(PSI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP)))
+      return(False);
+    if (IsRef(KOutA)) {
+      deref_ref(KOutA, Pa);
+      if (IsTpl(KOutA)) {
+	heapP Pb;
+	int ix = 0;
+	int Arity = Arity_of(KOutA);
+	if (Arity == 1)
+	  return(False);
+	Pb = Pa += 2;
+	deref_ptr(Pb);
+	KOutA = *Pb;
+	for (argn = 0; argn < Arity-2; argn++) {
+	  Pb = ++Pa;
+	  deref_ptr(Pb);
+	  if (IsReal(*Pb))
+	    argv[argn] = real_val(Pb+1);
+	  else if (IsInt(*Pb))
+	    argv[argn] = Int_Val(*Pb);
+	  else
+	    return False;
+	}
+      }
+      else
+	argn = 0;
+    }
+    WeightIndex = Int_Val(KOutA);
+
+    switch (Type)
+      {
+      case PSI_BIMOLECULAR: 
+	if (!do_read_vector(Word(PSI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
+	  return(False);
+	deref_val(KOutA);
+	ReceiveWeight = Int_Val(KOutA);
+	if (ReceiveWeight > 0) {
+	  if (WeightIndex != PSI_DEFAULT_WEIGHT_INDEX)
+	    *Result = psi_compute_bimolecular_weight(WeightIndex, BaseRate,
+						     SendWeight, ReceiveWeight,
+                                                     argn, argv);
+	  else
+	    *Result = BaseRate*SendWeight*ReceiveWeight; 
+	}
+	break;
+      case PSI_HOMODIMERIZED:
+	DimerWeight = SendWeight;
+	if (WeightIndex != PSI_DEFAULT_WEIGHT_INDEX)
+	  *Result = psi_compute_homodimerized_weight(WeightIndex, BaseRate,
+						     DimerWeight,
+						     argn, argv);
+	else
+	  *Result = (BaseRate*DimerWeight*(DimerWeight-1))/2.0;
+      }
+  }
+  return True;
+}
+
+
+//********************************************************************
+
+int set_nowp(heapP Now, heapP NowP, double SumWeights)
 {
   double NowVal, j;
   heapT V0;
 
   NowVal=real_val(Now+1); 
-  /*if(!IsReal(*Now)) {
-    set_reply_to(TUPLE, "Error - Base Rate not a Positive Real Number",Reply);
-    return(False);
-    }*/
   j=((random())/2147483647.0);
   NowVal-=log(j)/SumWeights;
   V0 = Ref_Word(HP);
@@ -1359,7 +1424,7 @@ heapP ChP,Reply;
 		       Ref_Word(ChP))){
     return(False);
   }
-  return(set_reply_to(STRING,"done",Reply));
+  return(set_reply_to("done",Reply));
 }
 
 //********************************************************************
@@ -1582,5 +1647,28 @@ heapP ChP,Reply;
       deref_ptr(Dm);
     }
   return(BLOCKED);
+}
+
+//*************************** Index Action ************************************
+
+int psi_index(Name, Index, Reply)
+heapP Name, Index, Reply;
+{
+  char *NameString; 
+  double result;
+
+  deref_ptr(Name);
+  if (!IsStr(*Name) || Str_Type(Name) != CharType) {
+    return set_reply_to("Error - weighter name not string", Reply);
+  }
+  deref_ptr(Index);
+  if (!IsVar(*Index)) {
+    return set_reply_to("Error - weighter index not writable", Reply);
+  }
+  result = psi_weight_index((char *)(Name+2));
+  if (!unify(Ref_Word(Index),Word(result,IntTag))){
+    return(False);
+  }
+  return set_reply_to("true", Reply);
 }
 
