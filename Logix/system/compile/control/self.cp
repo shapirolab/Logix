@@ -5,9 +5,9 @@ Michael Hirsch,  27 January 1985
 Bill Silverman, 5 September 1985
 
 Last update by		$Author: bill $
-		       	$Date: 2002/06/07 12:11:12 $
+		       	$Date: 2002/06/22 04:07:43 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Logix/system/compile/control/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -313,8 +313,8 @@ add_short_circuit(Mode, Program, NewProgram, PIds, TIds) :-
     Program ? procedure(Ident, Clauses) :
       NewProgram ! procedure(NewIdent, NewClauses),
       Value = Functor? / Arguments?,
-      PIds ! lookup(SecondPhaseFunctor?, Value, Value, Status) |
-/****/	add_lookup(Status?) = add_lookup(new), /** This should NOT fail. **/
+% PIds is only relevant for "protect"ed modules - not for monitors.
+      PIds ! lookup(SecondPhaseFunctor?, Value, Value, _Status) |
 	add_short_circuit,
 	new_ident(Ident,  Mode, NewIdent, Reply),
 	factor_ident(Ident, _Function, Functor, _Alias, Arguments),
