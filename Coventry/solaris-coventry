@@ -1,0 +1,34 @@
+#! /sbin/sh
+#
+# Coventry - Monitor and re-nice TS queue processes - Solaris version.
+#
+killproc() {            # kill the named process(es)
+        pid=`/usr/bin/ps -A -o pid,args |
+             /usr/bin/grep $1 |
+             /usr/bin/sed -e 's/^ *//' -e 's/ .*//'`
+        [ "$pid" != "" ] && kill $pid
+}
+
+AUXILIARY_DIR=/usr/local/bin
+COVENTRY_DIR=/usr/local/bin
+
+COVENTRYD=$COVENTRY_DIR/coventryd
+
+ECHO=echo
+
+case $1 in
+	'start')
+            if test -x $COVENTRYD; then
+		killproc coventryd
+	        $ECHO Starting coventry daemon
+	        $COVENTRYD -D$AUXILIARY_DIR &
+	    fi
+	;;
+	'stop')
+		$ECHO Stopping coventry daemon.
+		killproc coventryd
+	;;
+	*)
+		echo "usage: $0 {start|stop}"
+
+esac
