@@ -12,11 +12,13 @@ $PRIO_USER     =  2;
 $NICE_OFF      = -$PRIO_MIN;
 $NICE_MAX      =  $PRIO_MAX + $NICE_OFF;
 
-$NICE_DEFAULT  = 20;          # Default nice value of system
-$NICE_COVENTRY = 30;          # Must >= $NICE_DEFAULT + 2
+$NICE_DEFAULT  = 20;          # Default nice value of system.
+$NICE_COVENTRY = 30;          # Must be ge $NICE_DEFAULT + 2.
 $NICE_RADIX    = 10;          # Controls the ranges for nice changes.
 $NICE_INCR     =  1;          # Set 0 to permit only one greedy process
-                              # per user outside of coventry
+                              # per user, outside of coventry.
+$BAN_GANGS     =  1;          # Set to 0 to spread Greedy gang processes over
+                              # an interval of non-dteriorating priorities.
 
 $MONITOR_DELAY = 60;          # Main loop iteration delay in seconds.
 $THRESHHOLD    = 60;          # Minimum elapsed seconds before changing nice.
@@ -25,8 +27,15 @@ $GREED_BOUND   =  5;          # Minimum used time between iterations before
 $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 
 # see sys/schedctl.h            SGI only
-$NDPNORMMAX    = 40;          # Best Normal Non-deteriorating priority
-$NDPNORMMIN    = 127;         # Worst  "     "   " " "  "  "    "  "
+$NDPLOMAX      = 128;         # Best low Non-deteriorating priority
+$NDPLOMIN      = 254;         # Worst "   "   " " "  "  "    "  "
+
+$NDPRI_DEFAULT = $NDPLOMAX
+    - $BAN_GANGS*($NICE_COVENTRY - $NICE_DEFAULT);
+
+$NDPRI_OFFSET  = $NDPRI_DEFAULT - $NICE_DEFAULT;
+$NDPRI_OFFSET + $NICE_COVENTRY <= $NDPLOMIN or
+    die "Inconsistentcy between nice range and ndpri range."; 
 
 # Default exclusion hashes.
 
@@ -98,8 +107,8 @@ else {
 
 # Handle up to thirty character command name.
 $pscomm =
-    "ps $args -o user,pid,nice,class,time," .
-    "comm=aaaaaaaaaabbbbbbbbbbcccccccccc";
+    "ps $args -o user,nice,time,pid,pgid,class," .
+        "comm=aaaaaaaaaabbbbbbbbbbcccccccccc";
 if ($debug) {# debug
   print "command = ", $pscomm ,"\n";
 }# endebug
@@ -149,7 +158,7 @@ sub clean_up
 if ($debug) {# debug
   print_refed_process("returned to society", $process);
 }# endebug
-	setnice($process->[3], $process->[1]);
+	setnice($process, $process->[1]);
     }
     exit 0;
 }
@@ -167,16 +176,23 @@ if ($debug) {# debug
 sub parse_process
 {
     my $time;
-    my $user, $nice, $seconds, $pid, $comm, $class;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
 
-    ($user, $pid, $nice, $class, $time, $comm) = split;
+    my $leader = 0;
 
-    if ($users{$user} || $commands{$comm} || 
-	($class ne "TS" && $class ne "ts") ||
-	$NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
-	return 0;
+    ($user, $nice, $time, $pid, $pgid, $class, $comm) = split;
+    $class =~ tr/A-Z/a-z/;
+
+    if ($class eq "gn" || $class eq "gb") {
+	$_ = `getndpri $pid`;
+	return undef if !/^ndpri.* = (\d+)$/;
+	$nice = (int $1) ? $1 - $NDPRI_OFFSET : $NICE_DEFAULT;
     }
-
+    if ($users{$user} || $commands{$comm} || 
+	($class ne "ts" && $class ne "gn" && $class ne "gb") ||
+	$NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
+	return undef;
+    }
     if ($nice !~ /\s*\d\d\s*/) {
 	$nice = getpriority($PRIO_PROCESS, $pid) +$NICE_OFF;
 	print "$user($class) - $comm($pid), has nice = $nice\n";
@@ -193,8 +209,7 @@ sub parse_process
     }
     $time =~ /(\d+):(\d\d)/;
     $seconds += 60*$1 + $2;
-
-    return [$user,$nice,$seconds,$pid,$comm,$class];
+    return [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
 
 }
 
@@ -220,12 +235,24 @@ sub sortrefs #context {$a, $b}
 #
 # The arguments are the process id and the nice value.
 
-sub setnice #(processid, nice)
+sub setnice #(process, nice)
 {
-    my $pid = shift;
+    my $process;
+    my $user, $unnice, $seconds, $pid, $pgid, $class, $comm;
+
+    $process = shift;
     my $nice = shift;
 
-    return setpriority($PRIO_PROCESS, $pid, $nice-$NICE_OFF);
+    ($user, $unnice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
+
+    if ($class eq "ts") {
+	return setpriority($PRIO_PROCESS, $pid, $nice-$NICE_OFF);
+    }
+    else {
+      # $class eq "gn" || $class eq "gb"
+	$nice += $NDPRI_OFFSET;
+	return `setndpri $nice $pid`;
+    }
 }
 
 # query process conditionally displays all processes of interest, whose
@@ -237,7 +264,7 @@ sub setnice #(processid, nice)
 sub query_processes #(query)
 {
     my $minmins, $minsecs, $mins, $secs;
-    my $class, $comm, $nice, $pid, $seconds, $user;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
     my $title;
     my @display_processes;
 
@@ -254,7 +281,7 @@ sub query_processes #(query)
 	print_process_count($#display_processes+1, $title);
 	if ($#display_processes >= 0) {
 	    foreach (@display_processes) {
-		($user, $nice, $seconds, $pid, $comm, $class) = @{$_};
+		($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$_};
 
 		$mins = int ($seconds/60);
 		$secs = $seconds % 60;
@@ -262,9 +289,13 @@ sub query_processes #(query)
 		$secs = "0$secs" if $secs < 10;
 		
 		if ($seconds >= $minsecs) {
-		    print
-			"    $user($nice) - $mins:$secs - $comm($pid)\n";
-		}
+		    if ($class eq "gn" || $class eq "gb") {
+			$nice = `ps -p $pid -o pri=`;
+			$nice =~ /^\s*(\d+)\s*$/;
+			$nice = 'g' . $1;
+		    }
+		    print "    $user($nice) - $mins:$secs - $comm($pid)\n";
+	}
 	    }
 	}
 	return 1;
@@ -297,7 +328,7 @@ sub print_refed_process #(title, reference)
   
     my @list;
 
-    for (my $i = 0; $i < 6; $i++) {
+    for (my $i = 0; $i < 7; $i++) {
 	push @list, $ref->[$i];
     }
     print sprintf("%s - $title: %s\n",
@@ -334,10 +365,6 @@ sub collect_current_processes
     my @ps_lines;
     my $process;
 
-# Shared with parse_process.
-    local ($class, $comm, $nice, $pid, $seconds, $user);
-
-
     undef(%current_processes);
     $count = 0;
 
@@ -348,7 +375,6 @@ sub collect_current_processes
 	if (defined($process)) {
 	    $count++;
 	    $current_processes{$pid} = $process;
-#		[$user,$nice,$seconds,$pid,$comm,$class];
 	}
     }
 
@@ -395,26 +421,34 @@ elsif ($debug) {# debug
 
 sub send_to_coventry
 {
-    my $class, $comm, $nice, $pid, $seconds, $user;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
     my $changed, $previous, $process, $used;
     my $bound, $freedid, $niced, $oldsecs;
     my @pids;
 
     foreach $process (values(%current_processes)) {
-	($user, $nice, $seconds, $pid, $comm, $class) = @{$process};
+	($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
+	if ($BAN_GANGS && ($class eq "gn" || $class eq "gb")) {
+	    push @pids, $pid;
+	    push @coventry, $process;
+if ($debug) {# debug
+  print_refed_process("banned gang process", $process);
+}# endebug
+	    next;
+	}
 	$previous = $previous_processes{$pid};
 	if (defined($previous)) {
 	    $used = $seconds - $previous->[2];
 	    $bound = ($nice >= $NICE_COVENTRY);
 	    if ($bound || $used >= $GREED_BOUND) {
-		# do not omit the parentheses
 		$changed = 
 		    $seconds >= 
 			$THRESHHOLD*($NICE_RADIX**($nice - $NICE_DEFAULT))
 			    && ! $bound;
 		$nice += $NICE_INCR if $changed;
 		$freedid = "$user($nice)";
-		$process = [$user, $nice, $seconds, $pid, $comm, $class];
+		$process =
+		    [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
 		if (defined($freed_processes{$freedid}) || $bound) {
 		    push @pids, $pid;
 		    push @coventry, $process;
@@ -433,7 +467,7 @@ if ($debug) {# debug
 		    # this nice user.
 		    $freed_processes{$freedid} = $process;
 		    if ($changed) {
-			setnice($pid, $nice);
+			setnice($process, $nice);
 if ($debug) {# debug
   print_refed_process("re-niced in society", $process);
 }# endebug
@@ -444,8 +478,8 @@ if ($debug) {# debug
 	}
     }
     foreach $pid (@pids) {
-	delete $current_processes{$pid};
-        setnice($pid, $NICE_COVENTRY);
+	$process = delete $current_processes{$pid};
+        setnice($process, $NICE_COVENTRY);
     }
     @coventry = sort(sortrefs @coventry);
 }
@@ -456,7 +490,7 @@ if ($debug) {# debug
 
 sub free_from_coventry
 {
-    my $user, $nice, $seconds, $pid, $comm;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
     my $banned, $freedid, $social, $user;
 
     my @banned_processes = @coventry; # coventry is sorted.
@@ -464,17 +498,18 @@ sub free_from_coventry
     undef(@coventry);
     while ($#banned_processes >= 0) {
 	$banned = shift(@banned_processes);
-	($user, $nice, $seconds, $pid, $comm) = @{$banned};
+	($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$banned};
 	$freedid = "$user($nice)";
 	if (defined($freed_processes{$freedid}) ||
-	    $nice == $NICE_COVENTRY) {
+	    $nice == $NICE_COVENTRY ||
+	    ($BAN_GANGS && ($class eq "gn" || $class eq "gb"))) {
 	    # A process of this user with the same nice value has already
 	    # been freed, or this process has been permanently relegated! 
 	    push(@coventry, $banned);
 	}
 	else {
 	    $current_processes{$pid} = $banned;
-	    setnice($pid, $nice);
+	    setnice($process, $nice);
 	    $freed_processes{$freedid} = $banned;
 if ($debug) {# debug
   print_refed_process("freed from coventry", $banned);
