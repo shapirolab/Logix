@@ -1,14 +1,15 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/self.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
+/*$Header: /home/qiana/Repository/Logix/system/block/tree/self.cp,v 1.3 2002/06/05 18:33:00 bill Exp $ */
 /*
  *  Block compile  Tree  at  RootId , producing  Blocked  and  Report .
  */
 
 -export([load/5]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 
 Graph ::=  graph # Graph.
+EntriesTuple ::= graph # EntriesTuple.
 Controls ::= {GCalls, BlockedSource, Report}.
 ServiceKind ::= procedures ; monitor ; excluded.
 GCall ::= {Any, Graph, Any}.
@@ -24,8 +25,7 @@ load(ScopeId, RootId, Tree, Blocked, Report) :-
     Tree =\= false(_), Tree =\= {_, [], []} |
 	graph # build(ScopeId, RootId, Tree, Graph),
 	GCalls ! {'_', Graph, _},
-	serve_calls(GCalls, {GCalls', Blocked, Report}),
-	find_and_propagate_entries;
+	serve_calls(GCalls, {GCalls', Blocked, Report}, Graph);
 
     Tree = {_, [], []} : ScopeId = _, RootId = _,
       Blocked = [],
@@ -36,24 +36,10 @@ load(ScopeId, RootId, Tree, Blocked, Report) :-
       Report = [] |
 	computation # event(Tree) .
 
-  find_and_propagate_entries(Blocked, Graph) :-
 
-    Blocked ? -entries(Entries) :
-      Blocked' = _ |
-	graph # propagate_entries(Graph, Entries);
+procedure serve_calls(GCalls, Controls, Graph).
 
-    Blocked ? -Other,
-    Other =\= entries(_) |
-	self;
-
-    otherwise :		% probably a non-director target
-      Blocked = _,
-      Graph = _ .
-
-
-procedure serve_calls(GCalls, Controls).
-
-serve_calls(GCalls, Controls) :-
+serve_calls(GCalls, Controls, Root) :-
 
     GCalls ? {RemoteGoal, Graph, Goal},
     tuple(RemoteGoal),
@@ -95,7 +81,8 @@ serve_calls(GCalls, Controls) :-
     Controls = {GCalls, Blocked, Report} :	% End of List <-- Head = Tail
       GCalls = [],				% (not strictly necessary)
       Blocked = [],
-      Report = [] .
+      Report = [] |
+	graph # cumulate_entries(Root).
 
 
 procedure graph_reply(graph # Reply, Calls, Calls, Controls, Controls).
@@ -110,7 +97,7 @@ graph_reply(Reply, GCalls1, GCalls2, Controls1, Controls2) :-
       GCalls2 = [GCall | GCalls1],			% push simplified rpc
       Controls1 = Controls2 ;
 
-    Reply = load(SourceId, Entries, State, Calls),
+    Reply = load(SourceId, EntriesTuple, State, Calls),
     Controls1 = {QueueCalls, Blocked, Report} :
       GCalls1 = GCalls2,
       Calls ! calls(Lead, Path, QueueCalls, QueueCalls'),
@@ -118,8 +105,8 @@ graph_reply(Reply, GCalls1, GCalls2, Controls1, Controls2) :-
 	parser # parse(SourceId, Lead, Clauses, ProcIds, Attributes, Result),
 	auxils # member(monitor(_), Attributes, Monitor),
 	service_included(Lead, Monitor, Path, Result, Kind, Report, Report'),
-	save_attributes(Lead, Kind, Attributes, Entries, Clauses, Clauses',
-			Blocked, Blocked'
+	save_attributes(Lead, Kind, Attributes, EntriesTuple,
+			Clauses, Clauses', Blocked, Blocked'
 	),
 	rename # clauses(Clauses', Lead, ProcIds, Blocked', Blocked'', Calls'),
 	service_state(Kind, ProcIds, State).
@@ -183,22 +170,23 @@ service_state(Kind, ProcIds, State) :-
       Kind = State .
 
 
-procedure save_attributes(String, ServiceKind, Attributes, Clauses, Clauses,
-			  BlockedSource, BlockedSource
+procedure save_attributes(String, ServiceKind, Attributes, EntriesTuple,
+			  Clauses, Clauses, BlockedSource, BlockedSource
 ).
 
 % If the server is the root's self (Lead = ''), the significant
 % Attributes  are added to the beginning of  Block1 .
 % The source (Clauses) of an excluded service is elided.
 
-save_attributes(Lead, Kind, Attributes, Entries,
-		Clauses1, Clauses2,
+save_attributes(Lead, Kind, Attributes, EntriesTuple, Clauses1, Clauses2,
 		Blocked1, Blocked2
 ) :-
 
     Kind =\= excluded,
     Lead = '' :
-      Blocked1 = [-export(Exports), -entries(_), -mode(Mode) | Blocked1'],
+      EntriesTuple = CumulatedEntries(NodeEntries?),
+      Blocked1 = [-export(Exports), -entries(CumulatedEntries?), -mode(Mode?)
+		 | Blocked1'],
       Clauses1 = Clauses2 |
 	server_entries,
 	extract_root_attributes(Attributes, Exports, Mode,
@@ -207,27 +195,29 @@ save_attributes(Lead, Kind, Attributes, Entries,
 
     Kind = procedures,
     Lead =\= '' : Attributes = _,
+      EntriesTuple = _Unused(NodeEntries),
       Clauses1 = Clauses2,
       Blocked1 = Blocked2 |
 	server_entries;
 
     otherwise : Kind = _, Lead = _, Attributes = _, Clauses1 = _,
+      EntriesTuple = _Unused(NodeEntries),
       Clauses2 = [],
-      Entries = [],
+      NodeEntries = [],
       Blocked1 = Blocked2 .
 
-server_entries(Attributes, Entries) :-
+server_entries(Attributes, NodeEntries) :-
 
     Attributes ? entries(E) :
       Attributes' = _,
-      Entries = E;
+      NodeEntries = E;
 
     Attributes ? Other,
     Other =\= entries(_) |
 	self;
 
     Attributes = [] :
-      Entries = [] .
+      NodeEntries = [] .
 
 procedure extract_root_attributes(Attributes, Any, Any,
 				BlockedSource, BlockedSource

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/parser.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/parser.cp,v 1.3 2002/06/05 18:32:59 bill Exp $ */
 /*
  *  Get and parse a module, rejecting library, monitor (except root-self),
  *  empty module and module with parsing-errors.
@@ -6,7 +6,7 @@
 
 -export([parse/6]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 /******* PARSE ***************************************************************/
 

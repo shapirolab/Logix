@@ -1,20 +1,21 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.3 2002/06/05 18:32:59 bill Exp $ */
 /*
  *  Transform the hierarchical tree into a graph.
  */
 
--export([build/4, format_rpc/3, goal/4, rpc/5, propagate_entries/2]).
+-export([build/4, format_rpc/3, goal/4, rpc/5, cumulate_entries/1]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 Tree ::= hierarchy # Tree.
 Trees ::= [Tree].
 Graph ::= SubGraph ; [].
-DirGraph ::= {ServiceId, Lead, Graph, Entries, State, SubGraphs}.
-SubGraph ::= {ServiceId, Lead, Graph, Entries, State, (SubGraphs ; server)}.
+DirGraph ::= {ServiceId, Lead, Graph, EntriesTuple, State, SubGraphs}.
+SubGraph ::= {ServiceId, Lead, Graph, EntriesTuple, State, (SubGraphs;server)}.
 SubGraphs ::= [SubGraph].
 State ::= ProcIds ; monitor ; system ; excluded .
 ProcIds ::= [String/Integer].
+EntriesTuple ::= Entries(Entries).
 Entries ::= [(String ; String/Integer)].
 SubAnswer ::= found(SubGraph) ; not_found(Name).
 
@@ -37,12 +38,13 @@ scope_lead(ScopeId, RootId, DirLead, SelfLead, Graph, Root) :-
       SelfLead = DirLead .
 
 
-procedure director(ServiceId, Lead, Graph, Nodes, Trees, DirGraph, SubGraph).
+procedure director(ServiceId, ServiceId, Lead, Graph, Nodes, Trees,
+			DirGraph, SubGraph).
 
 director(ScopeId, RootId, DirLead, Super, Servers, SubTrees, Graph, Root) :-
 
     Servers ? self :
-      Graph = {ScopeId, SelfLead?, Super, Entries, _Status, SubGraphs?},
+      Graph = {ScopeId, SelfLead?, Super, Entries?, _Status, SubGraphs?},
       Super' = Graph |
 	scope_lead,
 	director_entries,
@@ -50,7 +52,7 @@ director(ScopeId, RootId, DirLead, Super, Servers, SubTrees, Graph, Root) :-
 	subgraphs;
 
     otherwise :
-      Graph = {ScopeId, DirLead, Super, [], excluded, SubGraphs?},
+      Graph = {ScopeId, DirLead, Super, _([]), excluded, SubGraphs?},
       Super' = Graph |
 	servers,
 	subgraphs.
@@ -60,10 +62,10 @@ procedure director_entries(Lead, Entries).
 director_entries(SelfLead, Entries) :-
 
     SelfLead = "" :
-      Entries = _;
+      Entries = _CumulatedEntries(_NodeEntries);
 
     SelfLead =\= "" :
-      Entries = [].
+      Entries = {[], []}.
 
 
 procedure servers(ServiceId, Lead, Graph, Nodes, SubGraphs).
@@ -101,7 +103,7 @@ subgraphs(ScopeId, RootId, DirLead, Graph, SubTrees, SubGraphs,
 
 /****************************** G O A L / 4 **********************************/
 
-GoalReply ::= done ; load(ServiceId, Entries, State, FullCalls).
+GoalReply ::= done ; load(ServiceId, EntriesTuple, State, FullCalls).
 FullCalls ::= [ calls(Lead, String, GCalls, GCalls) | Calls].
 RpcReply ::= done ; call(GCall).
 Reply ::= GoalReply ; RpcReply.
@@ -125,10 +127,10 @@ goal(Call, Graph, Goal, Reply) :-
       Reply = done |
 	format_rpc;
 
-    Graph = {ScopeId, Lead, Super, Entries, State, Subs},
+    Graph = {ScopeId, Lead, Super, EntriesTuple, State, Subs},
     writable(State) : Reply' = _,
       State = Locked? |
-	Reply = load(NodeId, Entries, Locked,
+	Reply = load(NodeId, EntriesTuple, Locked,
 		     [calls(Lead, SPath, Cs1, Cs2) | Calls]),
 	source_service_id(Subs, ScopeId, NodeId),
 	subgraph_path(ScopeId, Subs, Super, SPath),
@@ -276,11 +278,22 @@ format_rpc(Call, Graph, Goal) :-
       Goal = self # Call .
 
 
-propagate_entries(Graph, Entries) + (NextEntries = []) :-
+cumulate_entries(Graph)  :-
 
-    Graph = {_, Lead, _, Es, _, SubGraphs} |
-	cumulate_entries(Lead, Es, Entries, Entries'),
-	propagate_sub_entries;
+    Graph = {_, "", [], EntriesTuple, _, SubGraphs} :
+      EntriesTuple = Entries(_) |
+	cumulate_sub_entries(SubGraphs, Entries, []);
+
+    otherwise :
+      Graph = _ .
+	
+
+cumulate_graph_entries(Graph, Entries, NextEntries) :-
+
+    Graph = {_, Lead, _, EntriesTuple, _, SubGraphs} :
+      EntriesTuple = _(NodeEntries) |
+	cumulate_entries(Lead, NodeEntries, Entries, Entries'),
+	cumulate_sub_entries;
 
     Graph = [] :
       Entries = NextEntries;
@@ -289,21 +302,24 @@ propagate_entries(Graph, Entries) + (NextEntries = []) :-
       Entries = NextEntries |
 	fail((graph = Graph)).
 
-  cumulate_entries(Lead, Es, Entries, NextEntries) :-
+  cumulate_entries(Lead, NodeEntries, Entries, NextEntries) :-
 
-    Es ? Entry,
+    NodeEntries ? Entry,
     string_to_dlist(Lead, LL,LT) :
       Entries ! LeadEntry |
 	complete_entry_name,
 	self;
 
-    Es = [] :
+    NodeEntries = [] :
       Lead = _,
       Entries = NextEntries;
 
+    NodeEntries =\= [_|_], NodeEntries =\= [] :
+      NodeEntries' = [NodeEntries] |
+	self;
 
-    Es =\= [_|_], Es =\= [] :
-      Es' = [Es] |
+    we(NodeEntries) :
+      NodeEntries = [] |
 	self.
 
   complete_entry_name(LL, LT, Entry, LeadEntry) :-
@@ -322,10 +338,10 @@ propagate_entries(Graph, Entries) + (NextEntries = []) :-
 	fail(invalid_entry_name(Entry)),
 	self.
 
-  propagate_sub_entries(SubGraphs, Entries, NextEntries) :-
+  cumulate_sub_entries(SubGraphs, Entries, NextEntries) :-
 
     SubGraphs ? Graph |
-	propagate_entries(Graph, Entries, Entries'),
+	cumulate_graph_entries(Graph, Entries, Entries'),
 	self;
 
     SubGraphs =\= [_|_] :
