@@ -588,53 +588,56 @@ show_goal(Goal, Options, Output) :-
       Output = Goal;
 
     Options =\= fcp |
-	show_goal(Goal, Options, PiFcp, Output, PiFcp?).
+	show_goal(Goal, Options, PsiFcp, Output, PsiFcp?).
 
-show_goal(Goal, Options, PiFcp, Left, Right) :-
+show_goal(Goal, Options, PsiFcp, Left, Right) :-
 
     string(Goal) :
       Options = _,
-      PiFcp = Goal,
+      PsiFcp = Goal,
       Left = Right;
 
     tuple(Goal), Goal =\= (_#_),
     arg(1, Goal, Name), string(Name),
-    arity(Goal, Index),
-    make_tuple(Index, Tuple),
-    arg(1, Tuple, N) :
-      N = Name,
-      PiFcp = Tuple,
+    arity(Goal, Index) :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
 	show_goal2;
 
     Goal =?= (Service#Goal') :
-      PiFcp = (Service#PiFcp') |
+      PsiFcp = (Service#PsiFcp') |
 	self;
 
     otherwise :
       Goal = _,
       Options = _,
-      PiFcp = non_goal(Goal),
+      PsiFcp = non_goal(Goal),
       Left = Right.
 
-show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
+show_goal1(Goal, Which, Depth, Sender, PsiFcp, Left, Right) :-
 
     string(Goal) :
       Which = _,
       Depth = _,
       Sender = _,
-      PiFcp = Goal,
+      PsiFcp = Goal,
       Left = Right;
 
     tuple(Goal), Goal =\= (_#_),
+    Goal =\= clause(_, _), Goal =\= clause(_, _, _, _),
     arg(1, Goal, Name), string(Name),
     arity(Goal, Index) |
 	show_goal2;
 
+    Goal =?= clause(Goal', _Body) |
+	self;
+
+    Goal =?= clause(Goal', _Body, _Id, _Time) |
+	self;
+
     Goal =?= (Service#Goal') :
-      PiFcp = (Service#PiFcp') |
+      PsiFcp = (Service#PsiFcp') |
 	self;
 
     otherwise :
@@ -642,10 +645,10 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiFcp = non_goal(Goal),
+      PsiFcp = non_goal(Goal),
       Left = Right.
 
-  show_goal2(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right, Name) :-
+  show_goal2(Goal, Index, Which, Depth, Sender, PsiFcp, Left, Right, Name) :-
 
     nth_char(1, Name, Char1),
     ascii('A') =< Char1, Char1 =< ascii('Z') |
@@ -665,13 +668,13 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
     make_tuple(Index, Tuple),
     arg(1, Tuple, N) :
       N = Name,
-      PiFcp = Tuple |
+      PsiFcp = Tuple |
 	goal_channels1.
 
   % Blocked code may begin with a lower-case directory name.
   % Check the first character after '$'.
 
-  show_goal3(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right, Name, X) :-
+  show_goal3(Goal, Index, Which, Depth, Sender, PsiFcp, Left, Right, Name, X) :-
 
     X++,
     nth_char(X, Name, Char1),
@@ -694,11 +697,15 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
 
     X++,
     otherwise,
-    X' >= string_length(Name) |
+    X' >= string_length(Name),
+    make_tuple(Index, Tuple),
+    arg(1, Tuple, N) :
+      N = Name,
+      PsiFcp = Tuple |
 	goal_channels1.
 
 
-goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+goal_channels(Goal, Index, Which, Depth, Sender, PsiFcp, Left, Right) :-
 
 /* Exclude trailing non-pi arguments (mostly) */
 
@@ -718,7 +725,7 @@ goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
     arg(1, Goal, Name),
     arg(1, Tuple, N) :
       N = Name,
-      PiFcp = Tuple |
+      PsiFcp = Tuple |
 	goal_channels1;
 
     Index-- > 1,
@@ -730,14 +737,14 @@ goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiFcp = Name,
+      PsiFcp = Name,
       Left = Right.
 
-  goal_channels1(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+  goal_channels1(Goal, Index, Which, Depth, Sender, PsiFcp, Left, Right) :-
 
     Index > 1,
     arg(Index, Goal, Argument),
-    arg(Index, PiFcp, Display),
+    arg(Index, PsiFcp, Display),
     Index-- |
 	show_argument + (Left = Left, Right = Left'?),
 	self;
@@ -747,7 +754,7 @@ goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiFcp = _,
+      PsiFcp = _,
       Left = Right.
 
 
@@ -822,8 +829,8 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
 	self;
 
     TreeId ? Goal :
-      PiTreeId ! PiFcp? |
-	show_goal(Goal, [0], PiFcp),
+      PiTreeId ! PsiFcp? |
+	show_goal(Goal, [0], PsiFcp),
 	self;
 
     TreeId = [] :
@@ -981,13 +988,13 @@ show_goals(Goals, Options, Output) :-
   show_goals(Goals, Which, Depth, Sender, Result, Left, Right) :-
 
     Goals =?= (Goal, Goals') :
-      Result = (PiFcp?, Result') |
-	remote_goal([], Goal, Goal', PiFcp, PiFcp'),
+      Result = (PsiFcp?, Result') |
+	remote_goal([], Goal, Goal', PsiFcp, PsiFcp'),
 	show_goal1 + (Left = Left, Right = Left'?),
 	self;
 
     Goals =\= (_, _) |
-	remote_goal([], Goals, Goal, Result, PiFcp),
+	remote_goal([], Goals, Goal, Result, PsiFcp),
 	show_goal1.
 
 
@@ -1007,9 +1014,24 @@ show_resolvent(Resolvent, Options, Stream) :-
 
 show_goal_list(List, Depth, Sender, Which, Result, Left, Right) :-
 
-    List ? Name(Goal) :
-      Result ! PiFcp? |
-	remote_goal(Name, Goal, Goal', PiFcp, PiFcp'),
+/* These three clauses have been added to prettify resolvent of vtree. */
+    List ? _Name([_|_]) |
+	self;
+
+    List ? _Name([]) |
+	self;
+
+    List ? Name(Goal),
+    Name =?= vanilla,
+    arg(1, Goal, Functor), nth_char(1, Functor, C),
+    ascii('a') =< C, C =< ascii('z') |
+	self;
+/***********************************************************************/
+
+    List ? Name(Goal),
+    otherwise :
+      Result ! PsiFcp? |
+	remote_goal(Name, Goal, Goal', PsiFcp, PsiFcp'),
 	show_goal1,
 	self;
 
@@ -1062,19 +1084,19 @@ collect_resolvent_list(Resolvent, List) :-
       List = NextList.
 
 
-remote_goal(Name, Goal, OutGoal, PiFcp, OutPiFcp) :-
+remote_goal(Name, Goal, OutGoal, PsiFcp, OutPsiFcp) :-
 
     Name =\= [] :
       Name' = [],
-      PiFcp = Name#PiFcp'? |
+      PsiFcp = Name#PsiFcp'? |
 	self;
 
     Name =?= [],
     Goal =?= Target#Goal' :
-      PiFcp = Target#PiFcp'? |
+      PsiFcp = Target#PsiFcp'? |
 	self;
 
     Name =?= [],
     Goal =\= _#_ :
       OutGoal = Goal,
-      OutPiFcp = PiFcp.
+      OutPsiFcp = PsiFcp.
