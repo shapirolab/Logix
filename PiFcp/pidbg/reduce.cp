@@ -4,9 +4,9 @@ Meta-Interpreter of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/23 11:56:33 $
+			$Date: 2000/01/25 13:43:43 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/reduce.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -83,16 +83,17 @@ procedure debug(RPCGoal, PiOptions, Breaks, Commands, Trace, IO, Events).
 % {debug / 6, [no([], debug(_, _, _, _, _, _)), redundant(1, User_Input)]}
 debug(RPCGoal, PiOptions, Breaks, Commands, Trace, IO, Events) :-
 	Circuit = _L - _R,
-	Channels = {IO, User},
+	Channels = {IO, User, Pi},
 	make_channel(User,User_Input),
 	user#monitor(User_Input),
+	make_channel(Pi, Pi_Input),
 
 	report_state(Commands, Circuit, Channels, Events),
-	monitor(Commands,Signals,PiOptions,Circuit,Channels),
+	monitor(Commands,Signals,Pi_Input,PiOptions,Circuit,Channels),
 	make_channel(Context, Stream),
 	computation # (self#Stream?),
 	close(Self, Signals, Context),
-	reduce(Signals, PiOptions, Circuit
+	reduce(Signals, Circuit
 		,{RPCGoal,{self,Context-_,self-Self}}
 		,{Breaks, -1, interpret, Channels}
 		,{Trace,true}
@@ -158,38 +159,47 @@ report_state(Commands,Circuit,Channels,Events)+(State=started) :-
 		report_state;
 
 	Commands?suspend,
-	Channels = {IO,User},
+	Channels = {IO, User, Pi},
 	State = suspended :
-	    Channels' = {IO', User} | 
+	    Channels' = {IO', User, Pi} | 
 		write_channel(display(['Debug Reduction already Suspended.'|Q]
 							\Q,
 			[list]),IO, IO'),
 		report_state;
 
 	Commands?resume,
-	Channels = {IO,User},
+	Channels = {IO, User, Pi},
 	State = running :
-	    Channels' = {IO', User} | 
+	    Channels' = {IO', User, Pi} | 
 		write_channel(display(['Debug Reduction already Running.'|Q]\Q,
 			[list]),IO,IO'),
 		report_state;
 
+	Commands?options(_) |
+		report_state;
+
+	Commands?" goal "(_, _) |
+		report_state;
+
 	Commands?Command,
-	Command =\= suspend, Command =\= resume |
+	Command =\= suspend, Command =\= resume,
+	Command =\= options(_), Command =\= " goal "(_,_) |
 		report_state.
 
 /*************************************************************************/
 procedure close_channels(Channels).
 close_channels(Channels) :-
-	Channels = {IO, User} |
+	Channels = {IO, User, Pi} |
 		close_channel(IO),
-		close_channel(User).
+		close_channel(User),
+		close_channel(Pi).
 
 /*************************************************************************/
-procedure monitor(Commands,Signals,PiOptions,Circuit,Channels).
+procedure monitor(Commands,Signals,Pi_Input,PiOptions,Circuit,Channels).
 
-monitor(Commands,Signals,PiOptions,Circuit,Channels) :-
+monitor(Commands,Signals,Pi_Input,PiOptions,Circuit,Channels) :-
 	Commands = [] : 
+	    Pi_Input = _,
 	    PiOptions = _,
 	    Channels = _,
 	    Circuit = M-M,
@@ -212,37 +222,55 @@ monitor(Commands,Signals,PiOptions,Circuit,Channels) :-
 	    Signals!suspend,
 	    L = [resolvent(X') | L'] |
 		pi_utils#show_resolvent(X'?, PiOptions, X),
-		close_tail(Commands', Signals', PiOptions, L'-R, Channels);
+		close_tail(Commands', Signals', Pi_Input, PiOptions, L'-R,
+				Channels);
 
 	Circuit = L-R,
 	Commands?enabled(X) :
 	    Signals!suspend,
 	    L = [enabled(X') | L'] |
 		pi_utils#show_resolvent(X'?, PiOptions, X),
-		close_tail(Commands', Signals', PiOptions, L'-R, Channels);
+		close_tail(Commands', Signals', Pi_Input, PiOptions, L'-R,
+				Channels);
 
 	Circuit = L-R,
 	Commands?disabled(X) :
 	    Signals!suspend,
 	    L = [disabled(X') | L'] |
 		pi_utils#show_resolvent(X'?, PiOptions, X),
-		close_tail(Commands', Signals', PiOptions, L'-R, Channels);
+		close_tail(Commands', Signals', Pi_Input, PiOptions, L'-R,
+				Channels);
+
+	Commands ? options(PiOptions') :
+	    PiOptions = _ |
+		monitor;
+
+	Pi_Input ? options(PiOptions') :
+	    PiOptions = _ |
+		monitor;
+
+	Pi_Input ? " goal "(Goal, PiGoal) |
+		pi_utils#show_goal(Goal, PiOptions, PiGoal),
+		monitor;
 
 	otherwise,
 	Commands = [Command | MoreCommands] :
 	    Commands' = [Command' | MoreCommands] |
 		check_command(Ok, Command, Command', Error),
-		send_signal(Ok, Commands', Signals, PiOptions, 
+		send_signal(Ok, Commands', Signals, Pi_Input, PiOptions, 
 				Circuit,Channels, Error).
 
 
 /*************************************************************************/
-procedure close_tail(Commands,Signals,PiOptions, Choke_Msg_On_Right,Channels).
-close_tail(Commands,Signals,PiOptions, Choke_Msg_On_Right,Channels) :-
+procedure close_tail(Commands,Signals,Pi_Input,PiOptions,
+			Choke_Msg_On_Right,Channels).
+close_tail(Commands,Signals,Pi_Input,PiOptions,Choke_Msg_On_Right,
+		Channels) :-
 	Choke_Msg_On_Right = L-R,
 	R?{_,Goals} :
 	    Goals = [] |
-		monitor(Commands, Signals, PiOptions, L-R', Channels).
+		monitor(Commands, Signals, Pi_Input, PiOptions, L-R',
+			Channels).
 
 /*************************************************************************/
 procedure check_command(Ok, Command, NewCommand, Error).
@@ -271,37 +299,37 @@ check_command(Ok, Command, NewCommand, Error) :-
 		true.
 
 /*************************************************************************/
-procedure send_signal(Ok,Non_Empty_Commands,Signals,PiOptions, 
+procedure send_signal(Ok,Non_Empty_Commands,Signals,Pi_Input,PiOptions, 
 			Circuit,Channels,Error).
-send_signal(Ok,Non_Empty_Commands,Signals,PiOptions,
+send_signal(Ok,Non_Empty_Commands,Signals,Pi_Input,PiOptions,
 			Circuit,Channels,Error) :-
 	Ok =\= true,
-	Channels = {IO, _User},
+	Channels = {IO, _User, _Pi},
 	Non_Empty_Commands?_Command |
 		write_channel(Error, IO),
 %computation # display(term, debug#reduce(unknown_request(Command))),
-		monitor(Non_Empty_Commands', Signals, PiOptions,
+		monitor(Non_Empty_Commands', Signals, Pi_Input, PiOptions,
 				Circuit, Channels);
 
 	Ok = true,
 	Non_Empty_Commands?Command :
 	    Error = _,
 	    Signals = [Command | Signals'] |
-		monitor(Non_Empty_Commands', Signals', PiOptions,
+		monitor(Non_Empty_Commands', Signals', Pi_Input, PiOptions,
 				Circuit, Channels).
 
 
 /*************************************************************************/
-procedure reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info). 
-reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
+procedure reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info). 
+reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	Signals = [],
 	Goal_Info = {_Goal,{_Module, _Context, Lc-Rc}} :
-	    PiOptions = _, Debug_Info = _, Trace_Info = _ |
+	    Debug_Info = _, Trace_Info = _ |
 		Lc = Rc,
 		Circuit = L - L;
 
 	Signals?suspend |
-		suspend(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		suspend(Signals', Circuit, Goal_Info, Debug_Info,
 			Trace_Info, reduce);
 
 	Signals?Signal,
@@ -314,21 +342,21 @@ reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	unknown(Signals),
 	Circuit = L-R,
 	Goal_Info = {true, {_Module, _Context,Lc-Rc}} :
-	    PiOptions = _, Debug_Info = _,
+	    Debug_Info = _,
 	    Trace_Info = {true,_},
 	    L = R, Lc = Rc ;
 
 	unknown(Signals),
 	Goal_Info = {Goal, _Context_Info},
 	Debug_Info = {_Breaks, Depth, _Execute_or_Interpret, Channels},
-	Channels   = {_IO, User},
+	Channels   = {_IO, User, _Pi},
 	Depth =\= 0,
 	Goal =\= _#_, Goal =\= (_,_), Goal =\= true,
 	Goal =\= [],  Goal =\= [_|_] |
-		write_channel(pre(Signals, PiOptions, Goal_Info,
-				Debug_Info, Debug_Info', Id, Done1), User),
-		perform(Done1, PiOptions, Signals, Circuit,
-			Goal_Info, Debug_Info',	Trace_Info, Id);
+		write_channel(pre(Signals, Goal_Info, Debug_Info, Debug_Info',
+				  Id, Done1), User),
+		perform(Done1, Signals, Circuit, Goal_Info, Debug_Info',
+			Trace_Info, Id);
 
 	unknown(Signals),
 	Circuit = L-R,
@@ -338,10 +366,8 @@ reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	    Tree = (TreeA,TreeB),
 	    Goal_I1 = {GoalA, {Module, Context, Lc-Mc}},
 	    Goal_I2 = {GoalB, {Module, Context, Mc-Rc}} |
-		reduce(Signals, PiOptions, L-M, Goal_I1,
-			Debug_Info,{TreeA,Parent}), 
-		reduce(Signals, PiOptions, M-R,Goal_I2,
-			Debug_Info, {TreeB,Parent});
+		reduce(Signals, L-M,Goal_I1,Debug_Info,{TreeA,Parent}), 
+		reduce(Signals, M-R,Goal_I2,Debug_Info,{TreeB,Parent});
 
 	unknown(Signals),
 	Circuit = L-R,
@@ -350,16 +376,14 @@ reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	    Tree = (TreeA,TreeB),
 	    Goal_I1 = {Goal,  {Module, Context-Context', Lc-Mc}},
 	    Goal_I2 = {Goals, {Module, Context'-Context'', Mc-Rc}} |
-		reduce(Signals, PiOptions, L-M, Goal_I1,
-			Debug_Info,{TreeA,Parent}), 
-		reduce(Signals, PiOptions, M-R, Goal_I2,
-			Debug_Info,{TreeB,Parent});
+		reduce(Signals, L-M,Goal_I1,Debug_Info,{TreeA,Parent}), 
+		reduce(Signals, M-R,Goal_I2,Debug_Info,{TreeB,Parent});
 
 	unknown(Signals),
 	Circuit = L-R,
 	Goal_Info = {[], {_Module, Context-Context^, Lc-Rc}},
 	Trace_Info = {true^,_Parent}:
-	    PiOptions = _, Debug_Info = _,
+	    Debug_Info = _,
 	    L  = R,
 	    Lc = Rc;
 
@@ -367,7 +391,7 @@ reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 	Circuit = L-R,
 	Goal_Info = {computation#Goal, {_Module, Context-Context', Lc-Rc}},
 	Goal =\= _#_ :
-	    PiOptions = _, Debug_Info = _,
+	    Debug_Info = _,
 	    Trace_Info = {true,_},
 	    L = R, Lc = Rc, Context' = Context |
 		computation # Goal;
@@ -405,27 +429,25 @@ reduce(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 		reduce.
 
 /*************************************************************************/
-procedure suspend(Signals, PiOptions, Circuit,
-	Goal_Info, Debug_Info, Trace_Info, Where).
-suspend(Signals, PiOptions, Circuit,
-	Goal_Info, Debug_Info, Trace_Info, Where) :-
+procedure suspend(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info,
+		  Where).
+suspend(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Where) :-
 	Signals = [] :
-	    PiOptions = _,
 	    Goal_Info = _, Debug_Info = _, Trace_Info = _, Where = _ |
 		Circuit = M-M;
 
 	Signals?resume,
 	Where = reduce |
-		reduce(Signals',PiOptions,Circuit,Goal_Info,Debug_Info,Trace_Info);
+		reduce(Signals',Circuit,Goal_Info,Debug_Info,Trace_Info);
 
 	Signals?resume,
 	Where = perform(Done, Id) |
-		perform(Done, PiOptions, Signals', Circuit, Goal_Info,
+		perform(Done, Signals', Circuit, Goal_Info,
 				Debug_Info, Trace_Info, Id);
 
 	Signals?resume,
 	Where = wait(Return_Info, Done) |
-		wait(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		wait(Signals', Circuit, Goal_Info, Debug_Info,
 				Trace_Info, Return_Info, Done);
 
 	Signals?Signal,
@@ -530,17 +552,15 @@ increment_depth(Increment, Depth, NewDepth) :-
 	    NewDepth = Increment.
 
 /*************************************************************************/
-procedure perform(Done, PiOptions, Signals, Circuit, Goal_Info, Debug_Info,
+procedure perform(Done, Signals, Circuit, Goal_Info, Debug_Info,
 		  Trace_Info, Id). 
-perform(Done, PiOptions, Signals, Circuit,
-	Goal_Info, Debug_Info, Trace_Info, Id) :-
+perform(Done, Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Id) :-
 	Signals = [], Circuit = L-R :
-	    PiOptions = _, 
 	    Done = _, Goal_Info = _, Debug_Info = _, Trace_Info = _, Id = _,
 	    L=R;
 
 	Signals?suspend |
-		suspend(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		suspend(Signals', Circuit, Goal_Info, Debug_Info,
 			Trace_Info, perform(Done, Id));
 
 	Signals?Signal,
@@ -551,14 +571,14 @@ perform(Done, PiOptions, Signals, Circuit,
 	known(Done),
 	unknown(Signals),
 	Debug_Info = {_Breaks, _Depth, interpret, Channels},
-	Channels   = {_IO, User},
+	Channels   = {_IO, User, _Pi},
 	Goal_Info  = {Goal, {_,Context-Context',_}} :
 	    Return_Info = {Body, Id, Time} |
 		execute(Context, Context', clause(Goal,Body,Id,Time)),
 %		send(Goal_Info, Return_Info),
-		write_channel(post(Signals, PiOptions, Return_Info, Goal_Info,
-			Debug_Info, Debug_Info', Done1), User),
-		wait(Signals, PiOptions, Circuit, Goal_Info, Debug_Info',
+		write_channel(post(Signals, Return_Info, Goal_Info, Debug_Info,
+					Debug_Info', Done1), User),
+		wait(Signals, Circuit, Goal_Info, Debug_Info',
 			Trace_Info, Return_Info, Done1);
 
 	known(Done),
@@ -567,7 +587,7 @@ perform(Done, PiOptions, Signals, Circuit,
 	Debug_Info = {_Breaks, _Depth, execute, {IO, _User}},
 	Goal_Info  = {Goal, {_Module, Context-Context^, Lc-Rc}},
 	Trace_Info = {Trace,_} :
-	    PiOptions = _, Id = _,
+	    Id = _,
 	    L      = R,
 	    Trace  = execute |
 		write_channel(service_id(SId), Context),
@@ -603,26 +623,8 @@ execute(Context, NewContext, Clause) :-
 	    Id	 = 0,
 	    Body = Goal ;
 
-	otherwise,
-	Clause	 = clause(Goal,Body,Id,Time) :
-		Clause' = clause(Goal,Body,Id',Time),
-		write_channel(Clause', Context, NewContext) |
-			monitor_ids(Id, Id', Time).		
-
-  monitor_ids(Id1, Id2, Time) :-
-
-    known(Id1),
-    we(Id2) :
-      Time = _,
-      Id2 = Id1;
-
-    known(Id1),
-    ro(Id2) |
-	unify_without_failure(Time, abort);
-
-    known(Id2) :
-      Time = _ |
-	unify_without_failure(Id1, Id2).
+	otherwise :
+	   write_channel(Clause, Context, NewContext) .
 
 /*************************************************************************/
 %procedure continue(Time, Goal).
@@ -631,12 +633,10 @@ execute(Context, NewContext, Clause) :-
 
 
 /*************************************************************************/
-procedure wait(Signals, PiOptions, Circuit, Goal_Info, Debug_Info, Trace_Info,
+procedure wait(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info,
 		Return_Info, Done).
-wait(Signals, PiOptions, Circuit, 
-	Goal_Info, Debug_Info, Trace_Info, Return_Info, Done) :-
+wait(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Return_Info, Done) :-
 	Signals = [], Circuit = L - R :
-	    PiOptions = _,
 	    Goal_Info = _, Debug_Info = _, Trace_Info = _, Done = _,
 	    L = R,
 	    Return_Info = {_Body, Id, _Time} |
@@ -647,7 +647,7 @@ wait(Signals, PiOptions, Circuit,
 	unknown(Id) :
 	    Done = _,
 	    Id = 'Abort' |
-		suspend(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		suspend(Signals', Circuit, Goal_Info, Debug_Info,
 			Trace_Info, perform(done, _Id));
 % This is the case when the user specifies a  clause number via the
 % "data" statement, and then the clause suspends.  This gives us a
@@ -657,13 +657,13 @@ wait(Signals, PiOptions, Circuit,
 	Return_Info = {_Body,  Id, Time},
 	number(Id),
 	unknown(Time) |
-		suspend(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		suspend(Signals', Circuit, Goal_Info, Debug_Info,
 			Trace_Info, wait(Return_Info, Done));
 
 	Signals?suspend,
 	Return_Info = {_Body, _Id, Time},
 	number(Time), unknown(Done) |
-		suspend(Signals', PiOptions, Circuit, Goal_Info, Debug_Info,
+		suspend(Signals', Circuit, Goal_Info, Debug_Info,
 			Trace_Info, wait(Return_Info, Done));
 
 	Signals?Signal,
@@ -682,15 +682,12 @@ wait(Signals, PiOptions, Circuit,
 	    Trace_Info'  = {Children,Trace},
 	    Goal_Info'   = {Body, Context} |
 		newdepth(Depth, NewDepth),
-		reduce(Signals, PiOptions, Circuit, Goal_Info', Debug_Info',
+		reduce(Signals, Circuit, Goal_Info', Debug_Info',
 			Trace_Info').
 
 /*************************************************************************/
 procedure try_to_abort(Id_Abort).
 try_to_abort(Id_Abort) :-
-
-%	ro(Id_Abort) | true;
-
 	known(Id_Abort) | true;
 
 	true : Id_Abort = 'Abort' | true.
@@ -711,11 +708,10 @@ check_context(Ok, NewGoal, Goals, Signals, Channels) :-
 
 	Ok =\= true,
 	Goals = OldG - NewG,
-	Channels = {_IO, User} :
+	Channels = {_IO, User, _Pi} :
 	    NewGoal = _ |
 		unify_when_done(Done,true-NewG),
-		write_channel(pre(Signals, [0,none,no_sender],
-				{no_service(OldG),invalid_module},
+		write_channel(pre(Signals, {no_service(OldG),invalid_module},
 				{[],0,interpret,Channels}, _, _, Done)
 				,User).
 		

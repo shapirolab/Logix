@@ -4,9 +4,9 @@ Main control of algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/23 11:56:34 $
+			$Date: 2000/01/25 13:43:45 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -125,7 +125,7 @@ do_debug(NonEmpty_Events, Id, RPCGoal, PiOptions) :-
 		do_debug.
 
 /*************************************************************************/
-procedure adb(Id,RPCGoal,Trace).
+procedure adb(Id,RPCGoal,Trace,PiOptions).
 adb(Id,RPCGoal,Trace) + (PiOptions = []) :-
 	RPCGoal  = _Module#Goal,
 	string_to_dlist(Id, L,E),
@@ -252,6 +252,7 @@ break		Send the break  command to all active processes.
 remove		Send the remove command to all active processes.
 clear		Send the clear  command to all active processes.
 query		Return from temporary command mode to directive mode.
+options(O)	Reset pifcp options.
 
 To obtain help on a specific command, enter 'help(Command)'.
 To obtain a list of new features enter  'help(news)'.
@@ -351,6 +352,19 @@ query will return to the directive mode (if command mode was entered from
 directive mode).
 ",				[close([], Non_Help)]);
 
+	Command = help(options) |
+		computation # display(term, "
+options(O) may be used to reset the output format for pifcp goals.
+O may be a a single option or a list of options; options are:
+
+    Integer    Set the depth of channel/message display (default = 1);
+    active     Show active messages (default);
+    all        Show all messages;
+    none       Don't show any messages;
+    sender     Show sender of message;
+    no_sender  Don't show sender of message (default).
+",				[close([], Non_Help)]);
+
 	Command = help(help) |
 		computation # display(term, "
 The help command prints out help information for different commands.
@@ -400,10 +414,18 @@ command(I, O, Id, Commands, Commands') :-
 	    list_to_string(L,Prefix),
 		computation # display(stream,R,[known(prefix),prefix(Prefix)]);
 
+      I = options(Options) :
+	    Id = _,
+	    make_channel(BadOption, _),
+            Commands ! options([Depth?,Sender?,Which?]), O = [] |
+		pi_utils#parse_options(Options, Depth(1), BadOption(BadOption),
+			      Sender(no_sender), Which(active));
+
 	otherwise  :
 	    Id = _ |
 		command2(I,O,Commands,Commands').
 
+/*
 which_resolvent(N, I, O, Commands, Commands') :-
 	I = _(No, R) :
 	    No = N |
@@ -413,7 +435,7 @@ which_resolvent(N, I, O, Commands, Commands') :-
 	    N = _,
 	    O = [I],
 	    Commands = Commands'.
-
+*/
 
 /*************************************************************************/
 procedure command2(I,O,Commands,Commands').
