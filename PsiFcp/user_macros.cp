@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/06 08:08:30 $
+		       	$Date: 2000/07/26 06:59:10 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -86,6 +86,9 @@ expand(Command, Cs) :-
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Psi execution tree",
 		" record(G, F, L)    - record Goal events on File until Limit.",
+		" repeat(GS)         - execute Goals.",
+		" repeat(GS, L)      - execute Goals until Limit.",
+		" repeat(GS, F, L)   - execute Goals, record events on File until Limit.",
 		" run(Goal, Limit)   - record Goal until Limit.",
 		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" Service - Goal     - call Service#Goal",
@@ -192,6 +195,18 @@ expand(Command, Cs) :-
 
     Command = record(Goal, File, Limit) :
       Cs = [psi_record#run(Goal, File, Limit)
+	   | Commands]\Commands;
+
+    Command = repeat(Goals) :
+      Cs = [repeat#run(Goals)
+	   | Commands]\Commands;
+
+    Command = repeat(Goals, Limit) :
+      Cs = [psi_record#run(repeat#run(Goals), Limit)
+	   | Commands]\Commands;
+
+    Command = repeat(Goals, File, Limit) :
+      Cs = [psi_record#run(repeat#run(Goals), File, Limit)
 	   | Commands]\Commands;
 
     Command = run(Goal, Limit) :
