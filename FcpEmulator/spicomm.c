@@ -146,8 +146,9 @@ int which_mode (heapP P);
 int channel_type(heapP ChP, int *ChannelType);
 int positive_integer(heapT V);
 int set_new_weight(heapP ChP,heapP OpEntry,int Offset,int Positive);
-int transmit_instantaneous(heapP OpEntry,heapP Channel,heapP PId,
-				heapP Value,heapP Chosen,heapP Reply);
+int transmit_instantaneous(heapP OpEntry, heapP Channel, heapP PId, int ChType,
+			   heapP Value, heapP Chosen, heapP Reply);
+int choose_random_start(heapP MessageAnchor, double select, heapP *Start);
 int make_common_tuple(heapP PId,heapP MessageList,heapP Value,heapP Chosen);
 int make_message_tuple(heapP OpEntry,heapP ChP,heapP ComShTpl);
 int insert_message_at_end_queue(heapP ChP,heapP Link,heapP Message,int Offset);
@@ -159,26 +160,22 @@ int set_reply_trans(heapP SendPId, heapP SendCId,heapP SendCh,
 		    heapP Reply);
 
 int spi_weight_index(char *name);
-/*
-double spi_compute_bimolecular_weight(int method,
-				      double rate, int sends, int receives);
-double spi_compute_homodimerized_weight(int method, double rate, int dimers);
-*/
 double spi_compute_bimolecular_weight(int method,
 				      double rate, int sends, int receives,
 				      int argn, double argv[]);
 double spi_compute_homodimerized_weight(int method, double rate, int dimers,
 				      int argn, double argv[]);
 
-
 //************************* Step Functions ************************************
 
-int transmit_biomolecular(heapP ChP,heapP Reply);
-int transmit_homodimerized(heapP ChP,heapP Reply);
+int transmit_biomolecular(heapP ChP, int Random,
+			  double Uniform1, double Uniform2, heapP Reply);
+int transmit_homodimerized(heapP ChP, int Random,
+			   double Uniform1, double Uniform2, heapP Reply);
 int more_than_one_ms(heapP ChP);
 int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply);
 int get_selector(heapP ChP, int Type, double *Result);
-int set_nowp(heapP Now,heapP NowP,double SumWeights);
+int set_nowp(heapP Now,heapP NowP, double Uniform, double SumWeights);
 int set_blocked(heapP ChP,heapP Reply);
 
 
@@ -297,34 +294,34 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
                 return(set_reply_to("Error - Wrong channel type",Reply));
 		
      } /* End Switch */
-   
-   if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS)
-     {
-       Tag=(OpEntry+SPI_MS_TAGS);
-       deref_ptr(Tag);
-       if(!IsInt(*Tag)){
-         return(False);
-       }
-       TrIn=transmit_instantaneous(OpEntry, ChP, PId, Value, Chosen ,Reply);
-       if (TrIn==True)
-	 return(True);
-       if (TrIn==False)
-	 return(False);
-     }
+
    if (!positive_integer(*(OpEntry+SPI_MS_MULTIPLIER))) {
      return(False);
    }
-   Tag=(OpEntry+SPI_MS_TAGS);
+   
+   Tag = (OpEntry+SPI_MS_TAGS);
    deref_ptr(Tag);
-   if (MsType==SPI_DIMER) 
+
+   if (MsType==SPI_DIMER) {
      if (!IsTpl(*Tag)||(!(Arity_of(*Tag)==2))) {
 	 return(False);
      }
-   if ((MsType==SPI_SEND)||(MsType==SPI_RECEIVE))
-     if (!IsInt(*Tag)){
+   }
+   else {
+     if ((MsType!=SPI_SEND) && (MsType!=SPI_RECEIVE)) {
        return(False);
      }
-   
+     if(!IsInt(*Tag)) {
+       return(False);
+     }
+     if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS) {
+       TrIn = transmit_instantaneous(OpEntry, ChP, PId,
+				     ChannelType, Value, Chosen ,Reply);
+       if (TrIn != QUEUE)
+	 return(TrIn);
+     }
+   }
+
    OpList=Cdr(OpList);
    deref_ptr(OpList);
    }while(!IsNil(*OpList));  /* End Pass 1 */
@@ -565,16 +562,17 @@ int which_mode (P)
 
 //*********************************************************************
 
-transmit_instantaneous(OpEntry, Channel, PId, Value, Chosen ,Reply)
-heapP OpEntry, Channel, PId, Value, Chosen ,Reply; 
+transmit_instantaneous(OpEntry, Channel, PId, ChType, Value, Chosen ,Reply)
+heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType; 
 {
- int MsType;  // Maybe it will pass to the function? 
- heapT Index ;
- heapP ChP ,MessageAnchor ,Ma ,Common ,CmVal ,CmChos ,NextMes ,MessAn ,Mess;
+ int MsType;
+ heapT Index, WeightIx ;
+ heapP ChP ,MessageAnchor ,ThisMs ,Common ,CmVal ,CmChos ,NextMs ,Start;
 
  heapP InAmbient = 0;
- heapP MaAmbient;
+ heapP ThisMsAmbient;
 
+ /*printf("transmit 0\n");*/
  deref_ptr(OpEntry);
  MsType=which_mode(OpEntry+SPI_MS_TYPE);
  if (Arity_of(*OpEntry) == SPI_AMBIENT_MS_SIZE) {
@@ -586,86 +584,118 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply;
  if (MsType==SPI_SEND)
    {
      if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
+       /*printf("transmit 1\n");*/
        return(False);
      }
      deref(KOutA,MessageAnchor);
      Index=SPI_RECEIVE_TAG;
+     WeightIx = SPI_RECEIVE_WEIGHT;
    }
  else
    {
      if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
+       /*printf("transmit 2\n");*/
        return(False);
      }
      deref(KOutA,MessageAnchor);
      Index=SPI_SEND_TAG;
+     WeightIx = SPI_SEND_WEIGHT;
    }
- MessAn=MessageAnchor; 
- MessAn=MessAn+SPI_MESSAGE_LINKS;
- deref_ptr(MessAn);
- if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(MessAn))){
-   return(False);
+ Start = MessageAnchor;
+ if (ChType & SPI_RANDOM_FLAG) {
+   int weight;
+
+   if (!do_read_vector(Word(WeightIx,IntTag),Ref_Word(ChP))) {
+     /*printf("transmit 3\n");*/
+     return(False);
+   }
+   deref_val(KOutA);
+   if (!IsInt(KOutA)) {
+     /*printf("transmit 4\n");*/
+     return(False);
+   }
+   weight = Int_Val(KOutA);
+   if (weight) {
+     if (!choose_random_start(MessageAnchor,
+			      (random()/2147483647.0)*weight,
+			      &Start)) {
+       /*printf("transmit 5\n");*/
+       return(False);
+     }
+   }
  }
- deref(KOutA,NextMes);
- while (NextMes!=MessageAnchor)
-   {
-     Ma=NextMes;
-     Common=Ma+SPI_MS_COMMON;
+ NextMs = Start;
+ do {
+  ThisMs = NextMs;
+  if (NextMs != MessageAnchor) {
+      Common=ThisMs+SPI_MS_COMMON;
      deref_ptr(Common);
      if (!IsTpl(*Common)){
+       /*printf("transmit 7\n");*/
        return(False);
      }
      CmVal=Common+SPI_OP_VALUE;
      deref_ptr(CmVal);
      if (!IsWrt(*CmVal)){
+       /*printf("transmit 8\n");*/
       return(False);
      }
      CmChos=Common+SPI_OP_CHOSEN;
      deref_ptr(CmChos);
      if (!IsWrt(*CmChos)){
+       /*printf("transmit 9\n");*/
       return(False);
       }
      deref_ptr(Chosen);
      deref_ptr(CmChos);
-     MaAmbient = Ma + SPI_AMBIENT_CHANNEL;
-     deref_ptr(MaAmbient);
+     ThisMsAmbient = ThisMs + SPI_AMBIENT_CHANNEL;
+     deref_ptr(ThisMsAmbient);
      if ((Chosen != CmChos) &&
 	 (!InAmbient ||
 	  unify(Ref_Word(InAmbient), Word(0,NilTag)) ||
-	  (InAmbient != MaAmbient)))
+	  (InAmbient != ThisMsAmbient)))
        {
-	 if (!unify(Ref_Word(CmChos),Ref_Word(Ma+Index))){
+	 if (!unify(Ref_Word(CmChos),Ref_Word(ThisMs+Index))){
+	   /*printf("transmit 10\n");*/
           return(False);
 	 }
        	 if (!unify(Ref_Word(CmVal),Ref_Word(Value))){
+	   /*printf("transmit 11\n");*/
           return(False);
 	 }
        	 if (!unify(Ref_Word(Chosen),Ref_Word(OpEntry+SPI_MS_TAGS))) {
+	   /*printf("transmit 12\n");*/
           return(False);
 	 }
 	 if (!discount(Common+SPI_OP_MSLIST)){
+	   /*printf("transmit 13\n");*/
 	   return(False);
 	 }
+	 /*printf("transmit x\n");*/
 	 return (Index == SPI_RECEIVE_TAG) ?
 
 	   set_reply_trans(
-	      PId, (OpEntry+SPI_MS_CID), (OpEntry+SPI_MS_CHANNEL),
-	      (Common+SPI_OP_PID), (Ma+SPI_MS_CID), (Ma+SPI_MS_CHANNEL),
-	      Reply)
-	      :
+	     PId, (OpEntry+SPI_MS_CID), (OpEntry+SPI_MS_CHANNEL),
+	     (Common+SPI_OP_PID), (ThisMs+SPI_MS_CID), (ThisMs+SPI_MS_CHANNEL),
+	     Reply)
+	   :
 	   set_reply_trans(
-	      (Common+SPI_OP_PID), (Ma+SPI_MS_CID), (Ma+SPI_MS_CHANNEL),
-	      PId, (OpEntry+SPI_MS_CID), (OpEntry+SPI_MS_CHANNEL),
-	      Reply);
+	     (Common+SPI_OP_PID), (ThisMs+SPI_MS_CID), (ThisMs+SPI_MS_CHANNEL),
+	     PId, (OpEntry+SPI_MS_CID), (OpEntry+SPI_MS_CHANNEL),
+	     Reply);
        }
-     Mess=NextMes+SPI_MESSAGE_LINKS;
-     deref_ptr(Mess);
-     if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(Mess))){
-         return(False);
-     }
-     deref(KOutA,NextMes);
-     if (NextMes==Ma)
-       break;
    }
+   NextMs += SPI_MESSAGE_LINKS;
+   deref_ptr(NextMs);
+   if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(NextMs))){
+     /*printf("transmit 14\n");*/
+     return(False);
+   }
+   deref(KOutA,NextMs);
+   if (NextMs==ThisMs)
+     break;
+ } while (NextMs != Start);
+ /*printf("transmit q\n");*/
  return(QUEUE);
 }
 
@@ -792,7 +822,7 @@ make_message_tuple(OpEntry,ChP,ComShTpl)
 heapP OpEntry,ChP,ComShTpl;
 {
   int MsType;
-  heapP Tag,Pa,Mess,Message,Link;
+  heapP Tag,Pa,Ms,Message,Link;
   heapT TagS,TagR,V0,V1;
   
   if (Arity_of(*OpEntry) < SPI_MS_SIZE ||
@@ -803,18 +833,18 @@ heapP OpEntry,ChP,ComShTpl;
     return(False);
   }
   V0=KOutA;
-  deref(KOutA,Mess)
-    Message=Mess;
-  if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_MS_TYPE))){/*Message Type */
+  deref(KOutA,Ms)
+    Message=Ms;
+  if (!unify(Ref_Word(++Ms),Ref_Word(OpEntry+SPI_MS_TYPE))){/*Message Type */
     return(False);
   }
-  if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_MS_CID))){   /* CId */
+  if (!unify(Ref_Word(++Ms),Ref_Word(OpEntry+SPI_MS_CID))){   /* CId */
     return(False);
   }
-  if (!unify(Ref_Word(++Mess),Ref_Word(ChP))){  /* Channel */
+  if (!unify(Ref_Word(++Ms),Ref_Word(ChP))){  /* Channel */
     return(False);
   }
-  if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_MS_MULTIPLIER))){	 
+  if (!unify(Ref_Word(++Ms),Ref_Word(OpEntry+SPI_MS_MULTIPLIER))){	 
     return(False);				/* Multiplier */
   }
   Tag=(OpEntry+SPI_MS_TAGS);
@@ -839,13 +869,13 @@ heapP OpEntry,ChP,ComShTpl;
       deref_ptr(Pa);
       TagR=*Pa;
     }       
-  if (!unify(Ref_Word(++Mess),TagS)){  /* SendTag */
+  if (!unify(Ref_Word(++Ms),TagS)){  /* SendTag */
     return(False); 
   }
-  if (!unify(Ref_Word(++Mess),TagR)){ /* ReceiveTag */
+  if (!unify(Ref_Word(++Ms),TagR)){ /* ReceiveTag */
     return(False);
   }
-  if (!unify(Ref_Word(++Mess),Ref_Word(ComShTpl))){ /* shared Common */
+  if (!unify(Ref_Word(++Ms),Ref_Word(ComShTpl))){ /* shared Common */
     return(False);
   }
   if (!do_make_vector(Word(2,IntTag))){
@@ -861,15 +891,15 @@ heapP OpEntry,ChP,ComShTpl;
 		      Ref_Word(Message),Ref_Word(Link))){
     return(False);   /* Previous Message */
   }
-  if (!unify(Ref_Word(++Mess),Ref_Word(Link))){  /* The Link Vector */
+  if (!unify(Ref_Word(++Ms),Ref_Word(Link))){  /* The Link Vector */
     return(False);
   }
   if (Arity_of(*OpEntry) == SPI_MS_SIZE) {
-    if (!unify(Ref_Word(++Mess),Word(0,NilTag))) {
+    if (!unify(Ref_Word(++Ms),Word(0,NilTag))) {
       return(False);
     }
   } else {
-    if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_MS_AMBIENT))) {
+    if (!unify(Ref_Word(++Ms),Ref_Word(OpEntry+SPI_MS_AMBIENT))) {
       return(False);
     }
   }
@@ -1218,7 +1248,7 @@ int spi_step(Now ,Anchor ,NowP ,Reply )
 heapP Now ,Anchor ,NowP ,Reply ;
 {
  int  i,ChannelType,SendWeight ,ReceiveWeight ,DimerWeight ,TranS=False ,Ret;
- double SumWeights=0,Selector,NowVal,BaseRate,j=0,Val ; 
+ double SumWeights=0,Selector,NowVal,BaseRate,Uniform1=0,Uniform2=0,Val ; 
  heapP NextChannel ,ChP ,Pa ;
  heapT V0;
 
@@ -1276,8 +1306,8 @@ heapP Now ,Anchor ,NowP ,Reply ;
    } while(NextChannel!=Anchor);   /* End While - Pass 1 */
 
    if  (SumWeights != 0) {
-     j=((random())/2147483647.0);
-     Selector =j*SumWeights;
+     Uniform1 = random()/2147483647.0;
+     Selector = Uniform1*SumWeights;
 
      if (!do_read_vector(Word(SPI_NEXT_CHANNEL,IntTag),Ref_Word(Anchor))){
        return(False);
@@ -1292,32 +1322,34 @@ heapP Now ,Anchor ,NowP ,Reply ;
        if (!Int_Val(KOutA)) {                /* not blocked */
 
 	 double Result = 0.0;
+	 int BasicType;
 
 	 if (!channel_type(ChP, &ChannelType)) {
 	   return(False);
 	 }
-	 switch(ChannelType & SPI_TYPE_MASK)
-	   {     
-	   case SPI_BIMOLECULAR :	 
-	     if (!get_selector(ChP, ChannelType, &Result))
-	       return(False);
-	     Selector -= Result;
-	     if (Selector <= 0) {
-	       Ret=transmit_biomolecular(ChP,Reply);
-	       TranS=True;
+	 BasicType = ChannelType & SPI_TYPE_MASK;
+	 if (BasicType == SPI_BIMOLECULAR || BasicType == SPI_HOMODIMERIZED) {
+	   if (!get_selector(ChP, BasicType, &Result))
+	     return(False);
+	   Selector -= Result;
+	   if (Selector <= 0) {
+	     int Random = ChannelType&SPI_RANDOM_FLAG;
+	     if (BasicType == SPI_BIMOLECULAR) {
+	       Uniform2 = random()/2147483647.0;
+	       Ret = transmit_biomolecular(ChP, Random, Uniform1, Uniform2,
+					   Reply);
+	       TranS = True;
 	     }
-	     break;
-	   case SPI_HOMODIMERIZED:
-	     if (more_than_one_ms(ChP)) {
-	       if (!get_selector(ChP, ChannelType, &Result))
-		 return(False);
-	       Selector -= Result;
-	       if (Selector <= 0) {
-		 Ret=transmit_homodimerized(ChP,Reply);
-		 TranS=True;
-	       }
-	     }               /* End if more_than_one */
-	   }            /* End Switch  */
+	     else if (more_than_one_ms(ChP)) {
+	       Uniform2 = random()/2147483647.0;
+	       /*printf("transmit\n");*/
+	       Ret = transmit_homodimerized(ChP, Random, Uniform1, Uniform2,
+					    Reply);
+	       /*printf("reply = %i\n", Reply);*/
+	       TranS = True;
+	     }          /* End if more_than_one */
+	   }          /* End Selector <= 0  */
+	 }          /* End Transmittable */
        }          /* End if Not Blocked */
 
        if (!do_read_vector(Word(SPI_NEXT_CHANNEL,IntTag),Ref_Word(ChP))){
@@ -1328,7 +1360,7 @@ heapP Now ,Anchor ,NowP ,Reply ;
 
      if (TranS==True) {
        if (Ret==True) { 
-	 if (!set_nowp(Now,NowP,SumWeights)){
+	 if (!set_nowp(Now, NowP, Uniform2, SumWeights)){
 	   return(False);
 	 } 
 	 return(True);
@@ -1354,22 +1386,51 @@ heapP Now ,Anchor ,NowP ,Reply ;
 
 //************************** Step Functions ***********************************
 
+int
+choose_random_start(OpEntry, select, Start)
+ heapP OpEntry, *Start;
+ double select;
+{
+  /*printf("choose 0 - Anchor = %x\n", OpEntry);*/
+  while (select > 0) {
+    heapP multP;
+
+    OpEntry += SPI_MESSAGE_LINKS;
+    deref_ptr(OpEntry);
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(OpEntry))){
+      /*printf("choose 1 - Entry = %x\n", OpEntry);*/
+      return(False);
+    }
+    deref(KOutA,OpEntry);
+    multP = OpEntry+SPI_MS_MULTIPLIER;
+    deref_ptr(multP);
+    if (!IsInt(*multP)) {
+      /*printf("choose 2\n");*/
+      return(False);
+    }
+    select -= (Int_Val(*multP));
+  }
+  *Start = OpEntry;
+  /*printf("choose 1 - Start = %x\n", OpEntry);*/
+  return(True);
+}
+
 int more_than_one_ms(ChP)
 heapP ChP;
  {
-   heapP MesLink,NextMes,PrevMes,MesAnchor;
+   heapP MesLink,NextMs,PrevMes,MsAnchor;
 
    if (!do_read_vector(Word(SPI_DIMER_ANCHOR,IntTag),Ref_Word(ChP))){
      return(False);
    }
-   deref(KOutA,MesAnchor);
-   MesLink=MesAnchor+SPI_MESSAGE_LINKS;
+   deref(KOutA,MsAnchor);
+   MesLink=MsAnchor+SPI_MESSAGE_LINKS;
    deref_ptr(MesLink);
    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(MesLink))){
      return(False);
    }  
-   deref(KOutA,NextMes);
-return(MesAnchor!=NextMes); 
+   deref(KOutA,NextMs);
+return(MsAnchor!=NextMs); 
 }
                
 //********************************************************************
@@ -1464,7 +1525,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
 
 //********************************************************************
 
-int get_selector(heapP ChP, int Type, double *Result)
+int get_selector(heapP ChP, int BasicType, double *Result)
 {  
   int SendWeight,ReceiveWeight,DimerWeight,WeightIndex;
   double BaseRate; 
@@ -1510,7 +1571,7 @@ int get_selector(heapP ChP, int Type, double *Result)
     }
     WeightIndex = Int_Val(KOutA);
 
-    switch (Type & SPI_TYPE_MASK)
+    switch (BasicType)
       {
       case SPI_BIMOLECULAR: 
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
@@ -1542,14 +1603,13 @@ int get_selector(heapP ChP, int Type, double *Result)
 
 //********************************************************************
 
-int set_nowp(heapP Now, heapP NowP, double SumWeights)
+int set_nowp(heapP Now, heapP NowP, double Uniform, double SumWeights)
 {
-  double NowVal, j;
+  double NowVal;
   heapT V0;
 
-  NowVal=real_val((Now+1)); 
-  j=((random())/2147483647.0);
-  NowVal-=log(j)/SumWeights;
+  NowVal = real_val((Now+1)); 
+  NowVal -= log(Uniform)/SumWeights;
   V0 = Ref_Word(HP);
   *HP++ = Word(0, RealTag);
   real_copy_val(((realT) NowVal), HP);
@@ -1575,36 +1635,80 @@ heapP ChP,Reply;
 
 //********************************************************************
 
-transmit_biomolecular(ChP,Reply)
-heapP ChP,Reply;
+transmit_biomolecular(ChP, Random, Uniform1, Uniform2, Reply)
+heapP ChP, Reply;
+int Random;
+double Uniform1, Uniform2;
 {
- heapP ReceiveMessage,RMess,RCommon,RComValue,RComChos,RMesAnchor,SMesAnchor,
-       SendMessage,SMess,SCommon,SComValue,SComChos,SMsList,RMsList,Pa;
+  heapP RMsAnchor,ReceiveMessage,RMs,RCommon,RComValue,RComChos,RMsList,
+	SMsAnchor,SendMessage,SMs,SCommon,SComValue,SComChos,SMsList,Pa;
+  heapP ReceiveStart,SendStart;
 
   heapP ReceiveAmbient, SendAmbient;
- 
- if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
-  return(False);
- }
- deref(KOutA,ReceiveMessage);
- if(!IsTpl(*ReceiveMessage)){
-   return(False);
- }
- Pa=ReceiveMessage+SPI_MS_TYPE;
- deref_ptr(Pa);
- if ((Int_Val(*Pa)!=SPI_MESSAGE_ANCHOR)){
-   return(False);
- }
- RMesAnchor=ReceiveMessage;
- if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-		     Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
-   return(False);
- }
- deref(KOutA,ReceiveMessage);
- while (ReceiveMessage!=RMesAnchor) 
-   {
-     RMess=ReceiveMessage;
-     RCommon=RMess+SPI_MS_COMMON;
+
+  if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
+    return(False);
+  }
+  deref(KOutA,RMsAnchor);
+  if(!IsTpl(*RMsAnchor)){
+    return(False);
+  }
+  Pa = RMsAnchor+SPI_MS_TYPE;
+  deref_ptr(Pa);
+  if ((Int_Val(*Pa) != SPI_MESSAGE_ANCHOR)){
+    return(False);
+  }
+
+  if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
+    return(False);
+  }
+  deref(KOutA,SMsAnchor);
+  if(!IsTpl(*SMsAnchor)){
+    return(False);
+  }
+  Pa = SMsAnchor+SPI_MS_TYPE;
+  deref_ptr(Pa);
+  if ((Int_Val(*Pa) != SPI_MESSAGE_ANCHOR)){
+    return(False);
+  }
+
+  if (Random) {
+    int ReceiveWeight, SendWeight;
+
+    if (!do_read_vector(Word(SPI_SEND_WEIGHT, IntTag), Ref_Word(ChP)))
+      return(False);
+    deref_val(KOutA);
+    if (!IsInt(KOutA) || (SendWeight = Int_Val(KOutA)) < 0) {
+      set_reply_to("Error - Send Weight not a Non-negative Integer", Reply);
+      return(False);
+    }
+    if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
+      return(False);
+    deref_val(KOutA);
+    if (!IsInt(KOutA) || (ReceiveWeight = Int_Val(KOutA)) < 0) {
+      set_reply_to("Error - Receive Weight not a Non-negative Integer", Reply);
+      return(False);
+    }
+    if (!(choose_random_start(RMsAnchor,
+			     Uniform1*ReceiveWeight,
+			     &ReceiveStart)
+		&&
+	  choose_random_start(SMsAnchor,
+			      (random()/2147483647.0)*SendWeight,
+			      &SendStart))) {
+       return(False);
+     }
+  }
+  else {
+    ReceiveStart = RMsAnchor;
+    SendStart = SMsAnchor;
+  }
+  ReceiveMessage = ReceiveStart;
+
+  do {
+    if (ReceiveMessage != RMsAnchor) {
+     RMs=ReceiveMessage;
+     RCommon=RMs+SPI_MS_COMMON;
      deref_ptr(RCommon);
      if (!IsTpl(*RCommon)){
        return(False);
@@ -1619,29 +1723,15 @@ heapP ChP,Reply;
      if (!IsWrt(*RComChos)){
        return(False);
      }
-     if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
-       return(False);
-     }
-     deref(KOutA,SendMessage);
-     Pa=SendMessage+SPI_MS_TYPE;
-     deref_ptr(Pa);
-     if ((Int_Val(*Pa)!=SPI_MESSAGE_ANCHOR)){
-       return(False);
-     }
-     SMesAnchor=SendMessage;
-     if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-			 Ref_Word(SendMessage+SPI_MESSAGE_LINKS))){
-       return(False);
-     }
-     deref(KOutA,SendMessage);
+     SendMessage = SendStart;
 
      ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
      deref_ptr(ReceiveAmbient);
 
-     while (SendMessage!=SMesAnchor) 
-       {	       
-	 SMess=SendMessage;
-	 SCommon=SMess+SPI_MS_COMMON;
+     do {
+       if (SendMessage != SMsAnchor) {	       
+	 SMs=SendMessage;
+	 SCommon=SMs+SPI_MS_COMMON;
 	 deref_ptr(SCommon);
 	 if (!IsTpl(*SCommon)){
 	   return(False);
@@ -1672,10 +1762,10 @@ heapP ChP,Reply;
 	     if (!IsList(*SMsList)){
 	       return(False);
 	     }
-	     if (!unify(Ref_Word(SComChos),Ref_Word(SMess+SPI_SEND_TAG))){
+	     if (!unify(Ref_Word(SComChos),Ref_Word(SMs+SPI_SEND_TAG))){
 	       return(False);
 	     } 
-	     if (!unify(Ref_Word(RComChos),Ref_Word(RMess+SPI_RECEIVE_TAG))){
+	     if (!unify(Ref_Word(RComChos),Ref_Word(RMs+SPI_RECEIVE_TAG))){
 	       return(False);
 	     }
 	     if (!unify(Ref_Word(RComValue),Ref_Word(SComValue))){
@@ -1689,76 +1779,114 @@ heapP ChP,Reply;
 	     }
 	     return
              set_reply_trans(SCommon+SPI_OP_PID,
-                             SMess+SPI_MS_CID,
-                             SMess+SPI_MS_CHANNEL,
+                             SMs+SPI_MS_CID,
+                             SMs+SPI_MS_CHANNEL,
                              RCommon+SPI_OP_PID,
-                             RMess+SPI_MS_CID,
-                             RMess+SPI_MS_CHANNEL,
+                             RMs+SPI_MS_CID,
+                             RMs+SPI_MS_CHANNEL,
 		 Reply);
 	   }
-	 if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-			     Ref_Word(SendMessage+SPI_MESSAGE_LINKS))){
-	   return(False);
-	 }
-	 deref(KOutA,SendMessage);
-       }     
-     if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-			 Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
-       return(False);
-     }
-     deref(KOutA,ReceiveMessage);
-   }
+       }
+       if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			   Ref_Word(SendMessage+SPI_MESSAGE_LINKS))){
+	 return(False);
+       }
+       deref(KOutA,SendMessage);
+     } while (SendMessage != SendStart);
+    }
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
+      return(False);
+    }
+    deref(KOutA,ReceiveMessage);
+  } while (ReceiveMessage != ReceiveStart);
  return (BLOCKED);
 }  
 
 //********************************************************************
 
-transmit_homodimerized (ChP,Reply)
-heapP ChP,Reply;
+transmit_homodimerized (ChP, Random, Uniform1, Uniform2, Reply)
+heapP ChP, Reply;
+int Random;
+double Uniform1, Uniform2;
 {
-  heapP SendAnchor,ReceiveMessage,RMess,RCommon,RComValue,RComChos,
-       DimerMessage,DMess,DCommon,DComValue,DComChos,RMsList,DMsList,Dm;
+  heapP DimerAnchor,
+ 	ReceiveMessage,RMs,RCommon,RComValue,RComChos,RMsList,
+ 	DimerMessage,DMs,DCommon,DComValue,DComChos,DMsList,Dm;
+  heapP DimerStart;
 
   heapP ReceiveAmbient, DimerAmbient;
  
-  if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
+  if (!do_read_vector(Word(SPI_DIMER_ANCHOR,IntTag),Ref_Word(ChP))){
     return(False);
   }
-  deref(KOutA,SendAnchor);
-  if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-		      Ref_Word(SendAnchor+SPI_MESSAGE_LINKS))){
+  deref(KOutA,DimerAnchor);
+
+  DMs = DimerAnchor+SPI_MS_TYPE;
+  deref_ptr(DMs);
+  if ((Int_Val(*DMs) != SPI_MESSAGE_ANCHOR)){
     return(False);
-  } 
-  deref(KOutA,ReceiveMessage);
-  RMess=ReceiveMessage;
+  }
+
+  if (Random) {
+    int DimerWeight;
+
+    if (!do_read_vector(Word(SPI_DIMER_WEIGHT, IntTag), Ref_Word(ChP)))
+      return(False);
+    deref_val(KOutA);
+    if (!IsInt(KOutA) || (DimerWeight = Int_Val(KOutA)) < 0) {
+      set_reply_to("Error - Dimer Weight not a Non-negative Integer", Reply);
+      return(False);
+    }
+    if (!(choose_random_start(DimerAnchor,
+			     Uniform1*DimerWeight,
+			     &ReceiveMessage)
+		&&
+	  choose_random_start(DimerAnchor,
+			      (random()/2147483647.0)*DimerWeight,
+			      &DimerStart))) {
+       return(False);
+     }
+    DimerMessage = DimerStart;
+    /*printf("anchor = %x, receive = %x, start = %x\n",N
+      DimerAnchor, ReceiveMessage, DimerStart);*/
+  }
+  else {
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(DimerAnchor+SPI_MESSAGE_LINKS))){
+      return(False);
+    } 
+    deref(KOutA,ReceiveMessage);
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
+      return(False);
+    } 
+    deref(KOutA,DimerMessage);
+    DimerStart = DimerAnchor;
+  }
+  RMs = ReceiveMessage;
   ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
   deref_ptr(ReceiveAmbient);
-  RCommon=ReceiveMessage+SPI_MS_COMMON;
+  RCommon = ReceiveMessage+SPI_MS_COMMON;
   deref_ptr(RCommon);
   if (!IsTpl(*RCommon)){
     return(False);
   }
-  RComValue=RCommon+SPI_OP_VALUE;
+  RComValue = RCommon+SPI_OP_VALUE;
   deref_ptr(RComValue);
   if (!IsWrt(*RComValue)){
     return(False);
   }
-  RComChos=RCommon+SPI_OP_CHOSEN;
+  RComChos = RCommon+SPI_OP_CHOSEN;
   deref_ptr(RComChos);
   if (!IsWrt(*RComChos)){
     return(False);
   }
-  if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-		      Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
-    return(False);
-  }  
-  deref(KOutA,DimerMessage);
-  Dm=DimerMessage+SPI_MS_TYPE;
-  deref_ptr(Dm);
-  while(Int_Val(*Dm)!=SPI_MESSAGE_ANCHOR)
-    {
-      DMess=DimerMessage;
-      DCommon=DMess+SPI_MS_COMMON;
+
+  do {
+    DMs = DimerMessage;
+    if(DimerMessage != DimerAnchor) {
+      DCommon=DMs+SPI_MS_COMMON;
       deref_ptr(DCommon);
       if (!IsTpl(*DCommon)){
 	return(False);
@@ -1789,10 +1917,10 @@ heapP ChP,Reply;
 	  if (!IsList(*DMsList)){
 	    return(False);
 	  }
-	  if (!unify(Ref_Word(RComChos),Ref_Word(RMess+SPI_RECEIVE_TAG))){
+	  if (!unify(Ref_Word(RComChos),Ref_Word(RMs+SPI_RECEIVE_TAG))){
 	    return(False);
 	  } 
-	  if (!unify(Ref_Word(DComChos),Ref_Word(DMess+SPI_SEND_TAG))){
+	  if (!unify(Ref_Word(DComChos),Ref_Word(DMs+SPI_SEND_TAG))){
 	    return(False);
 	  }
 	  if (!unify(Ref_Word(DComValue),Ref_Word(RComValue))){  
@@ -1806,21 +1934,20 @@ heapP ChP,Reply;
 	  }
 	  return
             set_reply_trans(DCommon+SPI_OP_PID,
-                            DMess+SPI_MS_CID,
-                            DMess+SPI_MS_CHANNEL,
+                            DMs+SPI_MS_CID,
+                            DMs+SPI_MS_CHANNEL,
                             RCommon+SPI_OP_PID,
-                            RMess+SPI_MS_CID,
-                            RMess+SPI_MS_CHANNEL,
+                            RMs+SPI_MS_CID,
+                            RMs+SPI_MS_CHANNEL,
 	      Reply);
 	}
-      if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
-			  Ref_Word(DMess+SPI_MESSAGE_LINKS))){
-	return(False);
-      }  
-      deref(KOutA,DimerMessage);
-      Dm=DimerMessage+SPI_MS_TYPE;
-      deref_ptr(Dm);
     }
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(DMs+SPI_MESSAGE_LINKS))){
+      return(False);
+    }  
+    deref(KOutA,DimerMessage);
+  } while(DimerMessage != DimerStart);
   return(BLOCKED);
 }
 
