@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/04 15:43:31 $
+		       	$Date: 2003/08/05 10:56:38 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -50,16 +50,17 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
-**   Controls = {Exported, PublicDescriptors, PublicNames, WeightRate}
+**   Controls = {Exported, Parameters, ParameterNames, WeightRate}
 **
 **          Exported is "all" or a list of exported  Name  or  Name/Arity.
 **
-**          PublicDescriptors is a list of public channels, Name(BaseRate)
-**                            or Name(BaseRate, Weighter).
+**          Parameters is a list of logix parameters: {Name}
+**                              and public channels:   Name(BaseRate)
+**                                                     Name(BaseRate, Weighter)
 **
-**          WeightRate = Weighter(BaseRate) rate for new channels,
+**          ParameterNames is a list of names of parameters and public channels.
 **
-**          where Weighter is in {none, stochastic}.
+**          WeightRate = Weighter(BaseRate) weighter and rate for new channels.
 **
 ** Output:
 **
@@ -100,14 +101,14 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
 	self;
 
     In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
-    Controls = {Exported, PublicDescriptors, PublicNames, WeightRate} |
+    Controls =?= {Exported, Parameters, ParameterNames, WeightRate} |
 	make_process_scope(PiLHS, WeightRate, ProcessScope, [],
 				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
 	make_prefix_call(Export, Prefix),
-	create_entry(PublicDescriptors, PublicNames, Prefix?,
+	create_entry(Parameters, ParameterNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
 			Generated, Generated'?, Optimize, Optimize'?),
 	add_process_definition(NewDefinition?, LHSS, Progeny, Progeny'),
@@ -141,7 +142,7 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
       Prefix = [].
 
 
-create_entry(PublicDescriptors, PublicNames, Prefix,
+create_entry(Parameters, ParameterNames, Prefix,
 		ProcessDefinition, NewDefinition,
 		Generated, NextGenerated, Optimize, NextOptimize) :-
 
@@ -161,16 +162,16 @@ create_entry(PublicDescriptors, PublicNames, Prefix,
       NewLHS = {OuterLHS'?, InnerLHS'?} |
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
-	initialize_public_channels(Index', OuterLHS'?, PublicDescriptors,
+	initialize_public_channels(Index', OuterLHS'?, Parameters,
 					Initializer, Prefix);
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
     LHSS = {OuterLHS, _InnerLHS},
     Name =\= NULL,
     Prefix = [],
-    PublicNames =\= [],
+    ParameterNames =\= [],
     Index := arity(OuterLHS) :
-      PublicDescriptors = _,
+      Parameters = _,
       NextGenerated = Generated,
       NextOptimize = Optimize,
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
@@ -179,8 +180,8 @@ create_entry(PublicDescriptors, PublicNames, Prefix,
 	make_lhs_tuples;
 	
     otherwise :
-      PublicDescriptors = _,
-      PublicNames = _,
+      Parameters = _,
+      ParameterNames = _,
       Prefix = _,
       NewDefinition = ProcessDefinition,
       Generated = NextGenerated,
@@ -207,31 +208,45 @@ create_entry(PublicDescriptors, PublicNames, Prefix,
       ChannelNameList = [].
 
 
-  initialize_public_channels(Index, Tuple, PublicDescriptors,
-				Initializer, Prefix) + (List = Tail?, Tail) :-
+  initialize_public_channels(Index, Tuple, Parameters, Initializer, Prefix) +
+					(List = Tail?, Tail) :-
+
+    /* skip over duplicates */
+    Index =< arity(Tuple),
+    arg(Index, Tuple, `ParameterName),
+    Parameters ? {DuplicateName},
+    DuplicateName =\= ParameterName |
+	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    PublicDescriptors ? DuplicateName(_BaseRate),
+    Parameters ? DuplicateName(_BaseRate),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    PublicDescriptors ? DuplicateName(_BaseRate, _Weighter),
+    Parameters ? DuplicateName(_BaseRate, _Weighter),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
+    arg(Index, Tuple, `ParameterName),
+    Parameters ? {ParameterName},
+    Index++ :
+      Tail ! ParameterName(`ParameterName) |
+	self;
+
+    Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    PublicDescriptors ? ChannelName(BaseRate),
+    Parameters ? ChannelName(BaseRate),
     Index++ :
       Tail ! ChannelName(`ChannelName, BaseRate) |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    PublicDescriptors ? ChannelName(BaseRate, Weighter),
+    Parameters ? ChannelName(BaseRate, Weighter),
     Index++ :
       Tail ! ChannelName(`ChannelName, Weighter, BaseRate) |
 	self;
@@ -240,7 +255,7 @@ create_entry(PublicDescriptors, PublicNames, Prefix,
     arg(1, Tuple, ProcedureName),
     arg(2, Prefix, PublicPairList) :
       Index = _,
-      PublicDescriptors = _,
+      Parameters = _,
       Tail = [],
       Initializer = (computation # Prefix, ProcedureName) |
 	unify_without_failure(PublicPairList, List).
@@ -420,8 +435,8 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 
     In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
-	utilities#concatenate_lists([Privates, ChannelNames], PublicNames),
-	make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
+	utilities#concatenate_lists([Privates, ChannelNames], ParameterNames),
+	make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
 				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
@@ -642,7 +657,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   WeightRate is the module type and the default base rate.
 **
-**   PublicNames is a list of channel descriptors (<stochactic_channel_list>)
+**   ParameterNames is a list of channel descriptors (<stochactic_channel_list>)
 **   which are public to the module, and which may be shared by other modules.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
@@ -660,7 +675,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
+make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
 		NewChannelList1, Out, NextOut,
 		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
@@ -684,12 +699,12 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
 				Errors''', Errors''''?),
 	correct_for_duplication(PrivateList?, PrivateList1?, ParamList,
 				ChannelList1?, ChannelList2),
-	remove_ambient_channel(PublicNames, PublicNames1),
-	make_lhs_tuples(Name?, ParamList1?, PublicNames1, ChannelList2?,
+	remove_ambient_channel(ParameterNames, ParameterNames1),
+	make_lhs_tuples(Name?, ParamList1?, ParameterNames1, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
-	extract_parameters(NewChannelList1?, Parameters, ParameterNames),
+	extract_parameters(NewChannelList1?, Parameters, ParameterNameList),
 	atom_to_arguments(OuterLHS, Arguments),
-	utilities#subtract_list(ParameterNames, Arguments, Undeclared),
+	utilities#subtract_list(ParameterNameList, Arguments, Undeclared),
 	diagnose_replies(Undeclared, Name, undeclared_parameter,
 				Errors'''', Errors'''''?),
 	optimize_procedures(NewDefinition, Notes, Out, Out'?),
@@ -717,16 +732,16 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
     Index > arity(Atom) :
       Arguments = [].
 
-  remove_ambient_channel(PublicNames, PublicNames1) :-
+  remove_ambient_channel(ParameterNames, ParameterNames1) :-
 
-    PublicNames ? AmbientName,
+    ParameterNames ? AmbientName,
     string_to_dlist(AmbientName, AL, []),
     string_to_dlist("Ambient-", ADL, _) :
       AL = ADL,
-      PublicNames1 = PublicNames';
+      ParameterNames1 = ParameterNames';
 
     otherwise :
-      PublicNames1 = PublicNames.
+      ParameterNames1 = ParameterNames.
 
 optimize_procedures(ProcessDefinition, Notes, Out, NextOut) :-
 
@@ -1108,12 +1123,12 @@ extract_arglist(PiLHS, ParamList, Errors, NextErrors) +
 	self.
 
 
-make_lhs_tuples(Name, ParamList, PublicNames, ChannelList,
+make_lhs_tuples(Name, ParamList, ParameterNames, ChannelList,
 			ChannelNames, OuterLHS, InnerLHS) :-
 
     Name =?= NULL :
       ParamList = _,
-      PublicNames = _,
+      ParameterNames = _,
       ChannelList = _,
       OuterLHS = [],
       InnerLHS = [],
@@ -1122,23 +1137,24 @@ make_lhs_tuples(Name, ParamList, PublicNames, ChannelList,
     Name =\= NULL,
     ChannelList =?= [] :
       InnerLHS = OuterLHS?|
-	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
-	utilities#concatenate_lists([ParamList, PublicNames1?],	ChannelNames),
+	utilities#subtract_list(ParameterNames, ParamList, ParameterNames1),
+	utilities#concatenate_lists([ParamList, ParameterNames1?],
+					ChannelNames),
 	construct_lhs_tuple(Name, EMPTY, ChannelNames?, OuterLHS);
 
     Name =\= NULL,
     ChannelList =\= [],
-    PublicNames =?= [] |
+    ParameterNames =?= [] |
 	construct_lhs_tuple(Name, EMPTY, ParamList, OuterLHS),
 	utilities#concatenate_lists([ParamList, ChannelList?], ChannelNames),
 	construct_lhs_tuple(Name, DOT, ChannelNames?, InnerLHS);
 
     Name =\= NULL,
     ChannelList =\= [],
-    PublicNames =\= [] |
-	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
-	utilities#subtract_list(PublicNames1, ChannelList, PublicNames2),
-	utilities#concatenate_lists([ParamList, PublicNames2?], OuterList),
+    ParameterNames =\= [] |
+	utilities#subtract_list(ParameterNames, ParamList, ParameterNames1),
+	utilities#subtract_list(ParameterNames1, ChannelList, ParameterNames2),
+	utilities#concatenate_lists([ParamList, ParameterNames2?], OuterList),
 	construct_lhs_tuple(Name, EMPTY, OuterList?, OuterLHS),
 	utilities#concatenate_lists([OuterList?, ChannelList], ChannelNames),
 	construct_lhs_tuple(Name, DOT, ChannelNames?, InnerLHS).
