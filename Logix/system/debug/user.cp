@@ -4,9 +4,9 @@ User interface of algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 1999/07/09 07:03:21 $
+			$Date: 2003/04/30 06:09:44 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/debug/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -134,6 +134,7 @@ pre(Signals, Goal_In, Debug_Info, NewDebug_Info, Id, Done) :-
 		ask(Signals, query, pre, Goal, Debug_Info, NewDebug_Info,
 			 Execute_Info, Done);
 
+	otherwise,
 	Goal_In = {Goal,_OpenContext},
 	Debug_Info = {Breaks, _Depth, _Execute_or_Interpret, _Channels} :
 	    Execute_Info = {'?', Id, _Time} |
@@ -511,7 +512,7 @@ break1(Location,Goal,PredicateArity,Breaks,Answer,Index,Current) :-
 	    Answer = Mode,
 	    Index  = Current | true;
 
-	Breaks?{Location,pattern(FG),_Mode},
+	Breaks?{Location,pattern(_FG),_Mode},
 	otherwise,
 	Current' := Current + 1 |
 %	    melt(FG,Melted_Goal,_) |
