@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/heap.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/heap.c,v 1.2 2000/02/15 12:19:26 bill Exp $ */
 /*
 **	heap.c  -  kernel predicates dealing with the entire heap
 **
@@ -10,9 +10,9 @@
 **	Avshalom Houri		21 Sivan 5745, 10 Jun 1985
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 1999/07/01 07:15:09 $
+**		       	     $Date: 2000/02/15 12:19:26 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.1 $
+**			     $Revision: 1.2 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/heap.c,v $
 */
 
@@ -37,20 +37,16 @@ do_gc()
   register heapP LQF = Nil, LQB = Nil;
   register unsigned int StartCpuTime;
 
-#ifndef SUNOS5d3
   struct rusage	R_UsageStart, R_UsageEnd;
-#endif
 
   /* Count garbage collection time, Seperately */ 
   stop_time();
   StartCpuTime = CpuTime;
   start_time();
 
-#ifdef SUNOS4d1d3
   if (getrusage(RUSAGE_SELF, &R_UsageStart) < 0) {
     do_exit("getrusage - RUSAGE_SELF", SYSTEM, errno, False);
   }
-#endif
 
   if (HP >= CurHeapEnd) {
     do_exit("garbage collection - start", MACHINE, ErHPOVFL, True);
@@ -227,14 +223,12 @@ do_gc()
 		   ((int) Collections));
   CopiedAverage += (((HP-CurHeap)-((int) CopiedAverage))/((int) Collections));
 
-#ifdef SUNOS4d1d3
   if (getrusage(RUSAGE_SELF, &R_UsageEnd) < 0) {
     do_exit("getrusage - RUSAGE_SELF", SYSTEM, errno, False);
   }
   /* GC page faults */
   GCMinFlt += R_UsageEnd.ru_minflt - R_UsageStart.ru_minflt;
   GCMajFlt += R_UsageEnd.ru_majflt - R_UsageStart.ru_majflt;
-#endif
 
   /* Count garbage collection time, Seperately */ 
   stop_time();
