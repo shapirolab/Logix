@@ -8,7 +8,8 @@
 	 show_tree/3, close_tree/1,
 	 dimer/3, dimer/4, dimer/5, dimer/6,
 	 receive/2, receive/3, receive/4, receive/5,
-	 send/2, send/3, send/4, send/5]).
+	 send/2, send/3, send/4, send/5,
+	 weighter/1]).
 
 -include(psi_constants).
 
@@ -47,7 +48,7 @@ make_channel(Channel, Creator, BaseRate) :-
       Creator = _,
       BaseRate = _,
       Channel = _ |
-	screen#display(("psi_utils: Can't make_channel" : Name - Reply)).
+	computation#display(("psi_utils: Can't make_channel" : Name - Reply)).
 
 
 send(Message, Channel) :-
@@ -234,6 +235,10 @@ show_psi_channel(PsiChannel, Options, Display, Reply) :-
 
   show_psi_channel1(Name, PsiChannel, Options, Display) :-
 
+    Options =?= fcp :
+      Display = (Name : PsiChannel);
+
+    Options =\= fcp,
     read_vector(PSI_CHANNEL_REFS, PsiChannel, Refs),
     Refs > 0 :
       make_channel(BadOption, _) |
@@ -1100,3 +1105,45 @@ remote_goal(Name, Goal, OutGoal, PsiFcp, OutPsiFcp) :-
     Goal =\= _#_ :
       OutGoal = Goal,
       OutPsiFcp = PsiFcp.
+
+
+weighter(Weighter) :-
+
+    string(Weighter) |
+	psi_monitor # scheduler(S),
+	write_channel(default_weighter(Weighter), S);
+
+    tuple(Weighter) |
+	utils#tuple_to_dlist(Weighter, [Name | Parameters], []),
+	validate_parameters,
+	update_weighter;
+
+    otherwise |
+	fail("Weighter must be a string or a tuple" - Weighter).
+
+  validate_parameters(Parameters, List, Invalid) :-
+
+    Parameters ? P, number(P) :
+      List ! P |
+	self;
+
+    Parameters ? P, otherwise :
+      Invalid ! P |
+	self;
+
+    Parameters = [] :
+      List = [],
+      Invalid = [].
+
+
+  update_weighter(Name, List, Invalid) :-
+
+    string(Name), Invalid =?= [] |
+	utils#list_to_tuple([Name, _ | List], Weighter),
+	psi_monitor # scheduler(S),
+	write_channel(default_weighter(Weighter), S);
+
+    otherwise :
+      List = _ |
+	utils#list_to_tuple([Name | Invalid], Weighter),
+	fail("bad waiter" - Weighter).

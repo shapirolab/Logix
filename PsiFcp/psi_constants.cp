@@ -8,26 +8,27 @@ TRUE  => 1.
 PSI_POST =>            1.
 PSI_CLOSE =>           2.
 PSI_STEP =>            3.
+PSI_INDEX =>           4.
 
 /* Sub-Channel Indices */
 
-PSI_BLOCKED	 =>    1.		% TRUE iff non-empty queue and.
-					% no transmission is possible
-PSI_CHANNEL_TYPE =>    2.		% see below.
-PSI_CHANNEL_RATE =>    3.		% Real.
-PSI_CHANNEL_REFS =>    4.		% Reference counter.
-PSI_SEND_ANCHOR =>     5.		% Head of SendQueue.
-PSI_DIMER_ANCHOR =>    5.		% Head of DimerQueue.
-PSI_SEND_WEIGHT =>     6.		% Sum of Send Multipliers.
-PSI_DIMER_WEIGHT =>    6.		% Sum of Dimer Multipliers.
-PSI_RECEIVE_ANCHOR =>  7.		% Head of ReceiveQueue.
-PSI_RECEIVE_WEIGHT =>  8.		% Sum of Receive Multipliers.
-PSI_AVAILABLE      =>  9.               % Unused sub-channel
-PSI_NEXT_CHANNEL =>   10.		% (circular) channel list.
-PSI_PREVIOUS_CHANNEL => 11.		% (circular) channel list.
-PSI_CHANNEL_NAME =>   12.		% (constant) Created Channel name.
+PSI_BLOCKED	     =>  1.	% TRUE iff non-empty queue and.
+				% no transmission is possible
+PSI_CHANNEL_TYPE     =>  2.	% see below.
+PSI_CHANNEL_RATE     =>  3.	% Real.
+PSI_CHANNEL_REFS     =>  4.	% Reference counter.
+PSI_SEND_ANCHOR      =>  5.	% Head of SendQueue.
+PSI_DIMER_ANCHOR     =>  5.	% Head of DimerQueue.
+PSI_SEND_WEIGHT      =>  6.	% Sum of Send Multipliers.
+PSI_DIMER_WEIGHT     =>  6.	% Sum of Dimer Multipliers.
+PSI_RECEIVE_ANCHOR   =>  7.	% Head of ReceiveQueue.
+PSI_RECEIVE_WEIGHT   =>  8.	% Sum of Receive Multipliers.
+PSI_WEIGHT_TUPLE     =>  9.	% (constant) Weight computation parameters
+PSI_NEXT_CHANNEL     => 10.	% (circular) Channel list.
+PSI_PREVIOUS_CHANNEL => 11.	% (circular) Channel list.
+PSI_CHANNEL_NAME     => 12.	% (constant) Created Channel name.
 
-CHANNEL_SIZE =>       12.
+CHANNEL_SIZE => 12.
 
 /* Channel Types */
 
@@ -37,6 +38,11 @@ PSI_BIMOLECULAR =>     2.
 PSI_HOMODIMERIZED =>   3.
 PSI_INSTANTANEOUS =>   4.
 PSI_SINK =>            5.
+
+/* Weight Computation Values */
+
+PSI_DEFAULT_WEIGHT_INDEX => 0.
+PSI_DEFAULT_WEIGHT_NAME  => default.
 
 /* Message Types */
 

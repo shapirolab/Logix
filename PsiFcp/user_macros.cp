@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/10/03 11:25:59 $
+		       	$Date: 2000/11/09 10:25:02 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -74,7 +74,6 @@ expand(Command, Cs) :-
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
-		" d(It)              - debug(It) (Goal or RPC)",
 		" i(File)            - input file",
 		" options(New, Old)  - default Psi Options",
 		" pc(C)              - make psi channel C",
@@ -87,7 +86,7 @@ expand(Command, Cs) :-
 		" s / s(No)          - suspend computation No",
 		" spc(C)             - Psi channel",
 		" spg / spg(No)      - Psi goal of computation No",
-		" spgcs / spgcs(No)  - Psi global channels",
+		" spgcs              - Psi global channels",
 		" spr / spr(No)      - Psi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Psi execution tree",
@@ -95,12 +94,13 @@ expand(Command, Cs) :-
 		" run(GS)            - run Goals.",
 		" run(GS, L)         - run Goals until Limit.",
 		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
+		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
 		"",
 		"        options for sp*, pdb and ptree:",
-		" Integer            - depth of channel display",
 		" none/active        - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
+		"        additional options for ptree:",
 		" prefix/execute     - order of tree display"
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
@@ -209,6 +209,10 @@ expand(Command, Cs) :-
 
     Command = vtree(Context, Conjunction, Tree) :
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree) 
+	   | Commands]\Commands;
+
+    Command = weighter(Weighter) :
+      Cs = [to_context([psi_utils # weighter(Weighter)])
 	   | Commands]\Commands;
 
     Command = vtree(Context, Conjunction, Tree, Depth) :
