@@ -231,6 +231,7 @@ sub extract_authors
   $Authors =~ s/^\s+(.*)/$1/;
   $Lines =~ s/^\s+(.*)/$1/;
 
+  $Authors =~ s/\n/ /;
   filter_tex($Authors);
   $Authors = $Filtered;
 
