@@ -1121,7 +1121,7 @@ display_prefix_order(Head, Level, Indent, TreeTrace) :-
   update_indent(Level1, Level2, Indent1, Indent2) :-
 
     Level2 > 20,
-    mod(Level2, 20, Level2') |
+    Level2' := Level2 \ 20 |
 	self;
 
     Level1 < Level2,
@@ -1136,6 +1136,17 @@ display_prefix_order(Head, Level, Indent, TreeTrace) :-
     string_to_dlist(Indent1, IL, []),
     IL ? _,
     list_to_string(IL', Indent1') |
+	self;
+
+    Level1 > Level2,
+    Indent1 = " " :
+      Indent1' = "",
+      Level1' = 0 |
+	self;
+
+    Level1 > Level2,
+    Indent1 = "" :
+      Level1' = 0 |
 	self;
 
     Level1 =?= Level2 :
