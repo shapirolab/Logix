@@ -7,8 +7,8 @@ where:
 
     <quantified process set> ::=
 	<external_call>
-        (<process set>)
-        <repetition> * (<process set>)
+        [<process set>]
+        <repetition> * [<process set>]
 
     <process set> ::=
         <quantified process set>
@@ -16,23 +16,22 @@ where:
 
     <repetition> ::= <integer>
 
-A negative <repetition> is treated as zero.
+See BNF.txt for the definition of <external_call>.
 
-(See BNF for the definition of <external_call>.)
+The square brackets may be omitted in the case where <process set>
+is simply an <external_call>.
+
+A negative <repetition> is treated as zero.
 
 
 Examples:
 
-1. repeat#run(64*(dimerization#"A_PROTEIN"))
+1. repeat#run(64*dimerization#"A_PROTEIN")
 
-2. repeat#run([6*(activator#"A_PROTEIN"),activator#"A_GENE",
+2. repeat#run([6*activator#"A_PROTEIN",activator#"A_GENE",
                   repressor#"R_GENE"])
 
-3. repeat#run([2*[activator#"A_GENE",3*(repressor#"R_GENE")],
+3. repeat#run([2*[activator#"A_GENE",3*repressor#"R_GENE"],
                hysteresis#"MODULE"])
-
-Note that the parentheses are necessary in the case of:
-
-    <repetition>*(<external_call>)
 
 This process is used by the run and record macros (see record.txt).
