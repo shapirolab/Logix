@@ -1,0 +1,62 @@
+Logix attributes are specified at the head of each module in the form:
+
+    -<attribute name>.
+or
+    -<attribute name>(<arguments>).
+
+
+A required attribute for Stochastic Pi Calculus modules is:
+
+    -language([pifcp,compound,colon]).
+
+The names in the list specify transformations to be applied to the
+module as part of compilation.  The transformation, pifcp, transforms
+modules written in Stochastic Pi Calculus into modules in the
+compound dialect of LOGIX.
+
+
+An optional attribute is:
+
+    -export(<process name>).
+or
+    -export([<process name list>]).
+
+The export attribute specifies which processes may be called by RPC
+(Remote Process Call).  If omitted, all first level processes are
+callable.
+
+Each process name must be quoted.  See the modules in Examples/boolean
+and in Examples/circadian.
+
+
+An optional attribute is:
+
+    -mode(<execution mode>).
+
+where <execution mode> is one of:
+
+    interpret
+    interrupt
+    failsafe
+    trust
+
+To debug a module, it must be compiled in interpret mode - this is
+the default mode.
+
+To inspect the process resolvent during execution, or to suspend
+execution of its processes, or to abort the execution of its
+processes, a module must be compiled in interpret or interrupt
+mode.  Mode interrupt is substantially faster than mode interpret.
+Modes failafe and trust are somewhat faster than interrupt, but
+should only be used for modules whose processes are self-terminating.
+
+
+An optional attribute is:
+
+    -include(<module name>).
+
+The content of the named module is inserted following the attributes.
+This is useful primarily for including definitions of named values.
+See the modules in Examples/circadian, some of which include module
+rates.  Note that the definitions are implemented by the transformation
+evaluate, which is specified in the language attribute of those modules.

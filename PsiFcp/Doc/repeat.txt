@@ -1,0 +1,48 @@
+The repeat process can run a quantified set of Pi Calculus (pifcp)
+processes.
+
+    repeat#run(<quantified process set>)
+
+where:
+
+    <quantified process set> ::=
+        <process set>
+        <repetition> * <process set>
+
+    <process set> ::=
+        <external_call>
+        [multiple process set>
+
+    <multiple process set> ::=
+        <quantified process set>
+        <multiple process set>, <quantified process set>
+
+    <repetition> ::= <integer>
+
+(See BNF for the definition of <external_call>.)
+
+The repeat macro can run the processes, and it can also measure
+and record their behavior.
+
+Examples:
+
+1. repeat(64*(dimerization#"A_PROTEIN"))
+
+2. repeat([6*(activator#"A_PROTEIN"),activator#"A_GENE",repressor#"R_GENE"])
+
+3. repeat([2*[activator#A_GENE,3*(repressor#R_GENE)],hysteresis#module])
+
+4. repeat(4*(dimerization#"A_PROTEIN"), 100)
+
+5. repeat(4*(dimerization#"A_PROTEIN"), file, 100)
+
+Note that the parentheses are necessary in the case of:
+
+    <repetition>*(<external_call>)
+
+Examples 4 and 5 terminate after 100 units of events, like record/run.
+
+Example 5 records the behavior of 4*(dimerization#"A_PROTEIN")  on
+file, like record.
+
+

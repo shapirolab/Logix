@@ -1,0 +1,69 @@
+The psi_record process can run a Stochastic Pi Calculus (pifcp) process
+and record its behavior.
+
+    psi_record#run(<call program>, <time limit>)
+or
+    psi_record#run(<call program>, <file_name>, <time limit>)
+
+You may also use the macros:
+
+    run(<call program>, <time limit>)
+or
+    record(<call program>, <file_name>, <time limit>)
+
+Examples:
+
+1. run(hysteresis#"MODULE", 100)
+
+   starts the process  MODULE  in program module  hysteresis  and
+   terminates the run after 100 time units have elapsed.  To 
+   terminate the run prematurely, enter <control>C to kill the
+   logix system.
+
+2. record(hysteresis#"MODULE", fff, 100)
+
+   does the same thing, and records the events of the run on file 
+   fff.
+
+The elements of the file are lines which have one of three forms.
+
+   a. A real-valued "time'
+
+   b. +<procedure name>, which records the start of a procedure.
+
+   c. -<procedure name>, which records the termination of a procedure.
+
+To analyze the file, producing a table suitable for plotting with
+Matlab, use the PERL program "psi2t" - e.g.
+
+   % psi2t fff
+
+creates a table, where column 1 is time, and columns 2...n are totals
+of active processes.  A short file, with one long line, listing the
+column (process) names, and n-1 lines associating process names with
+array columns is also produced.  For example:
+
+  fff.table  and  fff.names
+
+Column one of the .table file is incremented approximately by 1 between
+rows (lines).  To change the increment to another positive integer, N,
+add the argument N to the call to tally - e.g.
+
+  % psi2t fff 7
+
+To combine columns sums add terms of the form:
+
+    <summed_column_name>+=<absorbed_column_name>
+
+  % psi2t fff A_GENE+=BASAL_A+PROMOTED_A A_GENE+=ACTIVATED_TRANSCRIPTION_A
+
+To split the table into multiple 2-column files, suitable for gnuplot,
+use the PERL program "t2xys" - e.g.
+
+  % t2xys fff
+  % gnuplot
+  gnuplot> plot "fff.3" smooth unique
+
+A short shell script, psixys, combines the functions with a call to gnuplot.
+It does not support arguments other than the file name.
+
