@@ -1,4 +1,4 @@
-The psi_record process can run a Stochastic Pi Calculus (pifcp) process
+The psi_record process can run a Stochastic Pi Calculus (psifcp) process
 and record its behavior.
 
     psi_record#run(<call program>, <time limit>)

@@ -7,10 +7,10 @@ or
 
 A required attribute for Stochastic Pi Calculus modules is:
 
-    -language([pifcp,compound,colon]).
+    -language([psifcp,compound,colon]).
 
 The names in the list specify transformations to be applied to the
-module as part of compilation.  The transformation, pifcp, transforms
+module as part of compilation.  The transformation, psifcp, transforms
 modules written in Stochastic Pi Calculus into modules in the
 compound dialect of LOGIX.
 
@@ -59,4 +59,7 @@ The content of the named module is inserted following the attributes.
 This is useful primarily for including definitions of named values.
 See the modules in Examples/circadian, some of which include module
 rates.  Note that the definitions are implemented by the transformation
-evaluate, which is specified in the language attribute of those modules.
+evaluate, which is specified in the language attribute of those modules,
+i.e.
+
+    -language([evaluate,psifcp,compound,colon]).

@@ -86,7 +86,7 @@ BNF for PiFcp
                            <compare> & <comparison>
 
 <compare>              ::= <communicator> =?= <communicator>
-                           <communicator> =/= <communicator>
+                           <communicator> =\= <communicator>
 
 <logix_guard_clauses>  ::= <logix_guard_clause> 
                            <logix_guard_clause> ; <logix_guard_clauses>
@@ -102,7 +102,6 @@ BNF for PiFcp
 
 <logix_tell_list> ::=      <logix_tell_guard>
                            <logix_tell_guard> , <logix_tell_list>
-                           <channel> =\= <channel>
 
 <body>                 ::= <call>
                            <call> | <body>
@@ -184,7 +183,7 @@ of a <new_scope> and the added <channel_list> of a <process>.
 
 
 The <channel>s in the <arguments> of a <process> are provided by a caller.
-A <channel> may be "extruded" from a <process> by a <send> to such an argument
+A <channel> may be "extruded" from a <process> by a <send> of such an argument
 channel.
 
 
@@ -215,17 +214,21 @@ refer to '_var'(<channel_name>.
 A <logix_variable> may have a value which is an arbitrary logix term.  Such
 values may be tested by a <logix_ask_guard> or manipulated by a <logix_goal>
 or by a <logix_tell_guard>.  An arbitrary <logix_term> may be sent in a
-<message> by the library <logix_goal> psi_send/3, or received by the logix
-goal, psi_receive/3:
+<message> by the library <logix_goal> psi_send/2, or received by the logix
+goal, psi_receive/2:
 
-    psi_send(<sender>, <message_content>, <channel>)
+    psi_send(<message_content>, <communicator>)
+    psi_receive(<communicator>, <message_content>)
 
 e.g.
 
-    psi_send(Id1, {"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
+    psi_send({"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
 
-    psi_receive(Id2, {Arg1, String(f(x)), Arg3}, 'var'(also_a_channel))
+    psi_receive('var'(another_channel), {Arg1, String(f(x)), Arg3})
 
+The library <logix_goal>s psi_send/3, psi_receive/3, psi_send/4, psi_receive/4
+may be used as well, where the third argument is a multiplier (default 1), and
+the fourth argument is an identifier (default sender or receiver).
 
 Channel typing has been omitted.  
 
@@ -240,7 +243,7 @@ is equivalent to:
 
 The recursive definition of <right_hand_side> is syntactic sugar - e.g.
 
-    P ::= <communication1> , ({<logix_ask_guard>} , Q;
+    P ::= <communication1> , {<logix_ask_guard>} , Q;
           <communication2> , (<comparison> , R; otherwise , S).
 
 is equivalent to:
