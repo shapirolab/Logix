@@ -22,8 +22,8 @@ BNF for PiFcp
                            <channel> , <channel_list>
 
 <stochastic_channel>   ::= <channel>
-                           <channel>(<integer>)
-                           <channel>(<integer>, <integer>)
+                           <channel>(<number>)
+                           <channel>(<number>, <number>)
 
 <right_hand_side>      ::= <synchronized_clauses>
                            <logix_guard_clauses>
@@ -34,6 +34,7 @@ BNF for PiFcp
                            <synchronized_clause> ; <synchronized_clauses>
 
 <synchronized_clause>  ::= <communication> | <right_hand_side>
+                           <cdr> | self
 
 <communication>        ::= <receive>
                            <send>
