@@ -7,38 +7,34 @@ procedure string(String).
 string(Text) :- true : Text =
 
 "library.
-
--language(compound).
+-language([evaluate,compound,colon]).
+-include(psi_constants).
 
 psi_channel(Channel) :-
-	psi_channel(Channel, 'SYSTEM', infinite, _FcpChannel).
+	psi_channel(Channel, 'SYSTEM', infinite).
 psi_channel(Channel, Creator) :-
-	psi_channel(Channel, Creator, infinite, _FcpChannel).
+	psi_channel(Channel, Creator, infinite).
 psi_channel(Channel, Creator, BaseRate) :-
-	psi_channel(Channel, Creator, BaseRate, _FcpChannel).
-psi_channel(Channel, Creator, BaseRate, FcpChannel) :-
+	psi_channel(Channel, Creator, BaseRate).
+psi_channel(Channel, Creator, BaseRate) :-
     true :
-      Channel = Channel'?,
-      FcpChannel = FcpChannel'? |
-	psi_monitor#new_channel(Creator, Channel', BaseRate),
-	Channel'? = _Creator,(FcpChannel', _Circuit);
+      Channel = Channel'? |
+	psi_monitor#new_channel(Creator, Channel', BaseRate);
     otherwise :
       Creator = _,
-      FcpChannel = _,
       BaseRate = _ |
 	computation#display(('psi_library: Can''t make channel' : Channel)).
 
 psi_send(Message, Channel) :-
-    arg(1, Channel, Creator) |
-	psi_send(psi(Creator), Channel, Message, 1).
-psi_send(Id, Message, Channel) :-
-	psi_send(Id, Message, Channel, 1).
-psi_send(Id, Message, Channel, Multiplier) :-
-    Channel = _Creator(FcpChannel, _Circuit),
-    channel(FcpChannel) :
-      Send = send(Id, Message, 1, Multiplier, Chosen),
-      write_channel(Send, FcpChannel) |
-	psi_sent(1, Chosen);
+	psi_send(Message, Channel, 1, sender).
+psi_send(Message, Channel, Multiplier) :-
+	psi_send(Message, Channel, Multiplier, sender).
+psi_send(Message, Channel, Multiplier, Id) :-
+    vector(Channel) :
+      Send = PSI_SEND(Id, Channel, Multiplier, 1) |
+	psi_monitor#scheduler(S),
+	write_channel(start(psi_send, [Send], Value, Chosen), S),
+	psi_transmitted(sending(Id), 1, Chosen, Message, Value);
     otherwise :
       Id = _,
       Message = _,
@@ -46,16 +42,15 @@ psi_send(Id, Message, Channel, Multiplier) :-
 	computation#display(('psi_library: Can''t send to' : Channel)).
 
 psi_receive(Channel, Message) :-
-    arg(1, Channel, Creator) |
-	psi_receive(psi(Creator), Channel, Message, 1).
-psi_receive(Id, Channel, Message) :-
-	psi_receive(Id, Channel, Message, 1).
-psi_receive(Id, Channel, Message, Multiplier) :-
-    Channel = _Creator(FcpChannel, _Circuit),
-    channel(FcpChannel) :
-      Receive = receive(Id, Ms, 1, Multiplier, Chosen),
-      write_channel(Receive, FcpChannel) |
-	psi_received(1, Chosen, Ms, Message);
+	psi_receive(Channel, Message, 1, receiver).
+psi_receive(Channel, Message, Multiplier) :-
+	psi_receive(Channel, Message, Multiplier, receiver).
+psi_receive(Channel, Message, Multiplier, Id) :-
+    vector(Channel) :
+      Receive = PSI_RECEIVE(Id, Channel, Multiplier, 2) |
+	psi_monitor#scheduler(S),
+	write_channel(start(psi_receive, [Receive], Value, Chosen), S),
+	psi_transmitted(receiving(Id), 2, Chosen, Message, Value?);
     otherwise :
       Id = _,
       Message = _,
@@ -63,16 +58,22 @@ psi_receive(Id, Channel, Message, Multiplier) :-
 	computation#display(('psi_library: Can''t receive from' : Channel)).
 
 psi_close(Channel) :-
-    Channel =?= _Creator(_FcpChannel, Circuit) :
-      Circuit = {Close, Close}.
+    vector(Channel) |
+	psi_monitor#scheduler(S),
+	write_channel(close({Channel}), S?);
+    otherwise |
+	computation#display(('psi_library: Can''t close' : Channel)).
 
-psi_received(Tag, Chosen, Ms, Message) :-
-    Chosen =?= Tag :
-      Ms = Message.
+psi_transmitted(Id, Tag, Chosen, Message, Value) :-
 
-psi_sent(Tag, Chosen) :-
-    Chosen =?= Tag | true.
+    Chosen = Tag :
+      Id = _,
+      Value = Message;
 
+    Chosen =\= Tag :
+      Message = _,
+      Id = _,
+      Value = _.
 "
 
 	| true.
