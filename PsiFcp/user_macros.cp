@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/03 04:59:09 $
+		       	$Date: 2000/07/06 08:08:30 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -50,11 +50,11 @@ expand(Command, Cs) :-
     Command = options(New, Old) :
       Cs = [to_context(psi_monitor # options(New, Old)) | Commands]\Commands;
 
-    Command = pc(N) :
-      Cs = [to_context(psi_utils # make_channel(N)) | Commands]\Commands;
+    Command = pc(C) :
+      Cs = [to_context(psi_utils # make_channel(C)) | Commands]\Commands;
 
-    Command = pc(N, S, R) :
-      Cs = [to_context(psi_utils # make_channel(N, S, R)) | Commands]\Commands;
+    Command = pc(C, S, B) :
+      Cs = [to_context(psi_utils # make_channel(C, S, B)) | Commands]\Commands;
 
     Command = pdb(Service) :
       Cs = [to_context(psi_monitor # options(O, O)),
@@ -100,8 +100,11 @@ expand(Command, Cs) :-
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
 
-    Command = pr(M, C) :
-      Cs = [to_context(psi_utils # receive(M, C)) | Commands]\Commands;
+    Command = pr(C, M) :
+      Cs = [to_context(psi_utils # receive(C, M)) | Commands]\Commands;
+
+    Command = pr(C, M, N) :
+      Cs = [to_context(psi_utils # receive(C, M, N)) | Commands]\Commands;
 
     Command = prgcs :
       Command' = prgcs(_) |
@@ -112,6 +115,9 @@ expand(Command, Cs) :-
 
     Command = ps(M, C) :
       Cs = [to_context(psi_utils # send(M, C)) | Commands]\Commands;
+
+    Command = ps(M, C, N) :
+      Cs = [to_context(psi_utils # send(M, C, N)) | Commands]\Commands;
 
     Command = spc(C) :
       Cs = [to_context([psi_monitor # options(O, O),
@@ -200,7 +206,6 @@ expand(Command, Cs) :-
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree, Depth) 
 	   | Commands]\Commands;
 
-/*
     Command = '^' :
       Cs = [display_stream(Bindings',[]),
             to_context([computation # dictionary(bindings, Bindings, 0),
@@ -221,7 +226,7 @@ expand(Command, Cs) :-
       Cs = [to_context([psi_monitor # options(O, O) | Stuff])
 	   | Commands]\Commands |
 	display_variables(X, O?, Stuff);
-*/
+
     Command = forward(Any) :
       Cs = [Any | Commands]\Commands;
 

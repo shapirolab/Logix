@@ -13,6 +13,9 @@ MAXTIME => 99999999999999999999999999999999999999999999999999999999999.0.
 
 DEBUG(Note) => write_channel(debug_note(Note), NotesChannel).
 
+%STOPPED => DEBUG((ChannelName:stopped!)).
+STOPPED => ChannelName = _, NotesChannel = _.
+
 
 serve(In) + (Options = []) :-
 
@@ -247,11 +250,11 @@ scheduling(Schedule, Offset, NegativeExponential, Uniform, Waiter,
     /* Pause processing until Continue is set. */
     Schedule ? pause(Continue) |
 	pause_scheduling(Continue,
-			 Schedule, Schedule'?,
-			 GetCommand, GetCommand'?,
+			 Schedule', Schedule'',
+			 GetCommand, GetCommand',
 			 Waiting, Waiting',
-			 Wakeup, Wakeup'?,
-			 Start_real_time, Start_real_time'?),
+			 Wakeup, Wakeup',
+			 Start_real_time, Start_real_time'),
 	self;
 
     /* Return the current head of the recording stream. */
@@ -422,7 +425,7 @@ pause_scheduling(Continue,
 		 SavedInput, SaveInput) :-
 
     Schedule ? Input :
-      SavedInput ! Input |
+      SaveInput ! Input |
 	self;
 
     Continue =?= resume,
@@ -469,18 +472,15 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
 			NotesChannel, CommandIn, CommandOut, Stop) :-
 
     BaseRate =< 0 :
-      Halt = _,
-      Input = _,
-      InputChannel  = _,
-      NotesChannel = _,
       Stop = _,
       CommandOut = CommandIn,
-      DEBUG((ChannelName: sink));
+      DEBUG((ChannelName: sink)) |
+	sink_channel + (Count = 0);
 
     BaseRate = test :
       Halt = _,
       DEBUG((ChannelName: test)) |
-	test_channel;
+	test_channel + (Weight = 0);
 
     BaseRate =?= infinite :
       CommandOut = CommandIn |
@@ -508,7 +508,7 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
 	bimolecular_channel;
 
     Input ? inspect(Head, Tail) :
-      Head ! indeterminate(ChannelName(BaseRate)),
+      Head ! indeterminate(ChannelName(BaseRate), []),
       Head' = Tail |
 	self;
 
@@ -546,8 +546,92 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
       CommandOut = [],
       close_channel(InputChannel).
 
+
+sink_channel(ChannelName, Input, InputChannel, NotesChannel,
+			Halt, Stop, Count) :-
+
+    Input ? Request, tuple(Request), arity(Request) =:= 6,
+    arg(1, Request, Functor), string(Functor),
+    Count++ |
+	self;
+
+    Input ? Request, Request =?= withdraw(_, _),
+    Count-- |
+	self;
+
+    Input ? inspect(Head, Tail) :
+      Head ! test(ChannelName(Count), []),
+      Head' = Tail |
+	self;
+
+    Input ? Other,
+    otherwise :
+      DEBUG((ChannelName:unknown - Other)) |
+	self;
+
+    Input =?= [] :
+      ChannelName = _,
+      Count = _,
+      Halt = _,
+      Stop = _,
+      NotesChannel = _,
+      close_channel(InputChannel);
+
+    Halt = halt :
+      ChannelName = _,
+      Count = _,
+      Input = _,
+      NotesChannel = _,
+      Stop = _ ,
+      close_channel(InputChannel);
+
+    unknown(Input),
+    Stop =?= stop :
+      ChannelName = _,
+      Count = _,
+      Halt = _,
+      NotesChannel = _,
+      close_channel(InputChannel).
+	
+
 test_channel(ChannelName, Input, InputChannel,
-	NotesChannel, CommandIn, CommandOut, Stop) :-
+	NotesChannel, CommandIn, CommandOut, Stop, Weight) :-
+
+    Input ? Request, tuple(Request), arity(Request) =:= 6,
+    arg(1, Request, Functor), string(Functor),
+    arg(5, Request, N), integer(N),
+    Weight += N :
+      DEBUG((ChannelName:request = Request)) |
+	self;
+
+    Input ? Request, Request =?= withdraw(_, N),
+    Weight -= N :
+      DEBUG((ChannelName:request = Request)) |
+	self;
+
+    Input ? inspect(Head, Tail) :
+      Head ! test(ChannelName(Weight), []),
+      Head' = Tail |
+	self;
+
+    Input ? Other,
+    otherwise :
+      DEBUG((ChannelName:unknown - Other)) |
+	self;
+
+    Input =?= [] :
+      Stop = _,
+      CommandOut = CommandIn,
+      close_channel(InputChannel),
+      DEBUG((ChannelName:closed - Weight));
+
+    unknown(Input),
+    Stop =?= stop :
+      Input = _,
+      Weight = _,
+      CommandOut = CommandIn,
+      close_channel(InputChannel),
+      DEBUG((ChannelName:stopped!));
 
     CommandIn ? Command :
       CommandOut ! Command,
@@ -556,64 +640,20 @@ test_channel(ChannelName, Input, InputChannel,
 
     CommandIn = [] :
       ChannelName = _,
+      Weight = _,
       Input = _,
       InputChannel = _,
       NotesChannel = _,
       Stop = _,
-      CommandOut = [];
+      CommandOut = [].
 
-    Input ? In :
-      DEBUG((ChannelName:input = In)) |
-	self;
 
-    Input =?= [] :
-      Stop = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      DEBUG((ChannelName:closed));
-
-    Stop =?= stop :
-      Input = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      DEBUG((ChannelName:stopped!)).
-	
 dimerized_channel(ChannelName, Input, InputChannel, BaseRate,
 		NotesChannel, CommandIn, CommandOut, Stop) :-    
 	dimerized + (Requests = AddRequests?, Weight = 0, Blocked = false).
 dimerized(ChannelName, Input, InputChannel, BaseRate,
 	  NotesChannel, CommandIn, CommandOut, Stop,
 	  Requests, AddRequests, Weight, Blocked) :-
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*(Weight*(Weight-1))/2 :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' < 0 |
-	get_active_request(Requests, Requests', Request),
-	dimerized_transmit + (Requests1 = AddRequests1?);
 
     Input ? Request, Request =?= dimer(_, _, _, Multiplier, _),
     Weight += Multiplier :
@@ -646,6 +686,16 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
 	fail(("unrecognized request" : ChannelName - Other)),
 	self;
 
+    Input = [] :
+      BaseRate = _,
+      Stop = _,
+      InputChannel = _,
+      Weight = _,
+      Blocked = _,
+      CommandOut = CommandIn,
+      AddRequests = [],
+      DEBUG((ChannelName:closed(Requests)));
+
     unknown(Input),
     Stop =?= stop :
       BaseRate = _,
@@ -655,6 +705,36 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
       close_channel(InputChannel),
       AddRequests = [],
       DEBUG((ChannelName:stopped(Requests)));
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= false,
+    Cumulant' := Cumulant + BaseRate*(Weight*(Weight-1))/2 :
+      CommandOut ! sum(Cumulant') |
+	self;
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= true :
+      CommandOut ! sum(Cumulant) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
+    Cumulant' >= 0 :
+      CommandOut ! select(Cumulant', Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= true :
+      CommandOut ! select(Cumulant, Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
+    Cumulant' < 0 |
+	get_active_request(Requests, Requests', Request),
+	dimerized_transmit + (Requests1 = AddRequests1?);
 
     CommandIn = [] :
       ChannelName = _,
@@ -667,17 +747,7 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
       Weight = _,
       Blocked = _,
       close_channel(InputChannel),
-      CommandOut = CommandIn;
-
-    Input = [] :
-      BaseRate = _,
-      Stop = _,
-      InputChannel = _,
-      Weight = _,
-      Blocked = _,
-      CommandOut = CommandIn,
-      AddRequests = [],
-      DEBUG((ChannelName:closed(Requests))).
+      CommandOut = CommandIn.
 
   dimerized_transmit(ChannelName, Input, InputChannel, BaseRate,
 		NotesChannel, CommandIn, CommandOut, Stop,
@@ -747,36 +817,6 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
 	    Sends, AddSends, SendWeight,
 	    Receives, AddReceives, ReceiveWeight, Blocked) :-
 
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*SendWeight*ReceiveWeight :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked = false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' < 0 |
-	get_active_request(Sends, Sends', Send),
-	bimolecular_send + (Receives1 = AddReceives1?);
-
     Input ? Request, Request =?= send(_, _, _, Multiplier, _),
     SendWeight += Multiplier :
       Blocked = _,
@@ -812,6 +852,18 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
 	fail(("unrecognized request" : ChannelName - Other)),
 	self;
 
+    Input = [] :
+      BaseRate = _,
+      Blocked = _,
+      InputChannel = _,
+      ReceiveWeight = _,
+      SendWeight = _,
+      Stop = _,
+      CommandOut = CommandIn,
+      AddSends = Receives,
+      AddReceives = [],
+      DEBUG((ChannelName:closed(Sends)));
+
     unknown(Input),
     Stop =?= stop :
       BaseRate = _,
@@ -823,6 +875,36 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
       AddSends = Receives,
       AddReceives = [],
       DEBUG((ChannelName:stopped(Sends)));
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= false,
+    Cumulant' := Cumulant + BaseRate*SendWeight*ReceiveWeight :
+      CommandOut ! sum(Cumulant') |
+	self;
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= true :
+      CommandOut ! sum(Cumulant) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
+    Cumulant' >= 0 :
+      CommandOut ! select(Cumulant', Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= true :
+      CommandOut ! select(Cumulant, Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked = false,
+    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
+    Cumulant' < 0 |
+	get_active_request(Sends, Sends', Send),
+	bimolecular_send + (Receives1 = AddReceives1?);
 
     CommandIn = [] :
       AddReceives = _,
@@ -838,19 +920,7 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
       SendWeight = _,
       Stop = _,
       close_channel(InputChannel),
-      CommandOut = CommandIn;
-
-    Input = [] :
-      BaseRate = _,
-      Blocked = _,
-      InputChannel = _,
-      ReceiveWeight = _,
-      SendWeight = _,
-      Stop = _,
-      CommandOut = CommandIn,
-      AddSends = Receives,
-      AddReceives = [],
-      DEBUG((ChannelName:closed(Sends))).
+      CommandOut = CommandIn.
 
 
 bimolecular_send(ChannelName, Input, InputChannel, BaseRate,
@@ -984,7 +1054,7 @@ instantaneous(ChannelName, Input, InputChannel,	NotesChannel,
 	self;
 
     Input ? inspect(Head, Tail) :
-      Head ! instantaneous(ChannelName, Content?),
+      Head ! instantaneous(ChannelName(infinite), Content?),
       Head' = Tail |
 	copy_requests(Sends, Content, Content'?),
 	copy_requests(Receives, Content', []),
@@ -994,17 +1064,6 @@ instantaneous(ChannelName, Input, InputChannel,	NotesChannel,
     otherwise |
 	fail(("unrecognized request" : ChannelName - Other)),
 	self;
-
-    Halt = halt :
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      Receives = _,
-      AddReceives = _,
-      Sends = _,
-      AddSends = _,
-      close_channel(InputChannel);
 
     Input = [] :
       ChannelName = _,
@@ -1023,7 +1082,18 @@ instantaneous(ChannelName, Input, InputChannel,	NotesChannel,
       AddSends = Receives,
       AddReceives = [],
       close_channel(InputChannel),
-      DEBUG((ChannelName:stopped(Sends))).
+      DEBUG((ChannelName:stopped(Sends)));
+
+    Halt = halt :
+      ChannelName = _,
+      Input = _,
+      NotesChannel = _,
+      Stop = _,
+      Receives = _,
+      AddReceives = _,
+      Sends = _,
+      AddSends = _,
+      close_channel(InputChannel).
 
 
 instantaneous_receive(ChannelName, Input, InputChannel, NotesChannel,
