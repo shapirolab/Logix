@@ -39,7 +39,6 @@ STOPPED => Reply = _.
 ** non-standard weighters.
 */
 
-%SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
 SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
 %SPIOFFSETS => {unbound, unbound, unbound, unbound, unbound}.
 
@@ -1455,6 +1454,7 @@ execute_post(MathOffset, PostId, OpList, Value, Chosen, Reply) :-
     true :
       Common = {PostId, Messages, Value, Chosen},
       Messages = AddMessages? |
+	post_pass0(OpList, Instantaneous, 0, Count, Ok),
 	post_pass1,
 	post_pass2.
 
@@ -1517,23 +1517,16 @@ close_channels(Channels, N, Reply)  :-
 
 /************************ post procedures ********************************/
 
-post_pass1(MathOffset, OpList, Common, Ok) :-
+post_pass0(OpList, Instantaneous, Number, Count, Ok) :-
 
     OpList ? Operation,
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
     integer(Multiplier), Multiplier > 0,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_INSTANTANEOUS) |
-	post_instantaneous;
-
-    OpList ? Operation,
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    integer(Multiplier), Multiplier > 0,
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_BIMOLECULAR) :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_INSTANTANEOUS),
+    Number++ :
+      Instantaneous ! Operation |
 	self;
 
     OpList ? Operation,
@@ -1541,8 +1534,15 @@ post_pass1(MathOffset, OpList, Common, Ok) :-
     integer(Multiplier), Multiplier > 0,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_HOMODIMERIZED) :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_BIMOLECULAR) |
+	self;
+
+    OpList ? Operation,
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    integer(Multiplier), Multiplier > 0,
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_HOMODIMERIZED) |
 	self;
 
     OpList ? Operation,
@@ -1560,12 +1560,12 @@ post_pass1(MathOffset, OpList, Common, Ok) :-
 	self;
 
     OpList =?= [] :
-      Common = _,
-      MathOffset = _,
+      Count = Number,
+      Instantaneous = [],
       Ok = true;
 
     otherwise |
-	post_pass1_skip.
+	post_pass0_skip.
 
   update_channel_type(Index, MessageType, RandomFlag, FinalType) :-
 
@@ -1589,28 +1589,76 @@ post_pass1(MathOffset, OpList, Common, Ok) :-
     bitwise_or(SPI_HOMODIMERIZED_PRIME, RandomFlag, ChannelType) :
       FinalType = ChannelType.
 
-  post_pass1_skip(MathOffset, OpList, Common, Ok) :-
+  post_pass0_skip(OpList, Instantaneous, Number, Count, Ok) :-
 
     OpList ? Operation,
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
     integer(Multiplier), Multiplier =< 0 |
-        post_pass1;
+        post_pass0;
 
     OpList ? Operation,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
     bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_SINK) |
-	post_pass1;
+	post_pass0;
 
     otherwise :
-      Common = _,
-      MathOffset = _,
+      Count = Number,
+      Instantaneous = [],
       Ok = invalid_transmission - OpList.
 
 
-post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
+post_pass1(MathOffset, Common, Instantaneous, Count, Ok, Ok1) :-
 
-    Ok =?= true,
+    Ok = true,
+    Count-- =:= 1,
+    Instantaneous ? Operation,
+    Instantaneous' =?= [],
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType^) |
+	post_instantaneous;
+
+    Ok = true,
+    Count-- > 1,
+    Decrement := real(1)/Count :
+      execute(MathOffset, {RAN, 0, Uniform}) |
+	choose_instantaneous_operation(Uniform, Decrement,
+				       Instantaneous, Instantaneous',
+				       Operation, Channel, ChannelType),
+	post_instantaneous;
+
+    otherwise :
+      Common = _,
+      Count = _,
+      Instantaneous = _,
+      MathOffset = _,
+      Ok1 = Ok .
+
+
+  choose_instantaneous_operation(Uniform, Decrement, I1, I2, Operation,
+				 Channel, ChannelType) :-
+
+    I1 ? Op,
+    I1' =\= [],
+    Uniform > Decrement,
+    Uniform -= Decrement :
+      I2 ! Op |
+	self;
+
+    I1 ? Op,
+    otherwise,
+    arg(SPI_MS_CHANNEL, Op, Ch),
+    read_vector(SPI_CHANNEL_TYPE, Ch, CT) :
+      Decrement = _,
+      Uniform = _,
+      Channel = Ch,
+      ChannelType = CT,
+      I2 = I1',
+      Operation = Op.
+
+post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok1) :-
+
+    Ok1 =?= true,
     OpList ? Operation,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
@@ -1625,7 +1673,7 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
 	queue_message + (Ambient = []),
 	self;
 
-    Ok =?= true,
+    Ok1 =?= true,
     OpList ? Operation,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
@@ -1641,7 +1689,7 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
 	queue_message,
 	self;
 
-    Ok =?= true,
+    Ok1 =?= true,
     OpList ? Operation,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
@@ -1650,14 +1698,14 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
     Multiplier =< 0 |
 	self;
 
-    Ok =?= true,
+    Ok1 =?= true,
     OpList ? Operation,
     arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     Type =?= SPI_SINK |
 	self;
 
-    Ok =?= true,
+    Ok1 =?= true,
     OpList =?= [] :
       Common = _,
       Messages = _,
@@ -1668,7 +1716,7 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
       Common = _,
       Messages = _,
       OpList = _,
-      Reply = Ok,
+      Reply = Ok1,
       AddMessages = [].
 
 /*
@@ -1676,7 +1724,7 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
  * Suffix R refers to a message request element.
  */ 
 
-post_instantaneous(MathOffset, OpList, Common, Ok,
+post_instantaneous(MathOffset, Common, Instantaneous, Count, Ok1,
 		   Operation, Channel, ChannelType) :-
 
     arity(Operation) =:= SPI_MS_SIZE,
@@ -1751,11 +1799,12 @@ post_instantaneous(MathOffset, OpList, Common, Ok,
       Channel = _,
       ChannelType = _,
       Common = _,
+      Count = _,
+      Instantaneous = _,
       MathOffset = _,
-      OpList = _,
-      Ok = invalid_transmission - Operation.
+      Ok1 = invalid_transmission - Operation.
 
-  post_instantaneous_random(MathOffset, OpList, Common, Ok,
+  post_instantaneous_random(MathOffset, Common, Instantaneous, Count, Ok1,
 			   Operation, MTX, Ambient, Anchor, Uniform, Weight) :-
 
     Select := Uniform*Weight |
@@ -1763,7 +1812,7 @@ post_instantaneous(MathOffset, OpList, Common, Ok,
 	do_instantaneous_transmit + (EndR = Message).
 
 
-do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
+do_instantaneous_transmit(MathOffset, Common, Instantaneous, Count, Ok1,
 			  Operation, MTX, Ambient, EndR, Message) :-
 
     arg(SPI_MS_CID, Message, RCIdQ),
@@ -1776,13 +1825,14 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
     arg(SPI_MS_CHANNEL, Operation, ChannelR),
     arg(SPI_MS_TAGS, Operation, OperationTag),
     Ambient =?= [] :
+      Count = _,
       EndR = _,
+      Instantaneous = _,
       MathOffset = _,
-      OpList = _,
       ValueQ = ValueR,
       ChosenQ = MessageTag,
       ChosenR = OperationTag,
-      Ok = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
+      Ok1 = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
 	discount(MsList);
 
     arg(SPI_MS_CID, Message, RCIdQ),
@@ -1797,13 +1847,14 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
     Ambient =\= [],
     arg(SPI_AMBIENT_CHANNEL, Message, AmbientQ),
     Ambient =\= AmbientQ :
+      Count = _,
       EndR = _,
+      Instantaneous = _,
       MathOffset = _,
-      OpList = _,
       ValueQ = ValueR,
       ChosenQ = MessageTag,
       ChosenR = OperationTag,
-      Ok = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
+      Ok1 = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
 	discount(MsList);
 
     Ambient =\= [],
@@ -1822,7 +1873,7 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
     Message' =?= EndR :
       Operation = _,
       MTX = _ |
-	post_pass1;
+	post_pass1 + (Ok = true);
 
     arg(SPI_COMMON, Message, CommonQ),
     arg(SPI_OP_CHOSEN, CommonQ, Chosen), not_we(Chosen),
@@ -1844,7 +1895,7 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
       Ambient = _,
       Operation = _,
       MTX = _ |
-	post_pass1;
+	post_pass1 + (Ok = true);
 
     % This can happen (to the monitor). 
     Common = {_, _, _, Chosen}, not_we(Chosen) :
@@ -1853,7 +1904,7 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
       Operation = _,
       Message = _,
       MTX = _ |
-	post_pass1;
+	post_pass1 + (Ok = true);
 
     % This Message has the same Chosen as the Operation -
     % mixed communications which ARE NOT homodimerized.
@@ -1874,7 +1925,7 @@ do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
       Ambient = _,
       Operation = _,
       MTX = _ |
-	post_pass1.
+	post_pass1 + (Ok = true).
 
 
 /*************************** step procedures *********************************/
@@ -2535,38 +2586,39 @@ queue_message(MessageType, RCId, Channel, Multiplier, Tags, Ambient,
 			Common, Message) :-
 
     MessageType =?= SPI_SEND,
-    read_vector(SPI_SEND_ANCHOR, Channel, Anchor),
     read_vector(SPI_SEND_WEIGHT, Channel, Weight),
-    Weight += Multiplier :
+    Weight += Multiplier,
+    read_vector(SPI_SEND_ANCHOR, Channel, Anchor) :
       store_vector(SPI_SEND_WEIGHT, Weight', Channel),
       Message = {MessageType, RCId, Channel, Multiplier,
 			Tags, 0, Common, Links?, Ambient} |
 	queue_to_anchor;
 
     MessageType =?= SPI_RECEIVE,
-    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, Weight),
-    Weight += Multiplier :
+    Weight += Multiplier,
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor) :
       store_vector(SPI_RECEIVE_WEIGHT, Weight', Channel),
       Message = {MessageType, RCId, Channel, Multiplier,
 			0, Tags, Common, Links?, Ambient} |
 	queue_to_anchor;
 
     MessageType =?= SPI_DIMER,
-    read_vector(SPI_DIMER_ANCHOR, Channel, Anchor),
-    Tags = {SendTag, ReceiveTag},
     read_vector(SPI_DIMER_WEIGHT, Channel, Weight),
-    Weight += Multiplier :
+    Weight += Multiplier,
+    read_vector(SPI_DIMER_ANCHOR, Channel, Anchor),
+    Tags = {SendTag, ReceiveTag} :
       store_vector(SPI_DIMER_WEIGHT, Weight', Channel),
       Message = {MessageType, RCId, Channel, Multiplier,
 			SendTag, ReceiveTag, Common, Links?, Ambient} |
 	queue_to_anchor.
 
-queue_to_anchor(Message, Anchor, Links) :-
+queue_to_anchor(Message, Anchor, Channel, Links) :-
 
     arg(SPI_MESSAGE_LINKS, Anchor, AnchorLinks),
     read_vector(SPI_PREVIOUS_MS, AnchorLinks, PreviousMessage),
     arg(SPI_MESSAGE_LINKS, PreviousMessage, PreviousLinks) :
+      store_vector(SPI_BLOCKED, FALSE, Channel),
       make_vector(2, Links, _),
       store_vector(SPI_PREVIOUS_MS, PreviousMessage, Links),
       store_vector(SPI_NEXT_MS, Anchor, Links),
