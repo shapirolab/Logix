@@ -1,0 +1,289 @@
+#!/usr/local/bin/perl
+my @START = ('MCS', 'CS', '');             # default input prefixes
+my $END_OF_HEADING = "\\\\smallskip";      # a line following the title.
+my @SEPARATORS = ('and', '&', ',', ';');
+
+my $MAX_LINE = 79;
+my $DOC_PATH = "trs/";                     # default directory path prefix
+
+my $OutputId =  "CS";
+my $InputFile = "abstracts.tex";
+my @Abstracts;
+my $Authors;
+my @Authors;
+my $Title;
+my $Lines;
+my $Filtered;
+
+
+my %IGNORE = (
+	      "bf" => 1,
+	      "it" => 1,
+	      "rm" => 1,
+	      "sl" => 1,
+	      "tt" => 1,
+	      "cal" => 1,
+	      "vfill" => 1,
+	      "eject" => 1,
+	      "endpage" => 1,
+	      "linebreak" => 1,
+	      "bigskip" => 1,
+	      "medskip" => 1,
+	      "smallskip" => 1,
+	      "noindent" => 1,
+	      "quad" => 1,
+	      "bye" => 1,
+	       "\"" => 1,
+	       "\." => 1,
+	       "\^" => 1,
+	       "'" => 1,
+	       "`" => 1,
+	       "=" => 1,
+	       "!" => 1,
+	       "/" => 1,
+	       "~" => 1,
+);
+
+my %REPLACE = (
+              "ldots" => "...",
+              "par" => "<P>",
+	       "," => " ",
+);
+
+sub replace
+{
+  my $part = shift;
+  $part =~ s/\{//g;
+  $part =~ s/\}//g;
+  $part =~ s/\$//g;
+  $part =~ s/~/ /g;
+  $Filtered .= $part;
+}
+	       
+
+sub backslash
+{
+  my $reply = "";
+
+  $_ = shift;
+  if (/^(\W)(.*)$/) {
+    $reply = $2;
+    my $replace = $REPLACE{$1};
+    if ($replace) {
+      $Filtered .= $replace;
+    }
+    elsif (!$IGNORE{$1}) {
+      $Filtered .= $1;
+    }
+  }
+  else {
+    (/^(\w+)(.*)$/);
+    my $word = $1;
+    $reply = $2;
+    if ($IGNORE{$word}) {
+      s/^ *(.*)$/$1/;
+    }
+    elsif ($REPLACE{$word}) {
+      $Filtered .= $REPLACE{$word};
+    }
+    else {
+      $Filtered .= "\\$word";
+    }
+  }
+  $Filtered =~ s/<P><P>/<P>/g;
+  return $reply;
+}
+
+
+sub filter_tex
+{
+  my @lines = split /\\/, shift, 2;
+
+  $Filtered = "";
+  while (scalar @lines) {
+    my ($part, $rest) = @lines;
+    replace($part);
+    if ($rest) {
+      my $result = backslash($rest);
+      @lines = split /\\/, $result, 2;
+    }
+    else {
+      last;
+    }
+  }
+  $Filtered =~ s/^(.*)% *$/$1/;
+  return $Filtered;
+}
+
+sub output_filtered_lines
+{
+  my $line = "";
+  my @text = split / +/, $Filtered;
+  my $word;
+
+  foreach $word (@text) {
+    if ($word eq "\n\n") {
+      print "$line\n\n";
+      $line = " ";
+    }
+    elsif (length($line) + length($word) > $MAX_LINE - 1 &&
+        length($line) > 1) {
+      print "$line\n";
+      $line = "$word";
+    }
+    else {
+      $line .= " $word";
+    }
+  }
+  print "$line\n";
+}
+
+sub read_abstracts
+{
+  my $lines = undef;
+  while(<ABSTRACTS>) {
+    chomp;
+    $_ =~ s/^(.*)\s\s+(.*)$/$1 $2/g;
+    if (!defined($lines)) {
+      $lines = $_;
+    }
+    else {
+      $lines .= ($_ ne "") ? " $_" : "\\par";
+    }
+  }
+  @Abstracts = split /\\offset\{\d+pt\}/, $lines;
+  shift @Abstracts;
+}
+  
+sub next_abstract
+{
+  $Lines = shift @Abstracts;
+
+  if ($Lines =~ s/^\{\{\\bf (\D*)(\d+)-+(\d+)\}\}(.*)$/$4/) {
+    foreach (@START) {
+      if ($_ eq $1) {
+	return "$2-$3";
+      }
+    }
+    print "ID does not match any of @START for \" $1$2--$3\"\n";
+    exit;
+  }
+  ($_) = split /\}\}/, $Lines;
+  print "Invalid ID format: \"$_\}\}\"\n";
+  exit;
+}
+
+sub extract_author
+{
+  @author = undef;
+
+  $Authors =~ s/^ +(\S.*)$/$1/;
+  while ($Authors) {
+    my $part = "";
+    ($part, $Authors) = split / /, $Authors, 2;
+    if (!$part) {
+      print STDERR "No more parts\n";
+      return undef;
+    }
+    my $separator;
+    foreach $separator (@SEPARATORS) { 
+      if ($separator =~ /\W/) {
+	my $x = index $part, $separator;
+	if ($x >= 0) {
+	  if ($x > 0) {
+	    push @author, (substr $part, 0, $x);
+	  }
+	  if ($x < length($part) - 1) {
+	    $Authors = (substr $part, $x+1) . ' ' . $Author;
+	  }
+	  return @author;
+	}
+      }
+      elsif ($part eq $separator) {
+	return @author;
+      }
+    }
+    push @author, $part;
+  }
+  return @author;
+}
+
+sub extract_authors
+{
+  ($Authors, $Lines) = split /:/, $Lines, 2;
+  $Authors =~ s/^s+(.*)/$1/;
+  $Lines =~ s/^s+(.*)/$1/;
+
+  filter_tex($Authors);
+  $Authors = $Filtered;
+
+  while ($Authors) {
+    my @author = extract_author();
+    my $name = join ' ', @author;
+    # Press out any double-spaces.
+    $name =~ s/^ *(\S+)  (.*)$/$1 $2/g;
+    push @Authors, $name;
+  }
+  $Authors = join ', ', @Authors;
+}
+
+sub extract_title
+{
+  ($Title, $Lines) = split /$END_OF_HEADING/, $Lines, 2;
+  filter_tex($Title);
+  $Title = $Filtered;
+  $Lines =~ s/^s+(.*)/$1/;
+}
+
+# main
+
+open(ABSTRACTS, $InputFile) or die "Can't open $InputFile - $!\n";
+
+read_abstracts();
+
+while (scalar @Abstracts) {
+  my ($year, $index) = split /-/, next_abstract();
+  my $docid  = "$year-$index";
+  my $report = $OutputId . $docid;
+  my $path   = $DOC_PATH . $report;
+
+  undef @Authors;
+  extract_authors();
+
+  extract_title();
+
+  mkdir $path, 7*64 + 7*8 +5;
+  open(STDOUT, "> $path/abstract.html") or
+    die "Can't open : $path/abstract.html - $!\n";
+  print
+    "<dl><dt><b>$report</b>. (Full text is available in 
+	     <a href=/Papers/CSreports/reps$year/$docid.ps.Z>
+		     Postscript</a>)\n";
+
+  filter_tex($Lines);
+  $Filtered =~ s/^ *(\S.*)/$1/;
+  print "<dd><strong>$Authors</strong><br><em>$Title.</em><p>\n";
+  output_filtered_lines();
+  print "</dl>";
+  close STDOUT;
+  open(STDOUT, "> $path/header.html") or
+    die "Can't open : $path/header.html - $!\n";
+  print
+    "<dl><dt><b>
+     <a href=/Papers/trs/$report/abstract.html>$report</a></b>
+     <dd><strong>$Authors</strong>, 
+     <em>$Title.</em>\n</dl>\n";
+  close(STDOUT);
+
+  open(STDOUT, "> $path/data.rec") or
+    die "Can't open : $path/header.html - $!\n";
+  print "ID $report\n";
+  print "YEAR $year\n";
+  print "AUTHOR $Authors\n";
+  print "TITLE $Title\n";
+  print "ABSTRACT\n";
+  $Filtered =~ s/<P>/ \n\n /g;
+  output_filtered_lines();
+  close STDOUT;
+}
+close ABSTRACTS;
