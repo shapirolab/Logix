@@ -346,7 +346,8 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
 
 inspect_channel(SpiChannel/*, Format*/, Status) :-
 
-    read_vector(SPI_CHANNEL_TYPE, SpiChannel, Type),
+    read_vector(SPI_CHANNEL_TYPE, SpiChannel, FullType),
+    bitwise_and(FullType, SPI_TYPE_MASK, Type),
     read_vector(SPI_CHANNEL_RATE, SpiChannel, Rate),
     read_vector(SPI_SEND_ANCHOR, SpiChannel, SendAnchor),
     read_vector(SPI_RECEIVE_ANCHOR, SpiChannel, ReceiveAnchor),
