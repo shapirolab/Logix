@@ -169,8 +169,8 @@ sub parse_process
 
     ($user, $pid, $nice, $class, $time, $comm) = split;
 
-    if ($users{$user} or $commands{$comm} or 
-	($class ne "TS" and $class ne "ts")) {
+    if ($users{$user} || $commands{$comm} || 
+	($class ne "TS" && $class ne "ts")) {
 	return 0;
     }
 
@@ -334,8 +334,8 @@ sub collect_current_processes
     @ps_lines = `$pscomm`;
     shift(@ps_lines);
     foreach (@ps_lines) {
-	if (parse_process() and
-	    $NICE_DEFAULT <= $nice and $nice <= $NICE_COVENTRY) {
+	if (parse_process() &&
+	    $NICE_DEFAULT <= $nice && $nice <= $NICE_COVENTRY) {
 	    $count++;
 	    $current_processes{$pid} = [$user,$nice,$seconds,$pid,$comm];
 	}
@@ -351,7 +351,7 @@ sub drop_terminated_processes
     my $current, $pid, $process;
 
 if ($debug) {# debug
-    if ($debug and !defined(%current_processes)) {
+    if ($debug && !defined(%current_processes)) {
 	print "No current processes\n";
     }
 }# endebug
@@ -395,16 +395,16 @@ sub send_to_coventry
 	if (defined($previous)) {
 	    $used = $seconds - $previous->[2];
 	    $bound = ($nice >= $NICE_COVENTRY);
-	    if ($bound or $used >= $GREED_BOUND) {
+	    if ($bound || $used >= $GREED_BOUND) {
 		# do not omit the parentheses
 		$changed = 
 		    $seconds >= 
 			$THRESHHOLD*($NICE_RADIX**($nice - $NICE_DEFAULT))
-			    and not $bound;
+			    && ! $bound;
 		$nice += $NICE_INCR if $changed;
 		$freedid = "$user($nice)";
 		$process = [$user, $nice, $seconds, $pid, $comm];
-		if (defined($freed_processes{$freedid}) or $bound) {
+		if (defined($freed_processes{$freedid}) || $bound) {
 		    push @pids, $pid;
 		    push @coventry, $process;
 if ($debug) {# debug
@@ -455,7 +455,7 @@ sub free_from_coventry
 	$banned = shift(@banned_processes);
 	($user, $nice, $seconds, $pid, $comm) = @{$banned};
 	$freedid = "$user($nice)";
-	if (defined($freed_processes{$freedid}) or
+	if (defined($freed_processes{$freedid}) ||
 	    $nice == $NICE_COVENTRY) {
 	    # A process of this user with the same nice value has already
 	    # been freed, or this process has been permanently relegated! 
