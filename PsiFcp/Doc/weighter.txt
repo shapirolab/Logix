@@ -1,0 +1,29 @@
+Channels with finite rates are weighted for selection using the
+following default computations.  When a multiplier is not specified
+explicitly in a <transmission>, it defaults to 1.
+
+  bimolecular weight =
+                (baserate of channel) *
+          (sum of <send> multipliers) * (sum of <receive> multipliers)
+
+  homodimerized weight =
+                (baserate of channel) *
+        ((sum of <dimer> multipliers) * (sum of <dimer> multipliers - 1))/2
+
+These computations are based on the analysis in "Exact stochastic
+simulation of coupled chemical reaction", D.T. Gillespie, Journal of
+Physical Chemistry, volume 81, pps 2340-2361.
+
+
+The user may specify custom computations using the notation for
+<weighter_specification> in Documentation/BNF; the computation must
+be explicitly coded in the module Logix/<emulator name>/psiweight.c .
+
+
+The default <weighter_specification> for a Psi session may be changed
+dynamically by a Psi macro call:
+
+    weighter(<weighter_specification>)
+
+See macros.txt for details.
+
