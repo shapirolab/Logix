@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.3 2004/10/12 16:37:37 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.4 2004/10/21 15:52:43 bill Exp $ */
 /*
  **	fcp.h  -  defines data structures, machine word format
  **		  and various macros
  **	NOTE when changing macros, to leave things as single occurence.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 2004/10/12 16:37:37 $
+ **		       	     $Date: 2004/10/21 15:52:43 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.3 $
+ **			     $Revision: 1.4 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/fcp.h,v $
  */
 
@@ -82,7 +82,7 @@ typedef trailT	*trailP;
  ** Heap
  */
   
-#define	Def_HeapSize	2*512*1024*2*sizeof(heapT)
+#define	Def_HeapSize	5000*1024*2*sizeof(heapT)
 #define Heap_TH		200*1024
 
 #define Null	((heapP) 0)
