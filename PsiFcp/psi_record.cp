@@ -29,7 +29,7 @@ run(Goal, File, Cutoff) :-
 	psi_monitor#scheduler(Scheduler),
 	write_channel(record(Stream), Scheduler, Scheduler'),
 	write_channel(cutoff(Cutoff), Scheduler'),
-	computation#Goal,
+	computation#[Goal, events(Events)],
 	file#put_file(File, Out?, write, Ok),
 	filter_data,
 	run_ok;
@@ -47,7 +47,7 @@ run(Goal, File, Cutoff) :-
 		write"(File) - Ok)).
 
 
-filter_data(Stream, Out) :-
+filter_data(Stream, Events, Out) :-
 
     Stream ? Number, number(Number),
     convert_to_string(Number, N),
@@ -75,8 +75,19 @@ filter_data(Stream, Out) :-
 	self;
 
     Stream =?= [] :
+      Events = _,
       Out = [] ;
 
     otherwise :
+      Events = _,
       Out = [QUERY, EOL] |
-	fail(Stream).
+	fail(Stream);
+
+    Events ? Event,
+    Event =\= aborted |
+	self;
+
+    unknown(Stream),
+    Events ? aborted :
+      Events' = _,
+      Out = [].
