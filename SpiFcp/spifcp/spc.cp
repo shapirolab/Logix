@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/10/13 10:05:51 $
+		       	$Date: 2002/11/16 11:49:20 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -553,8 +553,8 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
     Close =?= [] :
       ForkAsk = _,
       AddAsk = [],
-      AddTell = [],
-      NewBody = Body;
+      NewBody = Body |
+	continue_with_scheduler;
 
     ForkTell =?= [],
     Close =\= [] :
@@ -591,6 +591,25 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
     ForkAsk =?= [],
     Close =\= [] :
       List = [Close].
+
+  /* A little kluge for lint */
+  continue_with_scheduler(Body, AddTell) :-
+
+    Body =?= (Goal, _),
+    Goal =\= (_ # _), Goal =\= true :
+      AddTell = [];
+
+    Body =?= (_, Body'),
+    otherwise |
+	self;
+
+    Body =\= (_, _),
+    Body =\= (_ # _), Body =\= true :
+      AddTell = [];
+
+    Body =\= (_, _),
+    otherwise :
+      AddTell = [(`"Scheduler." = `"_")].
 
 
 dimerize_requests(Tell, NewTell) :-
