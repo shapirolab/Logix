@@ -44,3 +44,10 @@ Version Aspic-release.2004-05-28.tar.gz
 Fixed various bugs.
 Improved Channel formatting.
 Constructed Aspic-release.
+
+Version Aspic-release.2004-10-24.tar.gz
+
+Improved work area allocation (fcp.?); permit up to -h120000.
+Compiles biospi modules in interpret mode.
+Added randomize and serialize.
+Edited spidbg help text.
