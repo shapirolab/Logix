@@ -70,9 +70,9 @@ initialize(In) :-
 **    global_channels(List)
 **    global_channels(List, Scheduler^)
 ****************************************************************************
-**    get_public_channels(List?^)
-**    public_channels(List)
-**    public_channels(List, Scheduler^)
+**    get_public_channels(SortedList?^)
+**    public_channels(SortedList)
+**    public_channels(SortedList, Scheduler^)
 **    new_channel(ChannelName, Channel, BaseRate)
 **    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    options(New, Old?^)
@@ -91,7 +91,11 @@ initialize(In) :-
 ** State
 **
 **   Options - for spi_utils functions
-**   Publics - sorted (bounded) list of public channel {name,baserate}
+**   Parameters - sorted (bounded) list of global parameters:
+**                                       {name,value}
+**   Publics - sorted (bounded) list of public channel:
+**                                       {name,channel,baserate}
+**                                       {name,channel,computeweight,baserate}
 **   Scheduler - Channel to Scheduling input
 **
 ** Side-effects
@@ -101,11 +105,12 @@ initialize(In) :-
 
 serve(In, Options, Ordinal, SpiOffsets, DefaultWeighter) :-
 	Publics = [{0, _, -1, ""}, {[], _, -1, ""}],
+	Parameters = [{0, _}, {[], _}],
 	processor#link(lookup(math, MathOffset), OkMath),
 	server,
 	start_scheduling.
 
-server(In, Options, Scheduler, Publics) :-
+server(In, Options, Scheduler, Parameters, Publics) :-
 
     In ? debug(Debug) :
       Debug = Debug'?,
@@ -121,13 +126,17 @@ server(In, Options, Scheduler, Publics) :-
       write_channel(end_record(Stream'), Scheduler) |
 	self;
 
+/*************************** Obsolescent ***********************************/
     In ? global_channels(List) |
-	merge_public_channels(List, Publics, Publics', "", Scheduler, _),
+	merge_public_objects(List, Publics, Publics', "",
+			     Parameters, Parameters', 0,
+			     Scheduler, _),
 	self;
 
     In ? global_channels(List, ReadyScheduler) |
-	merge_public_channels(List, Publics, Publics', "",
-			      Scheduler, ReadyScheduler),
+	merge_public_objects(List, Publics, Publics', "",
+			     Parameters, Parameters', 0,
+			     Scheduler, ReadyScheduler),
 	self;
 
     In ? get_global_channels(List),
@@ -135,20 +144,24 @@ server(In, Options, Scheduler, Publics) :-
       List = List'? |
 	copy_public(Publics, List', _),
 	self;
-
-    In ? public_channels(List) |
-	merge_public_channels(List, Publics, Publics', "", Scheduler, _),
-	self;
-
-    In ? public_channels(List, ReadyScheduler) |
-	merge_public_channels(List, Publics, Publics', "",
-			      Scheduler, ReadyScheduler),
-	self;
+/****************************************************************************/
 
     In ? get_public_channels(List),
     we(List) :
       List = List'? |
 	copy_public(Publics, List', _),
+	self;
+
+    In ? public_channels(List) |
+	merge_public_objects(List, Publics, Publics', 0,
+			     Parameters, Parameters', 0,
+			     Scheduler, _),
+	self;
+
+    In ? public_channels(List, ReadyScheduler) |
+	merge_public_objects(List, Publics, Publics', 0,
+			     Parameters, Parameters', 0,
+			     Scheduler, ReadyScheduler),
 	self;
 
     In ? New , New = new_channel(_Creator, _Channel, _BaseRate) :
@@ -176,6 +189,7 @@ server(In, Options, Scheduler, Publics) :-
 	self;
 
     In ? reset(DefaultWeighter, SpiOffsets, Ordinal) :
+      Parameters = _,
       Publics = _,
       close_channel(Scheduler) |
 	serve;
@@ -199,53 +213,90 @@ server(In, Options, Scheduler, Publics) :-
 
     In =?= [] :
       Options = _,
+      Parameters = _,
       Publics = _,
       close_channel(Scheduler).
 
 /***************************** Utilities ************************************/
 
-/* merge_public_channels
+/* merge_public_objects
 **
 ** Input:
 **
-**   List - sorted list in {Name, Channel^, BaseRate}.
-**   Publics - (bounded) sorted list of {Name, BaseRate}.
-**   Last - Name of previous element of Publics - initially "".
+**   List - sorted list of: Name(Value)
+**                          Name(Channel^, BaseRate)
+**                          Name(Channel^, ComputeWeight, BaseRate)
+**   Parameters - (bounded) sorted list of:
+**                          Name(Value).
+**   Publics - (bounded) sorted list of:
+**                          Name(Channel, BaseRate, ComputeWeight)
+**   LastParameter - Name of previous element of Parameters - initially 0.
+**   LastPublic - Name of previous element of Publics - initially 0.
 **   Scheduler - FCP channel to scheduling monitor.
 **
 ** Output:
 **
+**   NewParameters - updated parameter list.
 **   NewPublics - updated public list.
+**   ReadyScheduler - Scheduler.
 **
 ** Processing:
 **
-**   Merge new Name Channels to NewPublics.
+**   Merge (new) Named Channels to NewPublics,
+**         (new) Named Parameters to NewParameters
 **   Call scheduling to create each new Channel.
+**   Call computation to unify each new Parameter.
 */
 
-merge_public_channels(List, Publics, NewPublics, Last,
-		      Scheduler, ReadyScheduler) :-
+merge_public_objects(List, Publics, NewPublics, LastPublic,
+		     Parameters, NewParameters, LastParameter,
+		     Scheduler, ReadyScheduler) :-
 
     List =?= [] :
-      Last = _,
+      LastPublic = _,
+      LastParameter = _,
       ReadyScheduler = Scheduler,
-      NewPublics = Publics;
+      NewPublics = Publics,
+      NewParameters = Parameters;
 
-    List ? Name(NewChannel, BaseRate),
-    Last @< Name,
+    List ? Name(Value), string(Name),
+    Parameters ? Parameter, Parameter =?= Name(ParameterValue) :
+      LastParameter = _,
+      Value = ParameterValue,
+      NewParameters ! Parameter,
+      LastParameter' = Name |
+	self;
+
+    List = [Name(_) | _], string(Name),
+    Parameters ? Parameter, Parameter = LastParameter'(_),
+    LastParameter' @< Name :
+      LastParameter = _,
+      NewParameters ! Parameter |
+	self;
+
+    List ? Name(Value), string(Name),
+    Parameters =?= [Name1(_) | _],
+    LastParameter @< Name, Name @< Name1 :
+      List'' = [Name(Value) | List'],
+      Parameters' = [Name(SystemValue) | Parameters] |
+	computation # dictionary(add, Name, SystemValue, Result),
+	wait_parameter_result;
+
+    List ? Name(NewChannel, BaseRate), string(Name),
+    LastPublic @< Name,
     we(NewChannel),
     Publics ? Public, Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      Last = _,
+      LastPublic = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
       NewPublics ! Public,
-      Last' = Name |
+      LastPublic' = Name |
 	self;
 
-    List ? Name(_NewChannel, BaseRate),
+    List ? Name(_NewChannel, BaseRate), string(Name),
     Publics ? Entry, Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
       NewPublics ! Entry |
@@ -254,17 +305,17 @@ merge_public_channels(List, Publics, NewPublics, Last,
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
     Publics ? Entry,
-    Entry = Last'(_, _, _),
-    Last' @< Name :
-      Last = _,
+    Entry = LastPublic'(_, _, _),
+    LastPublic' @< Name :
+      LastPublic = _,
       NewPublics ! Entry |
 	self;
 
-    List ? Name(NewChannel, BaseRate),
+    List ? Name(NewChannel, BaseRate), string(Name),
     we(NewChannel),
     Publics =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1 :
+    LastPublic @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
       Publics' =
@@ -274,29 +325,29 @@ merge_public_channels(List, Publics, NewPublics, Last,
 		    Scheduler) |
 	self;
 
-    List ? Name(NewChannel, CW, BaseRate),
-    Last @< Name,
+    List ? Name(NewChannel, CW, BaseRate), string(Name),
+    LastPublic @< Name,
     we(NewChannel),
     Publics ? Public, Public = Name(SpiChannel, ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      Last = _,
+      LastPublic = _,
       CW = ComputeWeight?,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
       NewPublics ! Public,
-      Last' = Name |
+      LastPublic' = Name |
 	self;
 
-    List ? Name(_NewChannel, _, BaseRate),
+    List ? Name(_NewChannel, _ComputeWeight, BaseRate), string(Name),
     Publics ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
       NewPublics ! Entry |
 	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
-    List ? Name(_NewChannel, ComputeWeight, _),
+    List ? Name(_NewChannel, ComputeWeight, _BaseRate), string(Name),
     Publics ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight :
       NewPublics ! Entry |
@@ -306,17 +357,17 @@ merge_public_channels(List, Publics, NewPublics, Last,
 
     List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
     Publics ? Entry,
-    Entry = Last'(_, _, _),
-    Last' @< Name :
-      Last = _,
+    Entry = LastPublic'(_, _, _),
+    LastPublic' @< Name :
+      LastPublic = _,
       NewPublics ! Entry |
 	self;
 
-    List ? Name(NewChannel, ComputeWeight, BaseRate),
+    List ? Name(NewChannel, ComputeWeight, BaseRate), string(Name),
     we(NewChannel),
     Publics =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1 :
+    LastPublic @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
       Publics' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Publics],
@@ -326,10 +377,18 @@ merge_public_channels(List, Publics, NewPublics, Last,
 	self;
 
     otherwise :
-      Last = _,
+      LastPublic = _,
+      LastParameter = _,
       ReadyScheduler = Scheduler,
+      NewParameters = Parameters,
       NewPublics = Publics |
-	fail(merge_public_channels(List)).
+	fail(merge_public_objects(List)).
+
+  wait_parameter_result(List, Publics, NewPublics, LastPublic,
+			Parameters, NewParameters, LastParameter,
+			Scheduler, ReadyScheduler, Result) :-
+    known(Result) |
+	merge_public_objects.
 
 /* copy_publics
 **

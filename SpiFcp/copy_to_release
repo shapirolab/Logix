@@ -36,10 +36,12 @@ rm -f Spi-release/Documentation/BNF.txt
 cp -p Documentation/BNF.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/attributes.txt
 cp -p Documentation/attributes.txt Spi-release/Documentation
-rm -f Spi-release/Documentation/public.txt
-cp -p Documentation/public.txt Spi-release/Documentation
+rm -f Spi-release/Documentation/global.txt
+cp -p Documentation/global.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/program_macros.txt
 cp -p Documentation/program_macros.txt Spi-release/Documentation
+rm -f Spi-release/Documentation/public_variables.txt
+cp -p Documentation/public_variables.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/record.txt
 cp -p Documentation/record.txt Spi-release/Documentation
 rm -f Spi-release/Documentation/repeat.txt

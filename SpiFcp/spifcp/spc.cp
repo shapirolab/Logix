@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/06/20 13:52:18 $
+		       	$Date: 2003/08/05 10:58:11 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -201,47 +201,86 @@ stochastic(In, ProcessTable, Terms, ProcessId, RHSS, Prototype, Procedure,
 
 update_publics(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
 
-    /* Obsolescent */
-    RHSS =?=  (spi_monitor # global_channels(Publics, Scheduler), Body) :
-      NewRHSS = (spi_monitor # public_channels(NewPublics?, Scheduler), Body),
-      ProcessTable = [member(Body, Channels, Ok) | NextProcessTable] |
-	update_publics1;
-
     RHSS =?=  (spi_monitor # public_channels(Publics, Scheduler), Body) :
       NewRHSS = (spi_monitor # public_channels(NewPublics?, Scheduler), Body),
       ProcessTable = [member(Body, Channels, Ok) | NextProcessTable] |
+	utilities # find_logix_variables(Modifiers?, Variables, []),
 	update_publics1;
 
     otherwise :
       NewRHSS = RHSS,
       NextProcessTable = ProcessTable.
 
-  update_publics1(Publics, Channels, NewPublics, Ok) :-
+  update_publics1(Publics, Channels, Variables, Modifiers, NewPublics, Ok) :-
 
     Ok = true,
     Publics ? Public, arg(1, Public, Name) |
-	update_public_list(Name, Channels, Public, NewPublics, NewPublics'?),
+	update_public_list(Name, Channels, Variables, Public,
+			Modifiers, Modifiers'?, NewPublics, NewPublics'?),
 	self;
 
     otherwise :
       Ok = _,
       Channels = _,
+      Variables = _,
+      Modifiers = [],
       NewPublics = Publics.
 
-  update_public_list(Name, Channels, Public, NewPublics, NextNewPublics) :-
+  update_public_list(Name, Channels, Variables, Public,
+		Modifiers, NextModifiers, NewPublics, NextNewPublics) :-
 
-    Channels ? Name :
+    Channels ? Name,
+    Public = Name(_Variable) :
       Channels' = _,
+      Variables = _,
+      Modifiers = NextModifiers,
+      NewPublics = [Public | NextNewPublics];
+
+    Channels ? Name,
+    Public = Name(_Variable, BaseRate) :
+      Channels' = _,
+      Variables = _,
+      Modifiers = [BaseRate | NextModifiers],
+      NewPublics = [Public | NextNewPublics];
+
+    Channels ? Name,
+    Public = Name(_Variable, BaseRate, WeighterDeclaration) :
+      Channels' = _,
+      Variables = _,
+      Modifiers = [BaseRate, WeighterDeclaration | NextModifiers],
       NewPublics = [Public | NextNewPublics];
 
     Channels ? Other, Other =\= Name |
 	self;
 
-    Channels =?= [] :
+    Channels =?= [],
+    Public = Name(Variable) :
+      Modifiers = NextModifiers |
+	need_variable_in_modifier;
+
+    otherwise :
+      Channels = _,
       Name = _,
       Public = _,
+      Variables = _,
+      Modifiers = NextModifiers,
       NewPublics = NextNewPublics.
 
+  need_variable_in_modifier(Variable, Variables, NewPublics, NextNewPublics) :-
+
+    Variables ? Variable, Variable =?= `Name :
+      Variables' = _,
+      NewPublics = [Name(Variable) | NextNewPublics];
+
+    Variables ? Other,
+    Other =\= Variable |
+	self;
+
+    otherwise :
+      Variable = _,
+      Variables = _,      
+      NewPublics = NextNewPublics.
+      
 
 rewrite_clauses(Communicate1, Requests, Communications, Communicate2) :-
 
@@ -498,7 +537,8 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
       Table ! entries(Entries),
       Rhss ! (NewAsk'? : NewTell'? | Body?) |
 	partition_rhs(RHS, Ask, Tell, Body),
-	reduce_channel_table(Entries, ForkAsk, ForkTell, Close, Table'),
+	remove_logix_variables(Entries, ChEntries),
+	reduce_channel_table(ChEntries?, ForkAsk, ForkTell, Close, Table'),
 	fork_and_close,
 	utilities#untuple_predicate_list(',', Ask, NewAsk, AddAsk?),
 	utilities#untuple_predicate_list(',', Tell, NewTell, AddTell?),
@@ -516,6 +556,19 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
   partition_rhs(Body, true^, true^, Body^) :-
     Body =\= (_ | _) | true.
 
+  remove_logix_variables(Entries, ChEntries) :-
+
+    Entries = [] :
+      ChEntries = [];
+
+    Entries ? _entry(Name, _Status),
+    nth_char(1, Name, C), CHAR_A =< C, C =< CHAR_Z |
+	self;
+
+    Entries ? Entry,
+    otherwise :
+      ChEntries ! Entry |
+	self.
 
   reduce_channel_table(Entries, AddAsk, AddTell, Close, Table) +
 			(CloseList, Closes = CloseList) :-
@@ -669,6 +722,12 @@ extract_spi_channels(Variables, Channels) :-
       Channels ! Name |
 	self;
 
+    Variables ? `Name, string(Name),
+    nth_char(1, Name, C),
+    CHAR_A =< C, C =< CHAR_Z :
+      Channels ! Name |
+	self;
+
     Variables ? _Other,
     otherwise |
 	self;
@@ -755,13 +814,6 @@ kluge_news(Asks, Tells, Channels, Ok, NewAsks, NewTells) :-
 
 	
 kluge_publics(RHSS, NewRHSS) :-
-
-    /* Obsolescent */
-    RHSS =?= (spi_monitor#global_channels(Publics, Scheduler), Goals) :
-      NewRHSS =
-	(Ask? | spi_monitor#public_channels(NewPublics?, Scheduler), Goals) |
-	kluge_public_channels + (Convert = []),
-	utilities#make_predicate_list(",", NewConvert?, Ask);
 
     RHSS =?= (spi_monitor#public_channels(Publics, Scheduler), Goals) :
       NewRHSS =

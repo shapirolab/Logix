@@ -13,7 +13,7 @@ BNF for SpiFcp
 
 <export_declaration>   ::= export(<process_name_list>)
 
-<public_declaration>   ::= public(<public_declaration_list>)
+<public_declaration>   ::= public(<parameter_list>)
 
 <default_baserate_declaration>
                        ::= baserate(<base_rate>)
@@ -31,11 +31,13 @@ BNF for SpiFcp
                        ::= <weighter_parameter>
                            <weighter_parameter> , <weighter_parameter_list>
 
-<public_declaration_list>
-                      ::= <channel_declaration>
-                          <channel_declaration> , <public_declaration_list>
+<parameter_list>       ::= <parameter>
+                           <parameter> , <parameter_list>
 
-<channel_declaration> ::=  <channel>
+<parameter>            ::= <channel_declaration>
+                           <logix_variable>
+
+<channel_declaration>  ::= <channel>
                            <channel>(<base_rate>)
                            <channel>(<base_rate> , <weighter_declaration>)
 
@@ -48,23 +50,11 @@ BNF for SpiFcp
 <process>              ::= <left_hand_side> ::= <right_hand_side>
 
 <left_hand_side>       ::= <atom>
-                           <atom>+<new_declaration>
-                           <atom>+(<new_declaration_list>)
+                           <atom>+<parameter>
+                           <atom>+(<parameter_list>)
 
 <atom>                 ::= <process_name>
-                           <process_name>(<argument_list>)
-
-<new_declaration_list> ::= <new_declaration>
-                           <new_declaration> , <new_declaration_list>
-
-<new_declaration>      ::= <channel_declaration>
-                           <logix_variable>
-
-<argument_list>        ::= <argument>
-                           <argument> , <argument_list>
-
-<argument>             ::= <channel>
-                           <logix_variable>
+                           <process_name>(<parameter_list>)
 
 <right_hand_side>      ::= <communication_clauses>
                            <comparison_clauses>
@@ -89,7 +79,7 @@ BNF for SpiFcp
                            <message> * <multiplier>
 
 <message>              ::= []
-                           {<argument_list>}
+                           {<parameter_list>}
 
 <multiplier>           ::= <positive_integer>
 
@@ -113,8 +103,8 @@ BNF for SpiFcp
 <logix_guard_clause>   ::= {<logix_ask_guard>} , <right_hand_side>
                            {(<logix_guard>)} , <right_hand_side>
 
-<logix_guard>          ::= <logix_ask_guard_list>
-                           <logix_ask_guard_list> : <logix_tell_guard_list>
+<logix_guard>          ::= <logix_ask_list>
+                           <logix_ask_list> : <logix_tell_list>
 
 <logix_ask_list>       ::= <logix_ask_guard>
                            <logix_ask_guard> , <logix_ask_list>
@@ -126,29 +116,36 @@ BNF for SpiFcp
                            <call> | <body>
 
 <call>                 ::= <local_call>
-                           <local_sum>
+                           <local_call_sum>
                            << <new_scope> >>
                            <external_call>
                            <macro_call>
                            {<logix_goal>}
                            {(<logix_goal_list>)}
-                           self
-			   self( <substitution_list> )
                            true
                            0
+
+<local_call_sum>       ::= <local_call> + <local_sum>
 
 <local_sum>            ::= <local_call>
                            <local_call> + <local_sum>
 
-<local_call>           ::= <atom>
-                           <process_name>( <substitution_list> )
+<local_call>           ::= <local_process_name>
+                           <local_process_name>( <argument_list> )
+
+<local_process_name>   ::= <process_name>
+                           self
+
+<argument_list>        ::= <parameter_list>
+                           <substitution_list>
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
 
-<substitution>         ::= <argument> = <argument>
+<substitution>         ::= <channel> = <channel>
+                       ::= <logix_variable> = <logix_variable>
 
-<new_scope>            ::= <new_declaration_list> . <scope_content>
+<new_scope>            ::= <parameter_list> . <scope_content>
                            <scope_content>
 
 <scope_content>        ::= <right_hand_side>
@@ -176,48 +173,13 @@ BNF for SpiFcp
 Primitives:
 
 
-A <channel> is an alpha-numeric string, beginning with a lower-case
-alphabetic character; the string may contain underscore (_)
-characters.  It represents a Pi Calculus channel.
-
-
-A <base_rate> is a real number, which is a factor in the stochastic weighting
-of a <channel>.  When the <base_rate> of a <channel> is 0, the
-channel acts as a sink - all messages on that channel are discarded.
-
-A <base_rate> may be specified by a logix variable for a new channel,
-but not in the <default_baserate_declaration> nor for a public channel.
-The logix variable should be instantiated to a number.
-
-
-A <weighter> is an alpha-numeric string, beginning with a lower-case
-alphabetic character; the string may contain underscore (_)
-characters.
-
-A <weighter> may be specified by a logix variable for a new channel,
-but not in the <default_weighter_declaration> nor for a public channel.
-The logix variable should be instantiated to a string.
-
-Any <weighter_parameter> may be specified by a logix variable for a new
-channel, but not for the default nor for a public channel.  The logix
-variable should be instantiated to a real number.
-
-
 A <process_name> is an alpha-numeric string, beginning with an upper case
 letter, which may contain underscore (_) characters.
 
 
-In a <macro_call> any argument which precedes the <channels_and_reply> or
-<channel_attributes> may be a read-only-variable (<logix_variable>?).
-The <logix_variable> must be instantiated before the <macro_call> can complete.
-
-When a <macro_call> is completed, the trailing <logix_variable> is
-instantiated - its value is usually the string "true", but it may vary in
-some cases.
-
-The program macro, get_channel_status instantiates the trailing
-<logix_variable> to the value(s) of the named attribute(s).  See 
-program_macros.txt for details regarding <channel_attribute> values.
+A <channel> is an alpha-numeric string, beginning with a lower-case
+alphabetic character; the string may contain underscore (_) characters.
+It represents a Pi Calculus channel.
 
 
 A <logix_variable> is an alpha-numeric string, beginning with an upper-case
@@ -226,40 +188,110 @@ or it may be a single underscore character.  By convention the single
 underscore character is an anonymous <logix_variable>; it may only appear in
 a <message> or within a <logix_guard>, a <logix_ask_guard> or a <logix_goal>.
 
-WARNING:  when the single underscore character <logix_variable> appears in a
-<message>, it should not appear in place of a <channel>, unless the
-corresponding sent <channel> is defined by a <public_declaration>.
+
+A <base_rate> is a non-negative real number, which is a factor in the
+stochastic weighting of a <channel>.  When the <base_rate> of a
+<channel> is 0, the channel acts as a sink - all messages on that
+channel are discarded.
 
 
-A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
-language(compound).
+A <weighter> is an alpha-numeric string, beginning with a lower-case
+alphabetic character; the string may contain underscore (_)
+characters.  The currently acceptable values of <weighter> are
+"default" and "michaelis"; additional values may be defined - see
+weighter.txt.
 
-A <logix_tell_guard> is any predicate permitted in the tell of a guard in logix
-language(compound).
 
-A <logix_goal> is any predicate permitted in the right-hand-side of a clause
+Semantics:
+
+
+A <parameter> in a <public_declaration> is an implicit argument of every
+process in the program.
+
+
+Any argument of a <process> may be  provided by a caller in an
+<argument_list>, replacing any implicit argument of the same name.  An
+argument  may be "extruded" from a <process> by a <send>.  An argument
+may also be replaced in a <parameter> which is added to the <atom> in
+the <left_hand_side> of a <process_declaration>.
+
+
+A <base_rate> may be specified by a <logix_variable> in the
+<default_baserate_declaration> or in a <channel_declaration>.  In the
+former case, or when the <channel_declaration> is within the
+<public_declaration>, the <logix_variable> itself must be declared in
+the <public_declaration>; in the latter case, when the channel is in
+the <parameter> which is added in the <process_declaration>, the
+<logix_variable> should be an argument of the process.  In any case,
+the <logix_variable> should be instantiated to a non-negative number.
+
+
+A <weighter> may be specified by a logix variable in the
+<default_weighter_declaration> or in a <channel_declaration>.  In the
+former case, or when the <channel_declaration> is within the
+<public_declaration>, the <logix_variable> itself must be declared in
+the <public_declaration>; in the latter case, when the channel is in
+a <parameter> which is added in the <process_declaration>, the
+<logix_variable> should be an argument of the process.  In any case
+the <logix_variable> should be instantiated to a string (see above).
+
+Any <weighter_parameter> may be specified by a <logix_variable>, as
+for a <base_rate> (see above).
+
+
+An argument in a <macro_call> which precedes the <channels_and_reply> or
+which is a <channel_attribute> may be a read-only-variable (<logix_variable>?).
+The <logix_variable> must be instantiated before the <macro_call> can
+be completed.
+
+When a <macro_call> is completed, the trailing <logix_variable> is
+instantiated - its value is usually the string "true", but it may vary in
+some cases.
+
+The program macro  get_channel_status  instantiates the trailing
+<logix_variable> to the value(s) of the named attribute(s).  See 
+program_macros.txt for details regarding <channel_attribute> values.
+
+
+WARNING: When the single underscore character <logix_variable> appears
+in a <receive> <transmission> in place of a <channel>, the corresponding
+<send> <channel> should be declared in a <public_declaration>.
+
+
+Logix Terms:
+
+
+A <logix_ask_guard> is any predicate permitted in the ask of a guard in
+logix language(compound).
+
+A <logix_tell_guard> is any predicate permitted in the tell of a guard
 in logix language(compound).
 
-A <logix_path_term> is any term permitted in the path specification of a remote
-procedure call in logix language(compound).
+A <logix_goal> is any predicate permitted in the right-hand-side of a
+clause in logix language(compound).
+
+A <logix_path_term> is any term permitted in the path specification of a
+remote procedure call in logix language(compound).
 
 
 Notes:
 
-The "new" predicate has been subsumed into a prefix <new_declaration_list>
-of a <new_scope> and the added <new_declaration_list> of a <process>.
+The "new" predicate has been subsumed into a prefix <parameter_list>
+of a <new_scope> and the added <parameter_list> of a <process>.
 
 
-The <argument>s of a <process> are provided by a caller.  An <argument>
-may be "extruded" from a <process> by a <send>.
-
-
-A <process> which is declared at level one of a <program> definition, may be
-called by an external process.
+A <process> which is declared at level one of a <program> definition, may
+be called by an external process, if it is exported explicitly in an
+<export_declaration>, or if there is no <export_declaration> in the<program>,
+in which case all level one processes are exported.
 
 
 Nested "new" processes are scoped with double angle brackets (see definition
 of <new_scope>).
+
+
+Each <local_call> in a <local_call_sum> must be to a <process> whose
+<right_hand_side> consists of <communication_clauses>.
 
 
 The reserved words are "self", "true" and "otherwise".
@@ -270,7 +302,8 @@ They are reserved in context, and may be used as channel names.
 "otherwise" appears as the guard of the last clause of <comparisons>.
 
 
-A  new <argument> which is a <logix_variable> is initially uninstantiated.
+An argument which is declared as a <logix_variable> in the added
+<parameter> of a <left_hand_side> is initially uninstantiated.
 
 
 Within a <logix_term>, normal logix recognition of variables applies - i.e.
@@ -282,8 +315,8 @@ variable names all begin with a capital letter or underscore; to reference a
 A <logix_variable> may have a value which is an arbitrary logix term.  Such
 values may be tested by a <logix_ask_guard>, instantiated or used as an
 argument in a <logix_goal> or in a <logix_tell_guard>.  An arbitrary
-<logix_term> may be sent in a <message> by the library <logix_goal> spi_send/2,
-or received by the logix goal, spi_receive/2:
+<logix_term> may be sent in a <message> by the library <logix_goal>
+spi_send/2, or received by the library logix goal spi_receive/2:
 
     spi_send(<message_content>, <channel>)
     spi_receive(<channel>, <message_content>)
@@ -292,13 +325,15 @@ e.g.
 
     spi_send({"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
 
-    spi_receive('var'(another_channel), {Arg1, String(f(x)), Arg3})
+    spi_receive('_var'(channel), {Arg1, String(f(x)), Arg3})
+
 
 The library <logix_goal>s spi_send/3, spi_receive/3, spi_send/4, spi_receive/4
 may be used as well, where the third argument is a multiplier (default 1), and
 the fourth argument is an identifier (default string "sender" or "receiver").
 
-A <logix_variable> may be instantiated by an assignment:
+A <logix_variable> may be instantiated by an assignment in a <logix_goal>
+within a <call> :
 
     <logix_variable> = <logix_term>
 
@@ -330,7 +365,3 @@ is equivalent to:
 
     P ::= <communication> , << P1 . P1 ::= {<logix_ask_guard1>} , Q ;
                                            {<logix_ask_guard2>} , R >> .
-
-
-Each <local_call> in a <local_sum> must be to  <process> whose
-<right_hand_side> consists of <communication_clauses>.

@@ -420,7 +420,8 @@ serve_ambient0(In, Events, FromSub, Done,
 	       Ambient, Parent,
 	       Children,
 	       Requests, Controls, AmbientDone, Scheduler, Debug) :-
-	serve_ambient + (PublicChannels = [{0, _, -1, ""}, {[], _, -1, ""}],
+	serve_ambient + (Parameters = [{0, _}, {[], _}],
+			 PublicChannels = [{0, _, -1, ""}, {[], _, -1, ""}],
 			 PrivateChannels = [], SharedChannels = []).
 
 /*
@@ -453,8 +454,11 @@ serve_ambient0(In, Events, FromSub, Done,
 ** State:
 **
 **   Children - list of FCP vectors to child ambients
-**   SharedChannels - list of inter-ambient channels in use by children
-o**   Status - one of running,suspended
+**   Parameters - (sorted) list of global Logix variables.
+**   PrivateChannels - list of "new" channels of this ambient.
+**   PublicChannels - (sorted) list of "public" channels of this ambient.
+**   SharedChannels - list of inter-ambient channels known to this ambient.
+**   Status - one of running,suspended
 **   UniqueId - integer updated and assigned to new ambients
 **
 ** FCP Vectors
@@ -466,7 +470,7 @@ o**   Status - one of running,suspended
 
 serve_ambient(In, Events, FromSub, Done,
 	      Ambient, Parent, Children,
-	      PrivateChannels, PublicChannels, SharedChannels,
+	      Parameters, PublicChannels, PrivateChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug) :-
 
@@ -511,26 +515,30 @@ serve_ambient(In, Events, FromSub, Done,
 /* Upward compatibility global channel declarations */
     In ? global_channels(List) |
 	DEBUG(global/1, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, _, _),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, _, _),
 	self;
 
     In ? global_channels(List, ReadyAmbient?^) |
 	DEBUG(global/2, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, Ambient, ReadyAmbient),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, Ambient, ReadyAmbient),
 	self;
 
     In ? public_channels(List) |
 	DEBUG(public/1, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, _, _),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, _, _),
 	self;
 
     In ? public_channels(List, ReadyAmbient?^) |
 	DEBUG(public/2, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, Ambient, ReadyAmbient),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, Ambient, ReadyAmbient),
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
@@ -861,16 +869,18 @@ serve_ambient(In, Events, FromSub, Done,
     Events ? Public,
     Public =?= event(public_channels(List)) |
 	DEBUG(delegated-Public, scheduler),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, _, _),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, _, _),
 	self;
 
     Events ? Public,
     Public =?= event(public_channels(List, AmbientChannel)) |
 	DEBUG(delegated-Public, scheduler),
 	unify_without_failure(AmbientChannel, ReadyAmbient),
-	merge_public_channels(List, PublicChannels, PublicChannels',
-			      Scheduler, Ambient, ReadyAmbient),
+	merge_public_objects(List, Parameters, Parameters', 0,
+			     PublicChannels, PublicChannels', 0,
+			     Scheduler, Ambient, ReadyAmbient),
 	self;
 
     Events ? Event,
@@ -903,6 +913,7 @@ serve_ambient(In, Events, FromSub, Done,
       Events = _,
       FromSub = _,
       In = _,
+      Parameters = _,
       Scheduler = _,
       Controls = [],
       Requests = [],
@@ -937,7 +948,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   ambient_lookup(In, Events, FromSub, Done,
 		 Ambient, Parent, Children,
-		 PrivateChannels, PublicChannels, SharedChannels,
+		 Parameters, PublicChannels, PrivateChannels, SharedChannels,
 		 Requests, Controls, AmbientDone,
 		 Scheduler, Debug,
 		 SharedChannel) :-
@@ -980,7 +991,8 @@ serve_ambient(In, Events, FromSub, Done,
 
   pass_unremoved(In, Events, FromSub, Done,
 	      Ambient, Parent,
-	      Children, PrivateChannels, PublicChannels, SharedChannels,
+	      Children, Parameters, PublicChannels,
+	      PrivateChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug,
 	      Unremoved) :-
@@ -1033,7 +1045,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   serve_event(In, Events, FromSub, Done,
 	      Ambient, Parent, Children,
-	      PublicChannels, PrivateChannels, SharedChannels,
+	      Parameters, PublicChannels, PrivateChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug,
 	      Event) :-
@@ -1075,7 +1087,8 @@ serve_ambient(In, Events, FromSub, Done,
 
   children_to_merged_ambient(In, Events, FromSub, Done,
 			     Ambient, Parent, Children,
-			     PublicChannels, PrivateChannels, SharedChannels,
+			     Parameters, PublicChannels,
+			     PrivateChannels, SharedChannels,
 			     Requests, Controls, AmbientDone,
 			     Scheduler, Debug,
 			     MergedAmbient, Goals, Ready) :-
@@ -1093,6 +1106,7 @@ serve_ambient(In, Events, FromSub, Done,
 
     Children =?= [] :
       MergedAmbient = _,
+      Parameters = _,
       SharedChannels = _,
       Controls ! request(extract(all, Goals)) |
 	resume_ambient_when_ready.
@@ -1587,31 +1601,56 @@ read_vector(SPI_CHANNEL_NAME, Channel, CId),
       FromAmbient = _.
 
 
-merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
-			Ambient, ReadyAmbient) + (Last = "") :-
+merge_public_objects(List, Parameters, NewParameters, LastParameter,
+		     PublicChannels, NewPublicChannels, LastPublic,
+		     Scheduler, Ambient, ReadyAmbient) :-
 
     List =?= [] :
-      Last = _,
+      LastParameter = _,
+      LastPublic = _,
       Scheduler = _,
+      NewParameters = Parameters,
       NewPublicChannels = PublicChannels,
       ReadyAmbient = Ambient;
 
-    List ? Name(NewChannel, BaseRate),
-    Last @< Name,
+    List ? Name(Value), string(Name),
+    Parameters ? Parameter, Parameter =?= Name(ParameterValue) :
+      LastParameter = _,
+      Value = ParameterValue,
+      NewParameters ! Parameter,
+      LastParameter' = Name |
+	self;
+
+    List = [Name(_) | _], string(Name),
+    Parameters ? Parameter, Parameter = LastParameter'(_),
+    LastParameter' @< Name :
+      LastParameter = _,
+      NewParameters ! Parameter |
+	self;
+
+    List ? Name(Value), string(Name),
+    Parameters =?= [Name1(_) | _],
+    LastParameter @< Name, Name @< Name1 :
+      List'' = [Name(Value) | List'],
+      Parameters' = [Name(SystemValue) | Parameters] |
+	computation # dictionary(add, Name, SystemValue, Result),
+	wait_parameter_result;
+
+    List ? Name(NewChannel, BaseRate), string(Name),
+    LastPublic @< Name,
     we(NewChannel),
     PublicChannels ? Public,
     Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      Last = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
       NewPublicChannels ! Public,
-      Last' = Name |
+      LastPublic' = Name |
 	self;
 
-    List ? Name(_NewChannel, BaseRate),
+    List ? Name(_NewChannel, BaseRate), string(Name),
     PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate,
@@ -1623,17 +1662,17 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
     PublicChannels ? Entry,
-    Entry = Last'(_, _, _),
-    Last' @< Name :
-      Last = _,
+    Entry = LastPublic'(_, _, _),
+    LastPublic' @< Name :
+      LastPublic = _,
       NewPublicChannels ! Entry |
 	self;
 
-    List ? Name(NewChannel, BaseRate),
+    List ? Name(NewChannel, BaseRate), string(Name),
     we(NewChannel),
     PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1 :
+    LastPublic @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
       PublicChannels' =
@@ -1644,22 +1683,21 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 		    Scheduler) |
 	self;
 
-    List ? Name(NewChannel, BaseRate),
-    Last @< Name,
+    List ? Name(NewChannel, BaseRate), string(Name),
+    LastPublic @< Name,
     we(NewChannel),
     PublicChannels ? Public,
     Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      Last = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
       NewPublicChannels ! Public,
-      Last' = Name |
+      LastPublic' = Name |
 	self;
 
-    List ? Name(_NewChannel, BaseRate),
+    List ? Name(_NewChannel, BaseRate), string(Name),
     PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate,
@@ -1671,31 +1709,30 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
     PublicChannels ? Entry,
-    Entry = Last'(_, _, _),
-    Last' @< Name :
-      Last = _,
+    Entry = LastPublic'(_, _, _),
+    LastPublic' @< Name :
+      LastPublic = _,
       NewPublicChannels ! Entry |
 	self;
 
 
-    List ? Name(NewChannel, CW, BaseRate),
-    Last @< Name,
+    List ? Name(NewChannel, CW, BaseRate), string(Name),
+    LastPublic @< Name,
     we(NewChannel),
     PublicChannels ? Public,
     Public = Name(SpiChannel, ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      Last = _,
       CW = ComputeWeight?,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
       NewPublicChannels ! Public,
-      Last' = Name |
+      LastPublic' = Name |
 	self;
 
-    List ? Name(_NewChannel, _ComputeWeight, BaseRate),
-    PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherBaseRate, _),
+    List ? Name(_NewChannel, _ComputeWeight, BaseRate), string(Name),
+    PublicChannels ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
     BaseRate =\= OtherBaseRate,
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
       NewPublicChannels ! Entry |
@@ -1703,7 +1740,7 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 				BaseRate =\= OtherBaseRate))),
 	self;
 
-    List ? Name(_NewChannel, ComputeWeight, _),
+    List ? Name(_NewChannel, ComputeWeight, _), string(Name),
     PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight,
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
@@ -1714,17 +1751,17 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 
     List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
     PublicChannels ? Entry,
-    Entry = Last'(_, _, _),
-    Last' @< Name :
-      Last = _,
+    Entry = LastPublic'(_, _, _),
+    LastPublic' @< Name :
+      LastPublic = _,
       NewPublicChannels ! Entry |
 	self;
 
-    List ? Name(NewChannel, ComputeWeight, BaseRate),
+    List ? Name(NewChannel, ComputeWeight, BaseRate), string(Name),
     we(NewChannel),
     PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1 :
+    LastPublic @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
       PublicChannels' = [Name(SpiChannel?, ComputeWeight, BaseRate)
@@ -1735,22 +1772,20 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 	self;
 
     otherwise,
-    List ? Item,
-    arg(1, Item, Name), string(Name),
-    arg(2, Item, PC), we(PC) :
-      Last = _,
-      List' = _,
-      Scheduler = _,
-      NewPublicChannels = PublicChannels,
-      ReadyAmbient = Ambient;
-
-    otherwise,
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
-      Last = _,
+      LastParameter = _,
+      LastPublic = _,
       Scheduler = _,
+      NewParameters = Parameters,
       NewPublicChannels = PublicChannels,
       ReadyAmbient = Ambient |
-	computation # failed(AmbientId@merge_public_channels(List)).
+	computation # failed(AmbientId@merge_public_objects(List)).
+
+  wait_parameter_result(List, PublicChannels, NewPublicChannels, LastPublic,
+			Parameters, NewParameters, LastParameter,
+			Scheduler, Ambient, ReadyAmbient, Result) :-
+    known(Result) |
+	merge_public_objects.
 
 
 /***************************** Utilities ************************************/

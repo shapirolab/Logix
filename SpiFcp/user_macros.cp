@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2003/06/20 14:08:42 $
+		       	$Date: 2003/08/05 10:57:59 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/SpiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -78,6 +78,7 @@ expand(Command, Cs) :-
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
+		" cta                - display communicating channels",
 		" i(File)            - input file",
 		" options(New, Old)  - default Spi Options",
 		" pc(C)              - make spi channel C",
@@ -359,7 +360,6 @@ expand(Command, Cs) :-
 		" at / at(Service)   - attributes(Service)",
 		" bta                - busy channels",
 		" c / c(Module)      - compile(Module)",
-		" cta                - communicating channels",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" goal / goal(No)    - goal of computation No",
 		" h                  - get this list",
