@@ -1,3 +1,19 @@
+Most of the user macros described in Spi-release/Documentation/user_macros.txt
+are available for users of the Ambient Stochastic Pi Calculus implementation.
+The Debugging macros, with the exceptioon of options/1 and options/2 cannot 
+be used.
+
+
+Program Execution
+-----------------
+
+Ambient Stochastic Pi Calus programs cannot be executed by a normal Logix 
+call.  Use the run user macro.
+
+    run(<goals>)
+    run(<goals>, <limit>)
+
+
 Ambient tree displays (the "xtr" commands)
 ------------------------------------------
 
@@ -40,8 +56,8 @@ which is the name of the internal channel.
     p2c(Symporter_Out.0.symO(2)),
     merge(public.complexAB)
 
-There are four macros which display the ambient tree of a computation.
-These are atr, btr, ctr, dtr (see also rtr below).  Each macro may
+There are four user macros which display the ambient tree of a computation.
+These are atr, btr, ctr, dtr (see also rtr below).  Each user macro may
 specify an argument, which may be:
 
   a. The unique positive integer identifier of an ambient, specifying
@@ -155,7 +171,7 @@ Notes:
    trace) the dtr display may include some ambigous information.
 
 3. A specific computation can be selected its ambient tree examined;
-   use the macro cno(<computation number>) to select a computation
+   use the user macro cno(<computation number>) to select a computation
    other than the current one - e.g.
 
      @cno(3);cta
@@ -188,8 +204,8 @@ An ambient tree resolvent can be displayed while:
 
  * After a time-limited computation is "done".
 
-The macro rtr may be used to suspend a computation and display its
-resolvent.  Its arguments are the same as those for "xtr" macros
+The user macro rtr may be used to suspend a computation and display its
+resolvent.  Its arguments are the same as those for "xtr" user macros
 above.
 
 Example:
@@ -215,7 +231,7 @@ Signal
 Notes:
 
 1. Suspension withdraws all communication requests.  Since the rtr
-   macro includes a suspend, when an xtr is preceded by a suspend or
+   user macro includes a suspend, when an xtr is preceded by a suspend or
    rtr, no communications are displayed in the ambient tree; only
    dtr will show channels, and those will only be internal channels.
 
@@ -224,7 +240,7 @@ Record and spi2t
 ----------------
 
 A full or partial record file can be generated during a run, using the
-record macro (see record.txt).
+record user macro (see record.txt).
 
 In addition to the usual record features, the ambient record includes:
 
@@ -251,4 +267,4 @@ Notes:
    processes across ambients (e.g. to sum the counts for a given
    process in all ambients).
 
-2. The re (resume) macro invalidates the output of a record macro.
+2. The re (resume) user macro invalidates the output of a record user macro.
