@@ -1,0 +1,20 @@
+Changes from Aspic-release/Documentation/attributes.txt .
+
+A required attribute for Ambient Stochastic Pi Calculus modules is:
+
+    -language(biospi).
+
+The transformation, biospi, transforms modules written in Ambient
+Stochastic Pi Calculus into modules in the compound dialect of LOGIX.
+
+
+An optional attribute is:
+
+    -mode(<execution mode>).
+
+where <execution mode> is one of:
+
+    interpret
+    interrupt
+
+The default mode is interrupt.
