@@ -11,6 +11,9 @@ my $BIB_ID = "CS";                         # default id
 my $Output_Entry = "";                     # Month day, Year
 my $Output_Date = "January 1, 1999";       # ???
 my $InputFile = "abstracts.tex";
+my $HtmlFile = "textohtml.html";
+my $DummyFile = "/tmp/textohtml.dummy";
+my $Dir_Path = "ncstrl";
 
 my @Abstracts;
 my $Authors;
@@ -152,7 +155,7 @@ sub read_abstracts
       $lines = $_;
     }
     else {
-      $lines .= ($_ ne "") ? " $_" : "\\par";
+      $lines .= ($_ ne "") ? "\n$_" : "\\par";
     }
   }
   @Abstracts = split /\\offset\{\d+pt\}/, $lines;
@@ -162,8 +165,11 @@ sub read_abstracts
 sub next_abstract
 {
   $Lines = shift @Abstracts;
+  my $line;
 
-  if ($Lines =~ s/^\{\{\\bf (\D*)(\d+)--(\d+)\}\}(.*)$/$4/) {
+  ($line, $Lines) = split /\}\}\n/, $Lines, 2;
+
+  if ($line =~ /^\s*\{\{\\bf (\D*)(\d+)-+(\d+)$/) {
     foreach (@START) {
       if ($_ eq $1) {
 	return "$2-$3";
@@ -215,8 +221,8 @@ sub extract_author
 sub extract_authors
 {
   ($Authors, $Lines) = split /:/, $Lines, 2;
-  $Authors =~ s/^s+(.*)/$1/;
-  $Lines =~ s/^s+(.*)/$1/;
+  $Authors =~ s/^\s+(.*)/$1/;
+  $Lines =~ s/^\s+(.*)/$1/;
 
   filter_tex($Authors);
   $Authors = $Filtered;
@@ -236,10 +242,31 @@ sub extract_authors
 sub extract_title
 {
   ($Title, $Lines) = split /$END_OF_HEADING/, $Lines, 2;
-  filter_tex($Title);
-  $Title = $Filtered;
   $Lines =~ s/^\s*(\S.*)$/$1/;
 }
+
+
+sub textohtml
+{
+  my $text = shift;
+  open TMP, "|/usr/local/bin/tth > $HtmlFile 2> $DummyFile";
+  print TMP $text;
+  close TMP;
+  open TMP, "< $HtmlFile";
+  $text = join ' ', <TMP>;
+  close TMP;
+  unlink $HtmlFile, $DummyFile;
+  ($_, $text) = split /<\/title>/, $text, 2;
+  my @text = split /\n/, $text;
+  pop @text;
+  pop @text;
+  $text = join ' ', @text;
+  $text =~ s/^\s+(\S.*)$/$1/;
+  $text =~ s/^(?:&nbsp;)*(.*)$/$1/;
+  while ($text =~ s/^(.*)\s*<\w+>\s*$/$1/) { }
+  return $text;
+}
+
 
 # main
 open(ABSTRACTS, $InputFile) or die "Can't open $InputFile - $!\n";
@@ -250,6 +277,8 @@ $Output_Entry = $MONTHS[$mon] . " $mday, " . ($year +1900);
 read_abstracts();
 while (scalar @Abstracts) {
   my ($year, $index) = split /-/, next_abstract();
+  $Output_Date = "January 1, " .
+    ($year < 80 ? 2000+$year : ($year <= 99 ? 1900+$year : $year));
 
   undef @Authors;
   extract_authors();
@@ -257,9 +286,9 @@ while (scalar @Abstracts) {
   extract_title();
 
   my $docname = "$BIB_ID$year-$index";
-  mkdir $docname, 7*64 + 7*8 +5;
-  open(BIB, "> $docname/$docname.bib") or
-    die "Can't open $docname/$docname.bib - $!\n";
+  mkdir "$Dir_Path/$docname", 7*64 + 7*8 +5;
+  open(BIB, "> $Dir_Path/$docname/$docname.bib") or
+    die "Can't open $Dir_Path/$docname/$docname.bib - $!\n";
   format_output("BIB-VERSION", $BIB_VERSION);
   format_output("ID", "$BIB_AUTHORITY//$docname");
   format_output("ENTRY", $Output_Entry);
@@ -267,9 +296,8 @@ while (scalar @Abstracts) {
   foreach $author (@Authors) {
     format_output("AUTHOR", $author);
   }
-  format_output("TITLE", $Title);
-  filter_tex($Lines);
-  format_output("ABSTRACT", $Filtered);
+  format_output("TITLE", textohtml($Title));
+  format_output("ABSTRACT", textohtml($Lines));
   format_output("END", "$BIB_AUTHORITY//$docname");
   close BIB;
 }
