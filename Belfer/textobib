@@ -269,6 +269,10 @@ sub textohtml
 
 
 # main
+
+$InputFile = shift @ARGV if scalar(@ARGV);
+$Dir_Path = shift @ARGV if scalar(@ARGV);
+
 open(ABSTRACTS, $InputFile) or die "Can't open $InputFile - $!\n";
 
 my ($sec, $min, $hour, $mday, $mon, $year) = localtime;
