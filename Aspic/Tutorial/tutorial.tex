@@ -1,17 +1,17 @@
 \documentstyle[twoside,11pt]{report}
-\title{Stochastic $\Pi$-Calculus - a Tutorial}
+\title{Stochastic $\Pi$ Calculus - a Tutorial}
 \author{William Silverman \and Aviv Regev}
-\date{November 2000}
+\date{August 2003}
 \begin{document} 
 \maketitle
 
 \tableofcontents
 
 \chapter{Introduction}
-{\bf $\Pi$-Calculus} is an abstract model of concurrent communication
+{\bf $\Pi$ Calculus} is an abstract model of concurrent communication
 developed in the late 1980s to express the behavior of mobile systems
 \cite{Milner99}.  This document describes an implementation of
-{\bf $\Pi$-Calculus} and its stochastic extension in {\bf Flat
+{\bf $\Pi$ Calculus} and its stochastic extension in {\bf Flat
 Concurrent Prolog} (FCP) \cite{Shapiro87a}.  The implementation is
 embedded in {\bf The Logix System} (LOGIX)
 \cite{logix:user-man,logix:user-man-supp}. Unlike most previous
@@ -23,13 +23,13 @@ assigned rates, and communication events are selected on a
 probabilistic basis, rather than a nondeterministic one.  The SPI
 system is developed as part of the BioSPI project, whose goal is to
 study biomolecular systems as concurrent processes. Therefore, we
-adhere closely to the concise Stochastic $\Pi$-Calculus, and only rarely
+adhere closely to the concise Stochastic $\Pi$ Calculus, and only rarely
 add functionalities beyond its original core.
 
 The tutorial is constructed as follows: In Chapter \ref{syntax}, we
 informally introduce the basic entities and operators of the
-$\Pi$-Calculus, and their appropriate representation in SPI syntax. The
-full correspondence between the SPI syntax and $\Pi$-Calculus is given in
+$\Pi$ Calculus, and their appropriate representation in SPI syntax. The
+full correspondence between the SPI syntax and $\Pi$ Calculus is given in
 Appendix \ref{SPIBNF}.  We follow, in Chapter \ref{simple programs}, with
 several simple programs, their compilation and execution. Chapter
 \ref{stochastic} extends these example to the stochastic variant.  We
@@ -37,17 +37,17 @@ then describe, in Chapter \ref{debug}, the available testing,
 tracing and debugging tools. Chapter \ref{usingFCP} explains how
 LOGIX guard and goal predicates may be used to perform arithmetic
 computations and to produce other useful side-effects.  Chapter
-\ref{aspic} describes the BIOSPI extension to Ambient Stochastic
-$\Pi$-Calculus.
+\ref{aspic} describes the extension to Ambient Stochastic
+$\Pi$ Calculus.
 
-The full set of commands for the SPI and BIOSPI systems, is in
+The full set of commands for both systems, is in
 Appendix \ref{commands}.
 
-\chapter{Processes, Channels and Communication: The $\Pi$-Calculus in
+\chapter{Processes, Channels and Communication: The $\Pi$ Calculus in
 SPI Syntax}
 \label{syntax}
 
-$\Pi$-Calculus describes systems of agents which exist in
+$\Pi$ Calculus describes systems of agents which exist in
 parallel. These agents communicate with each other by sending and
 receiving messages on channels identified by names. A message may
 be a simple signal or a tuple of channel names, which can be used by the
@@ -257,7 +257,7 @@ new channels, without the need of an explicit process declaration.
 This possibility is often very convenient. In the next example, the
 {\em new} predicate has been subsumed into a prefix
 \verb+ <new_declaration_list> +
-of a \verb+ <new_scope> +, declaring the private channels \verb+ x, y +.
+of a \verb+<new_scope>+, declaring the private channels \verb+ x, y +.
 
 \begin{verbatim}
   Try ::= <<
@@ -316,7 +316,7 @@ to a pair of channels from \verb+ x, y, z +.
 
 \section{Parametric and Recursive Processes}
 
-In the original $\Pi$-Calculus, parametric and recursive processes are
+In the original $\Pi$ Calculus, parametric and recursive processes are
 derived forms, based on a replication operator ({\bf Bang}).  This operator
 provides an unlimited number of concurrent processes, and is therefore
 inappropriate for realistic implementations. On the other hand,
@@ -629,7 +629,7 @@ required by the computation
 \chapter{Stochastic Programs}
 \label{stochastic}
 
-\section{Stochastic $\Pi$-Calculus}
+\section{Stochastic $\Pi$ Calculus}
 
 In all of the programs in the preceding chapters communication on
 channels was completed as soon as possible. Furthermore, the choice of
@@ -682,10 +682,13 @@ The default actual rate may be computed by a custom computation,
 by specifying an explicit computation function (\verb+<weighter>+).
 
 \section{Simple stochastic programs}
+ 
+Interesting programs submitted by users will be added here.
+\newline
 
-Here we should give basic examples for SPI, similarly to
-the above, also explaining \verb+record+.
-
+\noindent
+Meanwhile, see the programs in sub-directory Spi-release/Examples
+and in Spi-release/BioSpi/Examples.
 
 \chapter{Testing, Tracing and Debugging}
 \label{debug}
@@ -1042,13 +1045,16 @@ recursive call, self, to the process SendAndCount.
 The first process may be rewritten:
 
 \begin{verbatim}
-  Send(N, c) + I ::= {(true : I = 0} , SendAndCount.
+  Send(N, c) + I ::= {(true : I = 0)} , SendAndCount.
 \end{verbatim}
 
 \noindent
-to synchronize the initiallization of I.  This makes no difference
-in this example, since the process SendAndCount cannot be reduced
-until I is instantiated.
+to wait until N is known to be a number, before initializing
+I and then continuing with SendAndCount.  This might be useful
+if the reactions enabled by SendAndCount should not occur
+until N has been initialized, for instance if SendAndCount
+were to enable the reactions, and subsequently count them.
+\newline
 
 \noindent
 Many other LOGIX guards and goals may be employed in SPI processes -
@@ -1057,14 +1063,15 @@ see \cite{logix:user-man} Appendix 1.
 \chapter{Ambient Stochastic Programs}
 \label{aspic}
 
-Stochastic $\Pi$-Calculus supports a flat process space.  Ambient
-Stochastic $\Pi$-Calculus (BIOSPI) supports nested process spaces,
+Stochastic $\Pi$ Calculus supports a flat process space.  Ambient
+Stochastic $\Pi$ Calculus supports nested process spaces,
 organized in a tree, and
 communication between nearby nodes (called {\em ambients}) of the tree.
 
 \section{Channels}
 
-In addition to a type, a channel in BIOSPI has a {\em locus} as well.  The
+In addition to a type, a channel in Ambient Stochastic $\Pi$ Calculus
+has a {\em locus} as well.  The
 locus determines whether communication is {\em local} (within the ambient)
 or {\em non-local} (between nearby ambients).  Possible non-local loci of
 communication are: Parent to Child, Child to Parent, Sibling to
@@ -1073,10 +1080,10 @@ Sibling.
 \section{Ambient Declaration}
 
 Ambients are declared dynamically.
-An ambient is declared as a named \verb+ <new_scope> +, {\em e.g.}
+An ambient is declared as a named \verb+<new_scope>+, {\em e.g.}
 
 \begin{verbatim}
-  ACell ::= cell<< x, y. Cytoplasm(x,y) | Membrane(x,y) >> .
+  ACell ::= cell(<< x, y. Cytoplasm(x,y) | Membrane(x,y) >>) .
 \end{verbatim}
 
 The new ambient is created as a child of the ambient which declares it.
@@ -1089,21 +1096,24 @@ Ambients are mobile. An ambient may
 exit its parent, enter a sibling (become its child) or merge with a
 sibling.
 
-\section{BIOSPI Processes}
+\section{Ambient Stochastic $\Pi$ Calculus Processes}
 
-The first line of a BIOSPI module must be:
+The first line of an Ambient Stochastic $\Pi$ Calculus module must be:
 
 \begin{verse}
    -language(biospi).
 \end{verse}
 
-Any SPI module may be converted to a BIOSPI module by
-replacing the language name in the first line.
+\noindent
+Any Stochastic $\Pi$ Calculus module may be converted to an
+Ambient Stochastic $\Pi$ Calculus module by
+replacing the language name in the first line.  The semantics
+of the program are unchanged.
 
 \subsection{Inter-Ambient Communication}
 
-A \verb+ <send> + or \verb+ <receive> + may be prefixed by a
-\verb+ <direction> +, specifying the locus of communication.
+A \verb+<send>+ or \verb+<receive>+ may be prefixed by a
+\verb+<direction>+, specifying the locus of communication.
 The communication is between ambients.  The two communicating
 processes do so on their shared channel.
 
@@ -1117,6 +1127,7 @@ processes do so on their shared channel.
 \end{verbatim}
 
 \noindent
+Examples:
 
 \begin{verbatim}
   p2c a ! 3*[]
@@ -1125,10 +1136,11 @@ processes do so on their shared channel.
 
 \subsection{Capability Communication}
 
-A communication may be an assertion of the form \verb+ <capability> <channel>+.
+A communication may be an assertion of the form \verb+<capability> <channel>+.
 The communication is between ambients.  The two
 processes which communicate do so on the shared channel.
 
+\newpage
 \begin{verbatim}
   capability   action
 
@@ -1158,43 +1170,51 @@ Examples:
 \section{Testing Ambient Programs}
 
 Unlike SPI programs, BIOSPI programs cannot be
-executed directly under LOGIX.  However, the commands ``run'' (see
-\ref{runners}) and ``record'' (see \ref{recorders})
+executed directly under LOGIX.  However, the commands {\em run} (see
+\ref{runners}) and {\em record} (see \ref{recorders})
 provide means to execute BIOSPI programs.
 
 \section{Interruption and Inspection}
 
-A BIOSPI program may reach an impasse ({\em e.g.}
+A Ambient Stochastic $\Pi$ Calculus program may reach an impasse ({\em e.g.}
 \verb+ bland#"RunFF" + above), reach a limit (see \ref{runners}
 and \ref{recorders}), be interrupted manually (see \ref{suspend})
 or terminate normally.  At an impasse, limit or interruption,
 the current state of the computation can be inspected by the command
-``rtr'' (see \ref{rtr}).
+{\em rtr} (see \ref{rtr}).
 At an impasse, limit or interruption, the tree of ambients can be inspected
-by the command ``atr''; the tree including the communicating channel
-set of each ambient can be inspected by the command ``ctr''
+by the command {\em atr}; the tree including the communicating channel
+set of each ambient can be inspected by the command {\em ctr}
 (see \ref{xtr}).
 
 \appendix
-\chapter{SPIBNF}
+\chapter{Syntax and Semantics}
+\section{BNF for Stochastic $\Pi$ Calculus}
 \label{SPIBNF}
-BNF for Stochastic Pi Calculus
+A Stochastic $\Pi$ Calculus module begins with the line:
 
 \begin{verbatim}
-<program>              ::= <spi_attributes> . <process_definitions> .
+-language(spifcp).
+\end{verbatim}
+
+\noindent
+That line is followed by one \verb+<program>+.
+
+\begin{verbatim}
+<program>              ::= <attributes> . <process_definitions> .
                            <process_definitions> .
 
-<spi_attributes>       ::= <spi_attribute>
-                           <spi_attribute> . <spi_attributes>
+<attributes>           ::= <attribute>
+                           <attribute> . <attributes>
 
-<spi_attribute>        ::= <export_declaration>
+<attribute>            ::= <export_declaration>
                            <public_declaration>
                            <default_baserate_declaration>
                            <default_weighter_declaration>
 
 <export_declaration>   ::= export(<process_name_list>)
 
-<public_declaration>   ::= public(<public_declaration_list>)
+<public_declaration>   ::= public(<parameter_list>)
 
 <default_baserate_declaration>
                        ::= baserate(<base_rate>)
@@ -1212,11 +1232,13 @@ BNF for Stochastic Pi Calculus
                        ::= <weighter_parameter>
                            <weighter_parameter> , <weighter_parameter_list>
 
-<public_declaration_list>
-                      ::= <channel_declaration>
-                          <channel_declaration> , <public_declaration_list>
+<parameter_list>       ::= <parameter>
+                           <parameter> , <parameter_list>
 
-<channel_declaration> ::=  <channel>
+<parameter>            ::= <channel_declaration>
+                           <logix_variable>
+
+<channel_declaration>  ::= <channel>
                            <channel>(<base_rate>)
                            <channel>(<base_rate> , <weighter_declaration>)
 
@@ -1229,23 +1251,11 @@ BNF for Stochastic Pi Calculus
 <process>              ::= <left_hand_side> ::= <right_hand_side>
 
 <left_hand_side>       ::= <atom>
-                           <atom>+<new_declaration>
-                           <atom>+(<new_declaration_list>)
+                           <atom>+<parameter>
+                           <atom>+(<parameter_list>)
 
 <atom>                 ::= <process_name>
-                           <process_name>(<argument_list>)
-
-<new_declaration_list> ::= <new_declaration>
-                           <new_declaration> , <new_declaration_list>
-
-<new_declaration>      ::= <channel_declaration>
-                           <logix_variable>
-
-<argument_list>        ::= <argument>
-                           <argument> , <argument_list>
-
-<argument>             ::= <channel>
-                           <logix_variable>
+                           <process_name>(<parameter_list>)
 
 <right_hand_side>      ::= <communication_clauses>
                            <comparison_clauses>
@@ -1270,7 +1280,7 @@ BNF for Stochastic Pi Calculus
                            <message> * <multiplier>
 
 <message>              ::= []
-                           {<argument_list>}
+                           {<parameter_list>}
 
 <multiplier>           ::= <positive_integer>
 
@@ -1294,8 +1304,8 @@ BNF for Stochastic Pi Calculus
 <logix_guard_clause>   ::= {<logix_ask_guard>} , <right_hand_side>
                            {(<logix_guard>)} , <right_hand_side>
 
-<logix_guard>          ::= <logix_ask_guard_list>
-                           <logix_ask_guard_list> : <logix_tell_guard_list>
+<logix_guard>          ::= <logix_ask_list>
+                           <logix_ask_list> : <logix_tell_list>
 
 <logix_ask_list>       ::= <logix_ask_guard>
                            <logix_ask_guard> , <logix_ask_list>
@@ -1307,29 +1317,36 @@ BNF for Stochastic Pi Calculus
                            <call> | <body>
 
 <call>                 ::= <local_call>
-                           <local_sum>
-                           << <new_scope> >>
+                           <local_call_sum>
+                           <nested_scope>
                            <external_call>
                            <macro_call>
                            {<logix_goal>}
                            {(<logix_goal_list>)}
-                           self
-			   self( <substitution_list> )
                            true
                            0
+
+<local_call_sum>       ::= <local_call> + <local_sum>
 
 <local_sum>            ::= <local_call>
                            <local_call> + <local_sum>
 
-<local_call>           ::= <atom>
-                           <process_name>( <substitution_list> )
+<local_call>           ::= <local_process_name>
+                           <local_process_name>( <argument_list> )
+
+<local_process_name>   ::= <process_name>
+                           self
+
+<argument_list>        ::= <parameter_list>
+                           <substitution_list>
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
 
-<substitution>         ::= <argument> = <argument>
+<substitution>         ::= <channel> = <channel>
+                       ::= <logix_variable> = <logix_variable>
 
-<new_scope>            ::= <new_declaration_list> . <scope_content>
+<new_scope>            ::= <parameter_list> . <scope_content>
                            <scope_content>
 
 <scope_content>        ::= <right_hand_side>
@@ -1339,171 +1356,278 @@ BNF for Stochastic Pi Calculus
                            <logix_path_term>#<logix_goal>
                            <logix_path_term>#<external_call>
 
-<macro_call>           ::= set_base_rate(<base_rate>, <channels_and_reply>)
-                           randomize_messages(<channels_and_reply>)
-                           serialize_messages(<channels_and_reply>)
-			   get_channel_status(<channel> , <channel_attributes>
-			                                , <logix_variable>)
+<macro_call>           ::= set_base_rate(<base_rate>, <channels_reply>)
+                           randomize_messages(<channels_reply>)
+                           serialize_messages(<channels_reply>)
+                           get_channel_status(<channel> , <channel_attributes>)
 
-<channels_and_reply>   ::= <logix_variable>
-                           <channel> , <channels_and_reply>
+<channels_reply>       ::= <reply>
+                           <channel> , <channels_reply>
 
-<channel_attributes>   ::= <logix_variable>
-		           <channel_attribute> , <channel_attributes>
+<channels_attributes>  ::= <reply>
+                           <channel_attribute> , <channel_attributes>
+
+<reply>                ::= <logix_variable>
 
 <logix_goal_list>      ::= <logix_goal>
                            <logix_goal> , <logix_goal_list>
 \end{verbatim}
 
+\newpage
+\section{Alternate BNF for Ambient Stochatic $\Pi$ Calculus}
+\label{ASPICBNF}
+An Ambient Stochastic $\Pi$ Calculus module begins with the line:
+
+\begin{verbatim}
+-language(biospi).
+\end{verbatim}
 
 \noindent
-{\bf\Large Primitives:}
+That line is followed by one \verb+<program>+.  The program
+has alternative definitions as follows.
+
+\begin{verbatim}
+<communication>        ::= <receive>
+                           <send>
+                           <capability>
+
+<receive>              ::= <channel> ? <transmission>
+                           <direction><channel> ? <transmission>
+
+<send>                 ::= <channel> ! <transmission>
+                           <direction><channel> ! <transmission>
+
+<direction>            ::= local
+                           p2c
+                           c2p
+                           s2s
+
+<capability>           ::= enter <channel>
+                           accept <channel>
+                           exit <channel>
+                           expel <channel>
+                           merge - <channel>
+                           merge + <channel>
+
+<call>                 ::= <local_call>
+                           <local_call_sum>
+                           <external_call>
+                           <ambient>
+                           <macro_call>
+                           {<logix_goal>}
+                           {(<logix_goal_list>)}
+                           true
+                           0
+
+<ambient>              ::= <ambient_name>(<nested_scope>)
+\end{verbatim}
+
+\section{Primitives}
 
 \begin{itemize}
 \item
-\verb+<channel> + is an alpha-numeric string, beginning with a lower-case
-alphabetic character; the string may contain underscore (\_) characters.
-It represents a $\Pi$-Calculus channel.
+\verb+<process_name>+ is an alpha-numeric string, beginning with an
+upper-case letter, which may contain underscore (\_) characters.
 
 \item
-\verb+<base_rate> + is a real number, which is a factor in the
-stochastic  weighting of a \verb+ <channel> +.  When the
-\verb+ <base_rate> + of a \verb+ <channel> + \linebreak is 0, the
-channel acts as a sink - all messages on that channel are discarded.
-
-\noindent
-A \verb+<base_rate>+ may be specified by a LOGIX variable for a new channel,
-but not for the default nor for a public channel.  The LOGIX variable
-should be instantiated to a number.
+\verb+<channel>+ is an alpha-numeric string, beginning with a lower-case
+alphabetic character; the string may contain underscore (\_) characters.
+It represents a $\Pi$ Calculus channel.
 
 \item
 \verb+<weighter>+ is an alpha-numeric string, beginning with a lower-case
 alphabetic character; the string may contain underscore (\_)
-characters.
+characters.  The currently acceptable values of \verb+<weighter>+ are
+``default'' and ``michaelis''; additional values may be defined - see
+weighter.txt
 
-\noindent
-A \verb+<weighter>+ may be specified by a LOGIX variable for a new channel,
-but not for the default nor for a public channel.  The LOGIX variable
-should be instantiated to an alpha-numeric string as above.
+\verb+<ambient_name>+ is an alpha-numeric string, beginning with
+a lower-case alphabetic character; the string may contain
+underscore (\_) characters.
+\end{itemize}
 
-\noindent
-Any \verb+<weighter_parameter>+ may be specified by a
-LOGIX variable for a new channel, but not for a public channel.
-The LOGIX variable should be instantiated to a real number.
+\section{Semantics}
+
+A Stochastic $\Pi$ Calculus \verb+<program>+ is completely
+equivalent to an Ambient Stochastic $\Pi$ Calculus
+\verb+<program>+ with the same content.
+ 
+\begin{itemize}
+\item
+A \verb+<parameter>+ in a \verb+<public_declaration>+ is an implicit
+argument of every process in the program.
 
 \item
-\verb+<process_name> + is an alpha-numeric string, beginning with an
-upper case letter, which may contain underscore (\_) characters.
+Any argument of a \verb+<process>+ may be  provided by a caller in an
+\verb+<argument_list>+, replacing any implicit argument of the same
+name. 
+An argument  may be {\em extruded} from a \verb+<process>+ by a
+\verb+<send>+.  An argument
+may also be replaced in a \verb+<parameter>+ which is added to the
+\verb+<atom>+ in the \verb+<left_hand_side>+ of a
+\verb+<process_declaration>+.
 
 \item
-In a \verb+ <macro_call> + any argument which precedes the
-\verb+< channels_and_reply> + 
-or \verb+ <channel_attributes> + may be a read-only-variable
-(\verb+ <logix_variable>? +).  The \verb+ <logix_variable> + must be
-instantiated before the \verb+ <macro_call> + can complete.
+A \verb+<base_rate>+ may be specified by a \verb+<logix_variable>+
+in the \linebreak
+\verb+<default_baserate_declaration>+ or in a
+\verb+<channel_declaration>+.  In the former case, or when the
+\verb+<channel_declaration>+ is within the \verb+<public_declaration>+,
+the \verb+<logix_variable>+ itself must be declared in the
+\verb+<public_declaration>+; in the latter case, when the channel
+is in the \verb+<parameter>+ which is added in the \linebreak
+\verb+<process_declaration>+, the \verb+<logix_variable>+ should
+be an argument of the process.  In any case, the \verb+<logix_variable>+
+should be instantiated to a non-negative number.
+
+\item
+A \verb+<weighter>+ may be specified by a \verb+<logix variable>+
+in the \linebreak \verb+<default_weighter_declaration>+ or in a
+\verb+<channel_declaration>+.  In the former case, or when the
+\verb+<channel_declaration>+ is within the \verb+<public_declaration>+, 
+the \verb+<logix_variable>+ itself must be declared in the
+\verb+<public_declaration>+; in the latter case, when the channel is in
+a \verb+<parameter>+ which is added in the 
+\linebreak \verb+<process_declaration>+, 
+the \verb+<logix_variable>+ should be an argument of the process.
+In any case the \verb+<logix_variable>+ should be instantiated to
+a string (see above).
 
 \noindent
-When a \verb+ <macro_call> + is completed, the trailing
-\verb+ <logix_variable> + is instantiated - its value is usually the
-string "true", but it may vary in some cases.
+A \verb+<weighter_parameter>+ may be specified by a
+\verb+<logix_variable>+, as for a \verb+<base_rate>+ (see above).
+
+\item
+An argument in a \verb+<macro_call>+ which precedes the \linebreak
+\verb+<channels_and_reply>+ or which is a \verb+<channel_attribute>+
+may be a read-only-variable
+(\verb+<logix_variable>?+).
+The \verb+<logix_variable>+ must be instantiated before the
+\verb+<macro_call>+ can be completed.
 
 \noindent
-The program macro, {bf \verb+get_channel_status+} instantiates the trailing
-\verb+ <logix_variable> + to the value(s) of the named attribute(s).  See 
+When a \verb+<macro_call>+ is completed, the trailing \linebreak
+\verb+<logix_variable>+ is instantiated - its value is usually the
+string ``true'', but it may vary in some cases.
+
+\noindent
+The program macro \verb+get_channel_status+
+instantiates the trailing \linebreak
+\verb+<logix_variable>+ to the value(s) of the named attribute(s).  See 
 \verb+program_macros.txt+ for details regarding
-\verb+ <channel_attribute> + values.
+\verb+<channel_attribute>+ \linebreak values.
 
-\item
-\verb+<logix_variable> + is an alpha-numeric string, beginning with an
-upper-case alphabetic character; the string may contain underscore
-(\_) characters, or it may be a single underscore character.  By
-convention the single underscore character is an anonymous
-\verb+ <logix_variable> +; it may only appear in a \verb+ <message> + or
-within a \verb+ <logix_guard> +, a \verb+ <logix_ask_guard> + or a
-\verb+ <logix_goal> +\footnote{WARNING: when the single underscore
-character LOGIX variable appears in a \verb+ <message> +, it
-should not appear in place of a \verb+ <channel> + . } .
+\noindent
+WARNING: When the single underscore character \verb+<logix_variable>+
+\linebreak (\_) appears
+in a \verb+<receive> <transmission>+ in place of a \linebreak
+\verb+<channel>+, the corresponding \verb+<send> <channel>+
+should be declared in a \verb+<public_declaration>+.
+\end{itemize}
 
+\section{Logix Terms}
+See \verb+supplement.mss + for details of the Logix language.
+
+\begin{itemize}
 \item
-\verb+<logix_ask_guard> + is any predicate permitted in the ask of a
+\verb+<logix_ask_guard>+ is any predicate permitted in the ask of a
 guard in LOGIX language(compound).
 
 \item
-\verb+<logix_tell_guard> + is any predicate permitted in the tell of a
+\verb+<logix_tell_guard>+ is any predicate permitted in the tell of a
 guard in LOGIX language(compound).
 
 \item
-\verb+<logix_goal> + is any predicate permitted in the right-hand-side
+\verb+<logix_goal>+ is any predicate permitted in the right-hand-side
 of a clause in LOGIX language(compound).
 
 \item
-\verb+<logix_path_term> + is any term permitted in the path
+\verb+<logix_path_term>+ is any term permitted in the path
 specification of a remote procedure call in LOGIX language(compound).
 \end{itemize}
 
-\newpage
-
-\noindent
-{\bf\Large Notes:}
+\section{Notes}
 
 \begin{itemize}
 
 \item
-The ``new'' predicate of $\Pi$-Calulus has been subsumed into a prefix
-\verb+ <new_declaration_list>+\linebreak of a \verb+ <new_scope> +
-and the added
-\verb+ <new_declaration_list> + of a \verb+ <process> +.
+The {\em new} predicate of $\Pi$ Calulus has been subsumed into a prefix
+\verb+<parameter_list>+ of a \verb+<new_scope>+
+and the added \verb+<parameter_list>+ \linebreak of a \verb+<process>+.
 
 \item
-The \verb+ <argument>s + of a
-\verb+ <process> + are provided by a caller. An \verb+ <argument> +
-may be {\em extruded} from a \verb+ <process> + by a \verb+ <send> +.
+A \verb+<process>+ which is declared at level one of a
+\verb+<program>+ definition, may be called by an external process,
+if it is exported explicitly in an \verb+<export_declaration>+,
+or if there is no \verb+<export_declaration>+ \linebreak in the
+\verb+<program>+,
+in which case all level one processes are exported.
 
 \item
-A \verb+ <process> + which is exported, may be called by an
-external process.
-
-
-\item
-Nested processes are scoped with double angle brackets (see
-definition of \verb+ <new_scope> +).
-
+Nested  ``new'' processes are scoped with double angle brackets (see
+definition of \verb+<nested_scope>+).
 
 \item
-The reserved words are {\em self}, {\em true} and {\em otherwise}.
+Each \verb+<local_call>+ in a \verb+<local_call_sum>+ must be
+to a \verb+<process>+ \linebreak
+whose \verb+<right_hand_side>+ consists
+of \verb+<communication_clauses>+.
+
+\item
+The basic reserved words are {\em self}, {\em true} and
+{\em otherwise}.
 They are reserved in context, and may be used as channel names.
 
-
 \begin{itemize}
 \item
-self may be used to iterate any process, including anonymous processes.
+{\em self} may be used to iterate any process, including anonymous processes.
 \item
-true is an alternative name for process \verb+ 0 +.
+{\em true} is an alternative name for process \verb+0 +.
 \item
-otherwise appears as the guard of the last clause of
-\verb+ <comparisons> +.
+{\em otherwise} appears as the guard of the last clause of
+\verb+<comparisons>+.
 \end{itemize}
 
-\item
-A  new \verb+ <argument> + which is a \verb+ <logix_variable> + is initially
-uninstantiated.
+\noindent
+Additional reserved words, used in Ambient Stochastic $\Pi$
+Calculus are {\em enter}, {\em accept},
+{\em exit}, {\em expel}, {\em merge}, {\em p2c}, {\em c2p}, {\em s2s}.
+
+These words are all prefix operators, except for {\em merge}, which
+is only reserved in context.
 
 \item
-Within a \verb+ <logix_term> +, normal LOGIX recognition of variables
+An argument which is declared as a \verb+<logix_variable>+
+in the added \verb+<parameter_list>+ of a \verb+<left_hand_side>+
+is initially uninstantiated.
+
+\item
+Within a \verb+<logix_term>+, normal LOGIX recognition of variables
 applies - {\em i.e.} variable names all begin with a capital letter
-or underscore; to reference a \verb+ <channel> + whose name begins
-with a lower case letter, within a \verb+ <logix_term> +, refer to
-\verb+ "_var"(<channel>) +.
+or underscore; to reference a \verb+<channel>+ whose name begins
+with a lower case letter, within a \verb+<logix_term>+, refer to
+\verb+"_var"(<channel>)+.
 
 
 \item
-A \verb+ <logix_variable> + may have a value which is an arbitrary LOGIX
+A \verb+<logix_variable>+ may have a value which is an arbitrary LOGIX
 term.
-Such values may be tested by a \verb+ <logix_ask_guard> + or manipulated
-by a \verb+ <logix_goal> + or by a \verb+ <logix_tell_guard> +.  An
-arbitrary  \verb+ <logix_term> + may be sent in a \verb+ <message> + by
-the \verb+ <logix_goal> + \verb+ spi_send/2 +, or received by the
-\verb+ <logix_goal> +, \verb+ spi_receive/2 +:
+Such a value may be tested by a \verb+<logix_ask_guard>+,
+instantiated or used as an argument in a \verb+<logix_goal>+ or by
+a \verb+<logix_tell_guard>+.
+
+\noindent
+A \verb+<logix_variable>+ may be instantiated by an assignment
+in a \verb+<logix_goal>+ within a \verb+<call>+:
+
+\begin{verbatim}
+    {<logix_variable> = <logix_term>}
+\end{verbatim}
+
+\item An
+arbitrary  \verb+<logix_term>+ may be sent in a \verb+<message>+ by
+the library \verb+<logix_goal>+ \verb+spi_send/2+, or received by the
+library \verb+<logix_goal>+, \verb+spi_receive/2+:
 
 \begin{verbatim}
   spi_send(<message_content>, <channel>)
@@ -1515,37 +1639,37 @@ the \verb+ <logix_goal> + \verb+ spi_send/2 +, or received by the
 {\em e.g.}
 
 \begin{verbatim}
-  spi_send({"String", {tuple}, [list | Tail]},
+  spi_send({"A string", a(Tuple), [A, list | Tail]},
            "_var"(channel))
 
   spi_receive("_var"(channel), {String, Tuple, List})
 \end{verbatim}
 
 \item
-The library \verb+ <logix_goal>s+ \verb+ spi_send/3 +,
-\verb+ spi_receive/3 +,\linebreak \verb+ spi_send/4 +, \verb+ spi_receive/4 + may be
+The library \verb+<logix_goal>s+ \verb+spi_send/3 +,
+\verb+spi_receive/3 +,\linebreak \verb+spi_send/4+, \verb+spi_receive/4+ may be
 used as well, where the third argument is a multiplier (default 1), and
 the fourth argument is an identifier (default ``sender'' or ``receiver'').
 
 \item
-The additive definition of \verb+ <left_hand_side> + is syntactic sugar
+The additive definition of \verb+<left_hand_side>+ is syntactic sugar
 - {\em e.g.}
 
 \begin{verbatim}
-  P + (<new_declaration_list>) ::= <right_hand_side>.
+  P + (<argument_list>) ::= <right_hand_side>.
 \end{verbatim}
 
 \noindent
 is equivalent to:
 
 \begin{verbatim}
-  P ::= << <new_declaration_list> .
+  P ::= << <argument_list> .
            P1 .
            P1 ::= <right_hand_side> >> .
 \end{verbatim}
 
 \item
-The recursive definition of \verb+ <right_hand_side> + is syntactic
+The recursive definition of \verb+<right_hand_side>+ is syntactic
 sugar - {\em e.g.}
 
 \begin{verbatim}
@@ -1586,12 +1710,6 @@ is equivalent to:
                 P1 ::= {<logix_ask_guard1>} , Q ;
                        {<logix_ask_guard2>} , R >> .
 \end{verbatim}
-
-
-\item
-Each \verb+ <local_call> + in a \verb+ <local_sum> + must be to a 
-\verb+ <process> + whose \verb+ <right_hand_side> + consists of
-\verb+ <communication_clauses> +.
 
 \end{itemize}
 
@@ -1637,7 +1755,7 @@ transmission occurs.)
 
 \noindent
 The third macro permits the user to specify a
-\verb+ <weighter_declaration> +, Weighter, for the new channel.
+\verb+<weighter_declaration>+, Weighter, for the new channel.
 
 \noindent
 Channel may be a string, in which case a LOGIX variable named with that
@@ -1720,7 +1838,7 @@ The call above is an example of a Remote Process Call (RPC).
 
 \noindent
 The quotation marks around RunTT are necessary, since LOGIX
-treats names beginning with a capital letter or an underscore as logic
+treats names beginning with a capital letter or an underscore as logix
 variables.
 
 \subsection{Execute Goals - run}
@@ -1917,7 +2035,7 @@ Execute Goal, with respect to Path and prepare Tree.
 Tree may be displayed using macros ``ctree'' and ``vtree'' below.
 Depth is the depth of remote process call to be included in Tree -
 if omitted, all goals are included.
-For example, if Path is \verb+ boolean#bland +
+For example, if Path is \verb+boolean#bland+
 and goal is ``RunTT'', Tree represents the execution of the RPC:
 
 \begin{verse}
@@ -1957,7 +2075,7 @@ participation in the execution of the computation.
 \noindent
 See Section \ref{vtree traces} for examples.
 
-\section{Debugging BIOSPI}
+\section{Debugging }
 
 \subsection{Show Ambient Tree - atr,ctr}
 \label{xtr}
@@ -1975,7 +2093,7 @@ Display the ambient tree, a subtree, a node or a set of nodes.
 The form of the display is specified
 by the AmbientSelector (default is the entire tree).  An Ambient is
 uniquely identified (within a run) by a positive integer.  Its
-full identifier is a 2-tuple, \verb+ <name>(<integer>) +.  The
+full identifier is a 2-tuple, \verb+<name>(<integer>)+.  The
 AmbientSelector may specify:
 
 \begin{itemize}
@@ -1984,8 +2102,8 @@ AmbientSelector may specify:
   designated ambient.
 \item if a name, all ambients with that name;
   The name ``system'' designates the root of the tree as well as
-  any other ambients whose full identifier is \verb+ system(<integer>)+.
-\item if a 2-tuple ({\em e.g.} \verb+ cell(6) +) or a negative integer 
+  any other ambients whose full identifier is \verb+system(<integer>)+.
+\item if a 2-tuple ({\em e.g.} \verb+cell(6)+) or a negative integer 
   ({\em e.g.} -6), the absolute value of the integer is the unique
   identifier of the single node displayed; in the former case,
   the name of the ambient is ignored.
@@ -2005,7 +2123,7 @@ Suspend the computation and display the resolvent as a tree of ambients.
 The active processes in each ambient are indented immediately below 
 the node identifier.
 To continue the computation, use the resume command
-(see \verb+ ref{resume}+).
+(see \verb+ref{resume}+).
 
 \noindent
 The AmbientSelector is treated as for atr/ctr above.
@@ -2031,7 +2149,7 @@ private channels and the current options.
 
 \noindent
 The reset function is called automatically at the beginning of
-any ``run'' or ``record'' command and whenever the internal
+any {\em run} or {\em record} command and whenever the internal
 time Limit is exceeded
 (See \ref{runners} and  \ref{recorders}).
 
@@ -2091,7 +2209,7 @@ Change the current computation according to the specified number.
     state(Number) 
 \end{verse}
 
-The current computation number is set to \verb+ Number + and
+The current computation number is set to \verb+Number+ and
 that computation's goal and state are displayed,
 
 \chapter{Auxilliary LOGIX Procedures}
@@ -2115,8 +2233,8 @@ and record its behavior.
 \end{verbatim}
 
 \noindent
-It is normally called by the macros \verb+ run + in Section
-\ref{runners}, \verb+ record + in Section \ref{recorders}.
+It is normally called by the macros {\em run} in Section
+\ref{runners} and {\em record} in Section \ref{recorders}.
 
 \begin{itemize}
 \item
@@ -2136,7 +2254,7 @@ does the same thing, and records the events of the run on file fff.
 The elements of the file are lines which have one of three forms.
 \begin{itemize}
 \item
-A real-valued ``time''.
+A real-valued {\em time}.
 \item
 \verb:+<procedure name> :, which records the start of a procedure.
 \item
@@ -2152,7 +2270,7 @@ by 10.
 \end{itemize}
 
 \noindent
-The \verb+ <format> + argument may be one of ``none'', ``process'',
+The \verb+<format>+ argument may be one of ``none'', ``process'',
 ``creator'', ``full''.  The default is ``none''; the other three
 annotate the records of communication with the name or identifier
 of the channel over which the communication occurred.
@@ -2216,8 +2334,8 @@ A short shell script, spixys, combines the functions with a call to gnuplot.
 
 \section{repeat}
 \label{repeat}
-This LOGIX procedure is called by the \verb+ run + and
-\verb+ record + macros (see \ref{runners} and
+This LOGIX procedure is called by the {\em run} and
+{\em record} macros (see \ref{runners} and
 \ref{recorders}).
 
 \noindent
@@ -2245,9 +2363,9 @@ where:
 \end{verbatim}
 
 \noindent
-A negative \verb+ <repetition> + is treated as zero.
+A negative \verb+<repetition>+ is treated as zero.
 \noindent
-(See Appendix \ref{SPIBNF} for the definition of \verb+ <external_call>+ .)
+(See Appendix \ref{SPIBNF} for the definition of \verb+<external_call>+.)
 
 \noindent
 Examples:
