@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/16 08:04:00 $
+		       	$Date: 2000/05/25 07:29:43 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,7 +15,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -language(compound).
 %-mode(interrupt).
--export([concatenate_lists/2, make_lhs_tuple/3,
+-export([concatenate_lists/2, find_logix_variables/3, make_lhs_tuple/3,
 	 make_predicate_list/3, untuple_predicate_list/3,
 	 names_to_channel_list/2,
 	 real_mean_kluge/4,
@@ -102,8 +102,18 @@ tuple_to_atom(LHS, Atom) :-
 concatenate_lists(Lists, Out) :-
 
     Lists = [List | Rest],
-    List ? Item, Item =\= [] :
+    List ? Item, Item =\= [], Item =\= [_ | _] :
       Out ! Item,
+      Lists' = [List' | Rest] |
+	self;
+
+    Lists = [List | Rest],
+    List ? Item, Item =\= [], Item =?= [_ | _] :
+      Lists' = [Item, List' | Rest] |
+	self;
+
+    Lists = [List | Rest],
+    List ?  [] :
       Lists' = [List' | Rest] |
 	self;
 
@@ -391,3 +401,45 @@ real_mean_kluge(Mean, Body, Mean', Body') :-
       Search = _,
       Mean' = `pifcp(1),
       Body'= (Mean' = Mean, Body).
+
+
+
+find_logix_variables(Predicate, LogixVars, NextLogixVars) :-
+
+    Predicate ? Element |
+	find_logix_variables(Element, LogixVars, LogixVars'?),
+	self;
+
+    Predicate =?= `String, string(String) :
+      LogixVars = [Predicate | NextLogixVars];
+
+    Predicate =?= `_Other,
+    otherwise :
+      LogixVars = NextLogixVars;
+
+    Predicate =?= ?String, string(String) :
+      LogixVars = [`String | NextLogixVars];
+
+    Predicate =?= ?_Other,
+    otherwise :
+      LogixVars = NextLogixVars;
+
+    tuple(Predicate),
+    Predicate =\= `_, Predicate =\= ?_,
+    N := arity(Predicate) |
+	find_in_tuple + (Tuple = Predicate);
+
+    otherwise :
+      Predicate = _,
+      LogixVars = NextLogixVars.
+
+  find_in_tuple(N, Tuple, LogixVars, NextLogixVars) :-
+
+    N-- > 0,
+    arg(N, Tuple, Argument) |
+	find_logix_variables(Argument, LogixVars, LogixVars'?),
+	self;
+
+    N =< 0 :
+      Tuple = _,
+      LogixVars = NextLogixVars.

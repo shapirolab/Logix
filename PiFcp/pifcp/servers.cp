@@ -4,22 +4,22 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/16 08:04:01 $
+		       	$Date: 2000/05/25 07:29:44 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--export([serve_empty_scope/5, make_guard_receive/5]).
+-export([serve_empty_scope/6, make_guard_receive/5]).
 -language(compound).
 
 /*
-** serve_empty_scope/5+5
+** serve_empty_scope/6+5
 **
-** Serve requests from first-level processes.  See serve_process_scope/6+6
+** Serve requests from first-level processes.  See serve_process_scope/8+6
 **
 ** Input:
 **
@@ -32,8 +32,8 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **          Lookup process Functor and return:
 **               CallType in {none, outer, inner}
 **               CallDefinition = {Name, Arity, ChannelNames,
-**			OuterLHS, InnerLHS, Mode(SendRHS, ProcessRHS)}
-
+**                                 {OuterLHS, InnerLHS},
+**				   Mode(SendRHS, ProcessRHS)}
 **
 **      process(PiLHS, Status, ProcessScope)
 **
@@ -57,6 +57,8 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **
 **   Entries is a list of generated processes for first level procedure entry.
 **
+**   Optimize is a list of procedure object descriptors.
+**
 **   Errors is a list of error diagnostics.
 **
 ** Local:
@@ -66,7 +68,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **   Refs, AddRef is a list of deferred lookup_functor/3 requests.
 */
 
-serve_empty_scope(In, Controls, Exports, Entries, Errors) +
+serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 		(Progeny = [], Refs = AddRef?, AddRef,
 		 Sums, Summed = Sums?) :-
 
@@ -78,7 +80,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(PiLHS, NewChannelList, ProcessScope),
+    In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
     Controls = {Exported, GlobalDescriptors, GlobalNames, Means} |
 	make_process_scope(PiLHS, Means, ProcessScope, [],
 				NewChannelList, In'', In'?,
@@ -88,12 +90,16 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
 	make_prefix_call(Export, Means, GlobalNames, Prefix),
 	create_entry(GlobalDescriptors, GlobalNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
-			Entries, Entries'?),
-	add_process_definition(NewDefinition?, Progeny, Progeny'),
+			Entries, Entries'?, Optimize, Optimize'?),
+	add_process_definition(NewDefinition?, LHSS, Progeny, Progeny'),
 	self;
 
     In ? call_sum(Name, Sum, Call) :
       Sums ! Name(Sum, Call) |
+	self;
+
+    In ? procedure(Notes, Arity, LHSS) :
+      Optimize ! procedure(Notes, Arity, LHSS, _Value) |
 	self;
 
     In = [] :
@@ -103,7 +109,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
       Sums = [] |
 	find_process_refs(Refs, Progeny, [], []),
 	/* sum_procedures. */
-	call#sum_procedures(Summed, Entries, Errors).
+	call#sum_procedures(Summed, Entries, Optimize, [/*develope*/], Errors).
 
   make_prefix_call(Export, Means, GlobalNames, Prefix) :-
 
@@ -130,37 +136,40 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
 
 
 create_entry(GlobalDescriptors, GlobalNames, Prefix,
-		ProcessDefinition, NewDefinition, Entries, NextEntries) :-
+		ProcessDefinition, NewDefinition,
+		Entries, NextEntries, Optimize, NextOptimize) :-
 
-    ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
-					CodeTuple},
+    ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
     Name =\= "_",
+    LHSS = {OuterLHS, _InnerLHS},
     tuple(Prefix),
     Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
       ascii('.', Period),
-      Entries ! export(Atom?, Initializer?, []),
+      Entries ! export(OuterLHS, Initializer?, []),
       NextEntries = Entries',
-      NewDefinition = {Name, Arity, ChannelNames'?, OuterLHS'?, InnerLHS'?,
-					CodeTuple} |
-	piutils#tuple_to_atom(OuterLHS, Atom),
+      Optimize ! procedure([call(Name'?)], Arity, OuterLHS, _Value),
+      NextOptimize = Optimize',
+      NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
+      NewLHS = {OuterLHS'?, InnerLHS'?} |
 	list_to_string([Period|NL], Name'),
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
 	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
 					Initializer, Prefix);
 
-    ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
-					CodeTuple},
+    ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
+    LHSS = {OuterLHS, _InnerLHS},
     Name =\= "_",
     Prefix = [],
     GlobalNames =\= [],
     Index := arity(OuterLHS) :
       GlobalDescriptors = _,
       NextEntries = Entries,
-      NewDefinition = {Name, Arity, ChannelNames'?, OuterLHS'?, InnerLHS'?,
-					CodeTuple} |
+      NextOptimize = Optimize,
+      NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
+      NewLHS = {OuterLHS'?, InnerLHS'?} |
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples;
 	
@@ -169,7 +178,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
       GlobalNames = _,
       Prefix = _,
       NewDefinition = ProcessDefinition,
-      Entries = NextEntries.
+      Entries = NextEntries,
+      NextOptimize = Optimize.
 
   split_channels(I, Index, ChannelNames, ParamList, ChannelNameList) :-
 
@@ -221,16 +231,14 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 
 
 /*
-** serve_process_scope/7+6
-**
-** Serve requests from first-level processes.  See serve_process_scope/6+6
+** serve_process_scope/8+6
 **
 ** Input:
 **
 **   In is the request input stream:
 **
 **      lhss(Outer, Inner) - return ProcessDefinition's
-**                            OuterLHS and InnerLHS.
+**                           OuterLHS and InnerLHS.
 **
 **      body_receive(Channel, Body, ChannelVar, ChannelList)
 **
@@ -245,8 +253,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 **          Lookup process Functor and return:
 **               CallType in {none, outer, inner}
 **               CallDefinition = {Name, Arity, ChannelNames,
-			OuterLHS, InnerLHS, Mode(SendRHS, ProcessRHS)}
-**
+**                                 {OuterLHS, InnerLHS},
+**                                 Mode(SendRHS, ProcessRHS)}
 **
 **      process(PiLHS, Status, ProcessScope)
 **
@@ -261,27 +269,29 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 **   Out is a list of lookup_functor/3 requests which cannot be satisfied
 **   at this level.
 **
+**   Notes is a list of optimisation information - see optimize.cp .
+**
 **   Errors is defined in serve_empty_scope.
 **
-** Local: see serve_empty_scope/5+5 above.
+** Local: see serve_empty_scope/6+5 above.
 */
 
-serve_process_scope(In, ProcessDefinition, Means,
+serve_process_scope(In, ProcessDefinition, Means, Notes,
 			Out, NextOut, Errors, NextErrors) +
 		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
 		 Refs = AddRef?, AddRef) :-
 
     In ? lhss(Outer, Inner),
-    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, OuterLHS, InnerLHS,
-					_CodeTuple} :
+    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, LHSS, _CodeTuple},
+    LHSS = {OuterLHS, InnerLHS} :
       Outer = OuterLHS,
       Inner = InnerLHS |
 	self;
 
     In ? body_receive(FromChannel, Message, ChannelVar, ChannelList),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} :
-      ChannelVar = `ChannelName' |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      ChannelVar = `ChannelName'?,
+      Notes ! variables(ChannelVar) |
 	piutils#verify_channel(Name, FromChannel, ChannelNames, Locals,
 				ChannelName, Errors, Errors'?),
 	call#prime_local_channels(Primes, [ChannelName], [ChannelName']),
@@ -291,9 +301,9 @@ serve_process_scope(In, ProcessDefinition, Means,
 	self;
 
     In ? body_send(Message, ToChannel, Sender, ChannelList, ChannelVar),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} :
-      ChannelVar = `ChannelName'? |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      ChannelVar = `ChannelName'?,
+      Notes ! variables([ChannelName'? | MsChannelNames'?]) |
 	piutils#verify_channel(Name, ToChannel, ChannelNames, Locals,
 				ChannelName, Errors, Errors'?),
 	make_sender,
@@ -306,7 +316,8 @@ serve_process_scope(In, ProcessDefinition, Means,
 
     In ? call(Body1, Body2) |
 	call#make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
-				In'', In'?, Errors, Errors'?, _CallDefinition),
+				In'', In'?, Errors, Errors'?, CallDefinition),
+	add_call(CallDefinition, Body2, Notes, Notes'),
 	self;
 
     In ? error(Description),
@@ -316,17 +327,17 @@ serve_process_scope(In, ProcessDefinition, Means,
 
     In ? guard_compare(Guard, ChannelList, NextChannelList, Comparer),
     Guard =?= {Operator, C1, C2},
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      Notes ! variables(List?) |
 	message_to_channels({C1, C2}, Name, ChannelNames, Locals, false, List,
 				Errors, Errors'?),
 	compare_channels_ok,
 	self;
 
     In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} :
-      Primes = _ |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      Primes = _,
+      Notes ! variables(ChannelName'?) |
 	piutils#verify_channel(Name, Channel, ChannelNames, Locals,
 				ChannelName', Errors, Errors'?),
 	parse_message(Name, ChannelNames, Message, MsChannelNames,
@@ -337,8 +348,8 @@ serve_process_scope(In, ProcessDefinition, Means,
 	self;
 
     In ? guard_send(Channel, Message, SendId, SendIndex, Guard),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      Notes ! variables([ChannelName'? | MsChannelNames'?]) |
 	piutils#verify_channel(Name, Channel, ChannelNames, Locals,
 					ChannelName,
 				Errors, Errors'?),
@@ -346,21 +357,24 @@ serve_process_scope(In, ProcessDefinition, Means,
 				MsChannelNames, Errors', Errors''?),
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
-	/* Check channels */
 	piutils#names_to_channel_list(MsChannelNames'?, ChannelList),
 	make_guard_sender,
 	make_guard_send,
 	self;
 
     In ? guard_cdr(Cdr, ClauseList, GuardMode),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      Notes ! variables(MsChannelNames?) |
 	message_to_channels(Cdr, Name, ChannelNames, Locals, false,
 				MsChannelNames, Errors, Errors'?, 2),
 	piutils#sort_out_duplicates([MsChannelNames?], CdrNames, DChs),
 	check_duplicates_reply(DChs?, Name?, duplicate_channel_in_cdr,
 				Errors', Errors''?),
 	cdr_clauses,
+	self;
+
+    In ? logix_variables(Variables) :
+      Notes ! variables(Variables) |
 	self;
 
     In ? lookup_functor(Functor, CallType, CallDefinition),
@@ -382,31 +396,31 @@ serve_process_scope(In, ProcessDefinition, Means,
     IdIndex++,
     string_to_dlist(SI, SCs, []) :
       Tail = Dot,
-      Suffix = SCs |
+      Suffix = SCs,
+      Notes ! call(Id) | /* Can't hurt! */
 	list_to_string(DL, Id),
 	self;
 
-    In ? process(PiLHS, NewChannelList, ProcessScope),
-    ProcessDefinition =?= {_Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
+    In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
+    ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
 	piutils#concatenate_lists([Locals, ChannelNames], GlobalNames),
 	make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
 				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
-	add_process_definition(NewDefinition?, Progeny, Progeny'),
+	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
 	self;
 
     In ? remote_call(Call1, Call2),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
-	call#make_remote_call(Name, Call1, ChannelNames, Locals, Primes, Call2,
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
+      Notes ! variables(LogixVars?) |
+	call#make_remote_call(Name, ChannelNames, Locals, Primes, Call1, Call2,
 				Errors, Errors'?),
+	piutils#find_logix_variables(Call2?, LogixVars, []),
 	self;
 
     /* Code for communication procedures */
     In ? code(Mode, SendRHS, ProcessRHS),
-    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _OuterLHS, _InnerLHS,
-					CodeTuple} :
+    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _LHSS, CodeTuple} :
       CodeTuple = Mode?(SendRHS?, ProcessRHS?) |
 	self;
 
@@ -415,17 +429,31 @@ serve_process_scope(In, ProcessDefinition, Means,
       Out ! CallSum |
 	self;
 
+    /* Pass along */
+    In ? Procedure, Procedure  = procedure(_Notes, _Arity, _LHSS) :
+      Out ! Procedure |
+	self;
+
     In = [],
-    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _OuterLHS, _InnerLHS,
-					CodeTuple} :
+    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _LHSS, CodeTuple} :
       Means = _,
       IdIndex = _,
       Locals = _,
       Primes = _,
+      Notes = [],
       AddRef = [],
       Errors = NextErrors |
 	unify_without_failure(CodeTuple, none([], [])),
 	find_process_refs(Refs, Progeny, Out, NextOut).
+
+  add_call(CallDefinition, Goal, Notes, NextNotes) :-
+
+    CallDefinition =?= [] :
+      Goal = _,
+      Notes = NextNotes;
+
+    CallDefinition =\= [] :
+      Notes = [call(Goal) | NextNotes].
 
   compare_channels_ok(Operator, List, Comparer,
 			ChannelList, NextChannelList) :-
@@ -496,7 +524,6 @@ serve_process_scope(In, ProcessDefinition, Means,
      ClauseList ! Clause? |
 	make_guard_cdr,
 	self.
-
 
 /*
 ** find_process_refs/4
@@ -601,8 +628,8 @@ make_process_scope(PiLHS, Means, ProcessScope, GlobalNames, NewChannelList1,
 	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
-      ProcessDefinition =?= {Name?, Arity?, ChannelNames?,
-				OuterLHS?, InnerLHS?, _CodeTuple} |
+      ProcessDefinition = {Name?, Arity?, ChannelNames?, LHSS, _CodeTuple},
+      LHSS = {OuterLHS?, InnerLHS?} |
 	parse_lhs(PiLHS, Means, Name, Arity,
 			ParamList, ChannelList, NewChannelList,
 				Errors, Errors'?),
@@ -621,8 +648,9 @@ make_process_scope(PiLHS, Means, ProcessScope, GlobalNames, NewChannelList1,
 				ChannelList1?, ChannelList2),
 	make_lhs_tuples(Name?, ParamList1?, GlobalNames, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
-	serve_process_scope(ProcessScope?, NewDefinition, Means,
-				Out, NextOut, Errors'''', NextErrors).
+	optimize_procedures(NewDefinition, Notes, Out, Out'?),
+	serve_process_scope(ProcessScope?, NewDefinition, Means, Notes,
+				Out', NextOut, Errors'''', NextErrors).
 
   correct_for_duplication(L1, L2, P, C1, C2) :-
 
@@ -634,20 +662,42 @@ make_process_scope(PiLHS, Means, ProcessScope, GlobalNames, NewChannelList1,
       L1 = _,
       C1 = _ |
 	piutils#subtract_list(L2, P, C2).
-	
+
+optimize_procedures(ProcessDefinition, Notes, Out, NextOut) :-
+
+    ProcessDefinition =?= {_Name, _Arity, _ChannelNames, LHSS, _CodeTuple},
+    LHSS = {OuterLHS, _InnerLHS},
+    OuterLHS =?= [] :
+      Notes = _,
+      Out = NextOut;
+
+    ProcessDefinition =?= {_Name, Arity, _ChannelNames, LHSS, _CodeTuple},
+    LHSS = {OuterLHS, InnerLHS},
+    OuterLHS =\= [],
+    OuterLHS =\= InnerLHS,
+    arg(1, InnerLHS, Name) :
+      Out = [procedure([call(Name)], Arity, OuterLHS),
+	     procedure(Notes, Arity, InnerLHS) | NextOut];
+% | screen#display(outer(PName) - inner(Name));
+
+    ProcessDefinition =?= {_Name, Arity, _ChannelNames, LHSS, _CodeTuple},
+    LHSS = {OuterLHS, InnerLHS},
+    OuterLHS =\= [],
+    OuterLHS =?= InnerLHS :
+      Out = [procedure(Notes, Arity, InnerLHS) | NextOut].
+% | screen#display(only(Name, Arity)).
+    
 
 export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
 
-    ProcessDefinition =?= {Name, Arity, _ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple},
+    ProcessDefinition =?= {Name, Arity, _ChannelNames, _LHSS, _CodeTuple},
     Name =\= "_",
     Exported =?= all :
       Export = true,
       Exports ! (Name/Arity),
       NextExports = Exports';
 
-    ProcessDefinition =?= {Name, Arity, _ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple},
+    ProcessDefinition =?= {Name, Arity, _ChannelNames, _LHSS, _CodeTuple},
     Name =\= "_",
     Exported =\= all |
 	exported_procedure;	
@@ -693,15 +743,16 @@ export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
       NextExports = Exports.
 
 
-add_process_definition(ProcessDefinition, Progeny, NewProgeny) :-
+add_process_definition(ProcessDefinition, PLHSS, Progeny, NewProgeny) :-
 
-    ProcessDefinition =?= {Name, _Arity, _ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple},
+    ProcessDefinition =?= {Name, _Arity, _ChannelNames, LHSS, _CodeTuple},
     Name =\= "_" :
+      PLHSS = LHSS,
       NewProgeny = [ProcessDefinition | Progeny];
 
     otherwise :
       ProcessDefinition = _,
+      PLHSS = [],
       NewProgeny = Progeny.
 
 

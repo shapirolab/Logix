@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/16 08:04:00 $
+		       	$Date: 2000/05/25 07:29:42 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,7 +15,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -language(compound).
 -export([make_local_call/10, make_remote_call/8,
-	 prime_local_channels/3, sum_procedures/3]).
+	 prime_local_channels/3, sum_procedures/5]).
       
 make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 		In, NextIn, Errors, NextErrors, CallDefinition) :-
@@ -29,19 +29,19 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       Body2 = true,
       CallDefinition = [];
 
-    Body1 =?= self,
-    arg(1, ProcessDefinition, Name) :
+    Body1 =?= self :
       Body1' = `Name |
+	extract_id(ProcessDefinition, Name, _Arity),
 	self;
 
-    arity(Body1) > 1, arg(1, Body1, self),
-    arg(1, ProcessDefinition, Name) |
-	copy_goal_args(Body1, `Name, Body1'),
+    arity(Body1) > 1, arg(1, Body1, self) |
+	extract_id(ProcessDefinition, Name, _Arity),
+	copy_goal_args(Body1, `Name?, Body1'),
 	self;
 
-    arity(Body1) > 1, arg(1, Body1, `Functor), string(Functor),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-					_CodeTuple} |
+    arity(Body1) > 1, arg(1, Body1, `Functor), string(Functor) |
+	extract_id(ProcessDefinition, Name, _Arity),
+	extract_lhs_parts(ProcessDefinition, ChannelNames, _OuterLHS, _InnerLHS),
 	extract_arguments_or_substitutes(Name, Body1, Arguments, Substitutes,
 						Errors, Errors'?),
 	verify_call_channels(Name, Body1, ChannelNames, Locals,
@@ -51,18 +51,19 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	lookup_call_functor,
 	complete_local_call;
 
-    Body1 = `Functor,
-    arg(1, ProcessDefinition, Name) :
+    Body1 = `Functor :
       Locals = _,
       Primes = _,
       Arguments = [],
       Substitutes = [] |
+	extract_id(ProcessDefinition, Name, _Arity),
 	lookup_call_functor,
 	complete_local_call;
 
     Body1 = _ + _ :
-      CallDefinition = [] |
-	make_summed_call(ProcessDefinition, Locals, Primes, Body1, Body2,
+      CallDefinition = {Name, 0, [/*fake_channels*/], {{fake_lhs}, {fake_lhs}},
+				sum(fake_rhs, fake_communication_rhs)}|
+	make_summed_call(ProcessDefinition, Locals, Primes, Body1, Body2, Name,
 			 In, NextIn, Errors, NextErrors);
 
     otherwise,
@@ -71,31 +72,33 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       ProcessDefinition = _,
       Locals = _,
       Primes = _,
-      In = NextIn,
+      In = [logix_variables(LogixVars?) | NextIn],
       Errors = NextErrors,
       CallDefinition = [],
       Index = 1 |
-	copy_predicates(Body1, Index, Arity, Body2);	
+	copy_predicates(Body1, Index, Arity, Body2, LogixVars);	
 
-    otherwise,
-    arg(1, ProcessDefinition, Name) :
+    otherwise :
       Locals = _,
       Primes = _,
       Body2 = true,
       In = NextIn,
-      Errors = [(Name - invalid_local_call(Body1)) | NextErrors],
-      CallDefinition = [].
+      Errors = [(Name? - invalid_local_call(Body1)) | NextErrors],
+      CallDefinition = [] |
+	extract_id(ProcessDefinition, Name, _Arity).
 
-  copy_predicates(Predicates, Index, Arity, Body) :-
+  copy_predicates(Predicates, Index, Arity, Body, LogixVars) :-
 
     Index++ < Arity,
     arg(Index, Predicates, Predicate) :
       Body = (Predicate, Body') |
+	piutils#find_logix_variables(Predicate, LogixVars, LogixVars'?),
 	self;
 
     Index =:= Arity,
     arg(Index, Predicates, Predicate) :
-      Body = Predicate.
+      Body = Predicate |
+	piutils#find_logix_variables(Predicate, LogixVars, []).
 
   substituted_local_channels(Primes, Substitutes, Primed) :-
 
@@ -161,31 +164,29 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
       Errors = [Name - unknown_local_process(Body1) | NextErrors];
 
     CallType =\= none,
-    list(Arguments),
-    CallDefinition =?= {_Name, Arity, _ChannelNames, Atom, _InnerLHS,
-					_CodeTuple} :
+    list(Arguments) :
       Substitutes = _,
       Name = _,
       Body1 = _ |
+	extract_id(CallDefinition, _Name, Arity),
+	extract_lhs_parts(CallDefinition, _ChannelNames, Atom, _InnerLHS),
 	substitute_arguments+(Index = 1, Substitutes = Substitutes'),
 	call_with_substitutes;
 
     CallType =?= outer,
-    Arguments =?= [],
-    CallDefinition =?= {_Name, _Arity, _ChannelNames, Atom, _InnerLHS,
-					_CodeTuple} :
+    Arguments =?= [] :
       Errors = NextErrors,
       Name = _,
       Body1 = _ |
+	extract_lhs_parts(CallDefinition, _ChannelNames, Atom, _InnerLHS),
 	call_with_substitutes;
 
     CallType =?= inner,
-    Arguments =?= [],
-    CallDefinition =?= {_Name, _Arity, _ChannelNames, _OuterLHS, Atom,
-					_CodeTuple} :
+    Arguments =?= [] :
       Name = _,
       Body1 = _,
       Errors = NextErrors |
+	extract_lhs_parts(CallDefinition, _ChannelNames, _OuterLHS, Atom),
 	call_with_substitutes.
 
 
@@ -241,16 +242,16 @@ call_with_substitutes(Atom, Substitutes, Body2) :-
 	self.
 
 
-lookup_call_functor(ProcessDefinition, Functor,
+lookup_call_functor(Name, ProcessDefinition, Functor,
 		CallType, CallDefinition, In, NextIn) :-
 
-    arg(1, ProcessDefinition, Name),
     Functor =?= Name :
       CallType = inner,
       CallDefinition = ProcessDefinition,
       In = NextIn;
 
     otherwise :
+      Name = _,
       ProcessDefinition = _,
       In = [lookup_functor(Functor, CallType, CallDefinition) | NextIn].
 
@@ -323,7 +324,7 @@ extract_arguments_or_substitutes(Name, Tuple, Arguments, Substitutes,
 	self.
 
 
-make_remote_call(Name, PiCall, ChannelNames, Locals, Primes, CompoundCall,
+make_remote_call(Name, ChannelNames, Locals, Primes, PiCall, CompoundCall,
 				Errors, NextErrors) :-
 
 	extract_arguments_or_substitutes(Name, PiCall, Arguments, _Subs,
@@ -380,7 +381,7 @@ prime_local_channels(Primes, Arguments, Primed) :-
 
 /***************** Summation Process server predicates. **********************/
 
-make_summed_call(ProcessDefinition, Locals, Primes, Sum, Call,
+make_summed_call(ProcessDefinition, Locals, Primes, Sum, Call, Name,
 			In, NextIn, Errors, NextErrors) :-
 
     true :
@@ -452,34 +453,38 @@ summed_call(ProcessDefinition, Locals, Primes, Sum, Names, Procedures,
       Procedures = [{Call?, CallDefinition?}] |
 	make_local_call(ProcessDefinition, Locals, Primes, Sum, Call,
 			In, NextIn, Errors, NextErrors, CallDefinition);
-    otherwise,
-    arg(1, ProcessDefinition, Name) :
+    otherwise :
       Locals = _,
       Primes = _,
       Errors = [Name - illegal_process_summation(Sum) | NextErrors],
       Names = [],
       Procedures = false,
-      In = NextIn.
+      In = NextIn |
+	extract_id(ProcessDefinition, Name, _Arity).
 
 /****************** Summation  Empty server predicates. **********************/
 
-sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
+sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
+			(Cumulated = []) :-
 
     Summed ? Name(Procedures, Call) |
 	cumulate,
-	extract_procedure_parts(Procedures, Calls, Channels, CodeTuples),
+	extract_procedure_parts(Procedures,
+		Names, Calls, Channels, CodeTuples),
+	optimize_sum(Name, Names, Optimize, Optimize'?),
 	cumulated;
 
     Summed = [] :
       Cumulated = _,
       Entries = [],
+      Optimize = NextOptimize,
       Errors = [].
 
-  extract_procedure_parts(Procedures, Calls, Channels, CodeTuples) :-
+  extract_procedure_parts(Procedures, Names, Calls, Channels, CodeTuples) :-
 
     Procedures ? {Call, ProcedureDefinition},
-    ProcedureDefinition =?= {_Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
-				CodeTuple} :
+    ProcedureDefinition =?= {Name, _Arity, ChannelNames, _LHS, CodeTuple} :
+      Names ! Name,
       Calls ! Call,
       Channels ! ChannelNames,
       CodeTuples ! CodeTuple |
@@ -490,6 +495,7 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
 	self;
 
     Procedures = [] :
+      Names = [],
       Calls = [],
       Channels = [],
       CodeTuples = [].
@@ -507,7 +513,7 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
       Name = _,
       Reply = new.
 
-  cumulated(Summed, Entries, Errors, Cumulated,
+  cumulated(Summed, Entries, Optimize, NextOptimize, Errors, Cumulated,
 	Name, Calls, Channels, CodeTuples, Call, Reply) :-
 
     Reply =?= found :
@@ -534,6 +540,31 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
 				Streams'?, Entries, Entries'?),
 	make_sum_call(Name, Calls, Call, Errors''', Errors''''?),
 	sum_procedures.
+
+
+optimize_sum(Name, Names, Optimize, NextOptimize) :-
+
+    Names =?= [] :
+      Name = _,
+      Optimize = NextOptimize;
+
+    Names =\= [] :
+      Optimize ! procedure(Notes?, 0, {Name?}, _Value) |
+% screen#display(sum(Name, Value)),
+	add_calls_and_channels.
+
+  add_calls_and_channels(Names, Optimize, NextOptimize, Notes) :-
+
+    Names ? Name :
+      Optimize ! procedure([], 0, {Name}, {Calls, Channels}),
+      Notes ! call(Calls),
+      Notes' ! variables(Channels) |
+% screen#display(add(Name, Calls, Channels)),
+	self;
+
+    Names = [] :
+      Optimize = NextOptimize,
+      Notes = [].
 
 
 make_sum_call(Name, Calls, Call, Errors, NextErrors)
@@ -677,18 +708,6 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Prepares, Code, Streams,
     Write = write_channel({_Sender, ChannelList, _SendIndex, Chosen}, VN) :
       NewWrite = write_channel({Sender, ChannelList, Index, Chosen}, VN).
 
-/*
-analyze_receive_or_cdr(Receive, Sender, CdrStream, Cdr,
-		Code, NextCode, Streams, NextStreams, NextRHS) :-
-
-    CdrStream = (`StreamName ? _) :
-      Streams = [`StreamName | NextStreams] |
-
-	string_to_dlist(StreamName, SL, []),
-	string_to_dlist("_pistr_", SL, NL),
-	list_to_string(NL, ChannelName),
-	analyze_receive.
-*/
 
 analyze_receive(ClauseList, Sender, ChannelName, Cdr, 
 		Code, NextCode, NextClauseList) :-
@@ -781,6 +800,16 @@ make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Streams,
   make_choice_atom(InnerLHS, Name, ChoiceVars, ChoiceAtom) :-
 	utils#tuple_to_dlist(InnerLHS, [_ | ChannelVariables], ChoiceVars),
 	utils#list_to_tuple([Name | ChannelVariables], ChoiceAtom).
+
+
+extract_id(Definition, Name, Arity) :-
+    true :
+      Definition = {Name, Arity, _ChannelNames, _LHS, _CodeTuple}.
+
+extract_lhs_parts(Definition, ChannelNames, OuterLHS, InnerLHS) :-
+    true :
+      Definition = {_Name, _Arity, ChannelNames, LHS, _CodeTuple},
+      LHS = {OuterLHS, InnerLHS}.
 
 /************************** Summation Utilities ******************************/
 

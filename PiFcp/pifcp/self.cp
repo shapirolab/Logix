@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/05/07 09:05:50 $
+		       	$Date: 2000/05/25 07:29:43 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.1 $
+			$Revision: 2.2 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -45,12 +45,12 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Compound = Terms? |
 
 	/* Get Exported list. */
-	filter_attributes(Attributes1, Attributes1', Exported),
+	filter_attributes(Attributes1, Attributes1', Exported, Level),
 	Attributes2 = [export(Exports?) | Attributes1'?],
 	pctopifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
-  filter_attributes(In, Out, Exported) :-
+  filter_attributes(In, Out, Exported, Level) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
@@ -64,24 +64,47 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Exported = Es |
 	self;
 
+    In ? optimize :
+      Out ! optimize,
+      Level = 1 |
+	self;
+
+    In ? optimize(I) :
+      Out ! optimize,
+      Level = I |
+	self;
+
     In ? Other,
-    Other =\= export(_) :
+    otherwise :
       Out ! Other |
 	self;
 
     In =?= [] :
       Out = [] |
+	unify_without_failure(Level, 2),
 	unify_without_failure(Exported, all).
 
 
-program(Source, Exported, Exports, Terms, Errors) :-
+program(Source, Exported, Level, Exports, Terms, Errors) :-
 
 	filter_pifcp_attributes(Source, Exported, Controls, Delay, Source',
 					Errors, Errors'?),
 	servers#serve_empty_scope(Scope?, Controls?, Exports,
-					NextTerms, Errors'),
+				  NextTerms, Optimize, Errors'),
 	process_definitions+(Processes = [], NextScope = []),
+	optimize#initialize(Optimize?, Exports?, Accessible),
+	optimize_terms(Level, Terms''?, Accessible, Terms'),
 	spc#output(Terms'?, Delay, Terms).
+
+  optimize_terms(Level, In, Table, Out) :-
+
+    integer(Level), Level > 0 |
+	optimize#procedures(Level, In, Table, Out);
+
+    otherwise :
+      Level = _,
+      Table = [],
+      Out = In.
 
 
 /* Extract Global channel declarations and Stochastic means. */
@@ -242,12 +265,10 @@ validate_means(ReceiveMean, SendMean, Means, Global, Errors, NextErrors) :-
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
     Source ? (PiLHS :- RHSS) :
-      Scope ! process(PiLHS, NewChannelList, ProcessScope),
-      ProcessScope ! lhss(OuterLHS, InnerLHS) |
+      Scope ! process(PiLHS, LHSS, NewChannelList, ProcessScope) |
 	process_definitions(Processes, [], Nested, Nested'?,
-				ProcessScope', ProcessScope''?),
-	process(RHSS, OuterLHS, InnerLHS, NewChannelList, ProcessScope'',
-			Process, Nested'),
+				ProcessScope, ProcessScope'?),
+	process(LHSS, RHSS, NewChannelList, ProcessScope', Process, Nested'),
 	nested_procedures(Process, Nested?, Terms, Terms'?),
 	self;
 
@@ -263,38 +284,34 @@ process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
 /************************* Process Transformations ***************************/
 
-process(RHSS, OuterLHS, InnerLHS, NewChannelList, Scope, Process, Nested) :-
+process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 
-    OuterLHS =?= [] :
+    LHSS = [] :
       RHSS = _,
-      InnerLHS = _,
       NewChannelList = _,
       Scope = [],
       Process = [],
       Nested = [];
 
-    OuterLHS =\= [],
+    LHSS = {OuterLHS, InnerLHS},
     NewChannelList =\= [] :
-      Nested ! outer(Atom?, Initializer?, []),
+      Nested ! outer(OuterLHS, Initializer?, []),
       NewChannelList' = [] |
-	piutils#tuple_to_atom(OuterLHS, Atom),
 	arg(1, InnerLHS, Name),
 	initialize_channels(Name, NewChannelList, Initializer),
 	self;
 
-    OuterLHS =\= [],
+    LHSS = {_OuterLHS, InnerLHS},
     NewChannelList =?= [],
     RHSS =\= (_|_), RHSS =\= (_;_)  :
       Scope ! code(no_guard, [], []),
-      Process = no_guard(Atom?, RHSS'?, []) |
-	piutils#tuple_to_atom(InnerLHS?, Atom),
+      Process = no_guard(InnerLHS, RHSS'?, []) |
 	transform_body(RHSS, RHSS', Nested, [], Scope', []);
 
+    LHSS = {_OuterLHS, InnerLHS},
     otherwise :
-      OuterLHS = _,
       NewChannelList = _,
-      Process = _Type(Atom?, RHSS'?, _Action) |
-	piutils#tuple_to_atom(InnerLHS?, Atom),
+      Process = _Type(InnerLHS, RHSS'?, _Action) |
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
   initialize_channels(Name, NewChannelList, Initializer) +
@@ -381,17 +398,17 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
   code_reply(Process, FinalMode, PrepareProcedure, Scope) :-
 
     FinalMode =?= cdr :
-      Process = cdr(_Atom, ProcessRHS, []),
+      Process = cdr(_LHS, ProcessRHS, []),
       PrepareProcedure = _,
       Scope = [code(cdr, [], ProcessRHS)];
 
     PrepareProcedure =?= (_ :- PrepareRHS) :
-      Process = FinalMode(_Atom, ProcessRHS, PrepareProcedure),
+      Process = FinalMode(_LHS, ProcessRHS, PrepareProcedure),
       Scope = [code(FinalMode, ProcessRHS, PrepareRHS)];
 
     otherwise :
       PrepareProcedure = _,
-      Process = FinalMode(_Atom, _RHSS, []),
+      Process = FinalMode(_LHS, _RHSS, []),
       Scope = [code(FinalMode, [], [])].
 
   make_rhs2(Mode, SendId, ClauseList, Prepares, RHS2,
@@ -400,7 +417,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
     Mode =?= receive :
       SendId = "_",
       RHS2 = (PrepareGuards? | Communicator?),
-      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
+      PrepareProcedure = (CommunicationLHS? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
 	make_communication_name(PName, ".receive", Communicator),
@@ -411,7 +428,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
     Mode =?= send :
       SendId = "_",
       RHS2 = (PrepareGuards? | Communicator?),
-      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
+      PrepareProcedure = (CommunicationLHS? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
 	make_communication_name(PName, ".send", Communicator),
@@ -423,7 +440,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       SendId = pifcp(sendid),
       RHS2 = (PrepareGuards? | pi_monitor#unique_sender(PName?, `SendId),
 			Communicator),
-      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
+      PrepareProcedure = (CommunicationLHS? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
 	make_communication_name(PName?, ".mixed", Communicator),
@@ -495,10 +512,10 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 	list_to_string(PL, Communicator).
 
   make_communication_atom(InnerLHS, Communicator, ChoiceVars,
-				CommunicationAtom) :-
+				CommunicationLHS) :-
 
 	utils#tuple_to_dlist(InnerLHS, [_ | Channels], ChoiceVars),
-	utils#list_to_tuple([Communicator | Channels], CommunicationAtom).
+	utils#list_to_tuple([Communicator | Channels], CommunicationLHS).
 
   make_right_hand_side(RHSS, FinalMode, Index, ClauseList,
 				Prepares, NextPrepares) :-
@@ -621,7 +638,8 @@ transform_guard(Guard, Control, LastClause, Clauses, BodyGuard,
       Scope = NextScope;      
 
     Guard =\= (_ =?= _), Guard =\= (_ =\= _),
-    Guard =\= (_ & _), Guard =\= otherwise |
+    Guard =\= (_ & _), Guard =\= otherwise :
+      Scope = [Result? | NextScope] |
 	logix_guards;
 
     otherwise :
@@ -639,34 +657,35 @@ transform_guard(Guard, Control, LastClause, Clauses, BodyGuard,
     Iterates =?= {Cdr, Mixed} :
       Clauses = receive([Cdr, Mixed, LastClause]).
 
-logix_guards(Guard, Control, LastClause, Clauses, BodyGuard,
-			Scope, NextScope) :-
+logix_guards(Guard, Control, LastClause, Clauses, BodyGuard, Result) :-
 
     tuple(Guard),
     Guard =\= `_, Guard =\= ?_,
     arity(Guard, Arity) :
       Clauses = logix([LastClause]),
       Control = logix(_, _),
-      Scope = NextScope,
-      Index = 1 |
+      Index = 1,
+      Result = logix_variables(LogixVars?) |
 	copy_ask_guards;
 
     otherwise:
       BodyGuard = true,
       Clauses = none([LastClause]),
       Control = none(_, _),
-      Scope = [error(invalid_guard(Guard)) | NextScope].
+      Result = error(invalid_guard(Guard)).
 
-  copy_ask_guards(Guard, Index, Arity, BodyGuard) :-
+  copy_ask_guards(Guard, Index, Arity, BodyGuard, LogixVars) :-
 
     Index++ < Arity,
     arg(Index, Guard, Predicate) :
       BodyGuard = (Predicate, BodyGuard') |
+	piutils#find_logix_variables(Predicate, LogixVars, LogixVars'?),
 	self;
 
     Index =:= Arity,
     arg(Index, Guard, Predicate) :
-      BodyGuard = Predicate.
+      BodyGuard = Predicate |
+	piutils#find_logix_variables(Predicate, LogixVars, []).
 
 
 compare_channels(Guard, BodyGuard, Channels, NextChannels, Scope, NextScope) :-
@@ -722,8 +741,9 @@ transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
 
     Body1 =?= Name # Call1 :
       Goals = [(Name # Call2) | NextGoals],
+      Scope = [Result? | NextScope],
       Nested = NextNested |
-	parse_remote_call(Call1, Call2, Scope, NextScope);
+	parse_remote_call(Call1, Call2, Result);
 
     otherwise :
       Goals = [Body2 | NextGoals],
@@ -772,7 +792,7 @@ expand_new_scope(Channels, Body, Processes, Body2,
       PiLHS = `Id + Channels.
 
 
-parse_remote_call(Call1, Call2, Scope, NextScope) :-
+parse_remote_call(Call1, Call2, Result) :-
 
     Call1 =?= Name # Call1', string(Name) :
       Call2 = Name # Call2' |
@@ -781,12 +801,16 @@ parse_remote_call(Call1, Call2, Scope, NextScope) :-
     Call1 =\= _ # _, Call1 =\= `_,
     tuple(Call1), arg(1, Call1, Name), string(Name) :
       Call2 = Call1,
-      Scope = NextScope;
+      Result = logix_variables(Call2);
 
     Call1 = `Name, string(Name) :
       Call2 = Name,
-      Scope = NextScope;
+      Result = logix_variables([]);
 
     Call1 =\= _ # _,
     tuple(Call1), arg(1, Call1, `_) :
-      Scope = [remote_call(Call1, Call2) | NextScope].
+      Result = remote_call(Call1, Call2);
+
+    otherwise :
+      Call2 = Call1,
+      Result = logix_variables(Call2).
