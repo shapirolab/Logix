@@ -11,8 +11,10 @@ AMBIENT_ARITY => 2.
 AMBIENT_CONTROL => 1.
 AMBIENT_ID => 2.
 
+/**/
 DEBUG(TAG,ARG) => true.
 TERMS(Terms) => true.
+/**/
 
 /*
 DEBUG(TAG,ARG) => debug_out(Ambient, TAG, ARG,  Debug).
@@ -194,7 +196,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 
   new_debug(Debug, Children) :-
     Children ? Child :
-      write_channel(debug(Debug), Child) |
+      write_vector(AMBIENT_CONTROL, debug(Debug), Child) |
 	self;
     Children = [] :
       Debug = _.
@@ -340,7 +342,7 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? NewId, NewId =?= new_id(_Id) :
-      write_vector(AMBIENT_CONTROL, NewId, Parent) |
+      write_vector(AMBIENT_CONTROL, NewId, Parent, Parent') |
 %	DEBUG(NewId, pass),
 	self;
 
@@ -350,7 +352,7 @@ serve_ambient(In, Events, FromSub, Done,
       write_channel(close(ChannelTuple, Reply), Scheduler) |
 	DEBUG(close - Reply - ChannelTuple - LocalChannels - SharedChannels,
 		scheduler),
-	remove_local_channels(ChannelTuple, Reply,
+	remove_local_channels(Reply, ChannelTuple,
 			      LocalChannels, LocalChannels',
 			      SharedChannels, SharedChannels', Unremoved),
 	pass_unremoved;
@@ -401,8 +403,10 @@ serve_ambient(In, Events, FromSub, Done,
       IdL = Prefix |
 	DEBUG(lookup/3 + global + PC + SCs + SCs', search),
 	TERMS((format_channel(PrivateChannel, PC),
-	       format_channel_list(GlobalChannels, SCs),
-	       format_channel_list(GlobalChannels', SCs')
+	       copy_global_channels(GlobalChannels, GCsBefore),
+	       format_channel_list(GCsBefore, SCs),
+	       copy_global_channels(GlobalChannels', GCsAfter),
+	       format_channel_list(GCsAfter, SCs')
 	     )),
 	list_to_string(NL, Name),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
@@ -424,26 +428,32 @@ serve_ambient(In, Events, FromSub, Done,
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
     Locus =?= parent(Kind) :
       write_vector(AMBIENT_CONTROL,
-		lookup(self(Kind), PrivateChannel, SharedChannel, 1), Parent) |
+		   lookup(self(Kind), PrivateChannel, SharedChannel, 1),
+		   Parent, Parent') |
 	DEBUG(lookup/3 - Locus - PrivateChannel, pass),
 	ambient_lookup;
 
     /***** Obsolescent *****/
     In ? new_ambient(Name, ModuleId, Goal, NewAmbient?^),
     ModuleId = [ModuleName | SId] :
-      Children' = [NewAmbient? | Children] |
-%	DEBUG(new_ambient, ambient),
+      Children' = [NewAmbient'? | Children] |
+	DEBUG(new_ambient, ambient - AId?),
+	TERMS(read_vector(AMBIENT_ID, NewAmbient, AId)),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
-	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient),
+	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient,
+				Lookups, []),
+	copy_initial_commands(Lookups, NewAmbient, NewAmbient'),
 	ambient(Name, SId, ModuleName # NewGoal?,
 		Ambient, NewAmbient, Debug),
 	self;
     In ? new_ambient(Name, ModuleId, Goal),
     ModuleId = [ModuleName | SId] :
-      Children' = [NewAmbient? | Children] |
+      Children' = [NewAmbient'? | Children] |
 %	DEBUG(new_ambient, ambient),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
-	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient),
+	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient,
+				Lookups, []),
+	copy_initial_commands(Lookups, NewAmbient, NewAmbient'),
 	ambient(Name, SId, ModuleName # NewGoal?,
 		Ambient, NewAmbient, Debug),
 	self;
@@ -462,9 +472,12 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? new_locals(Locals, NewLocals) |
-%	DEBUG(new_locals, ambient),
+	DEBUG(new_locals(Ls), NLs),
+	TERMS((format_channel_tuple(Locals, Ls),
+	       format_channel_tuple(NewLocals, NLs)
+             )),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
-	merge_local_channels(Idle, Locals, NewLocals, copy, Ambient, Ambient),
+	copy_local_channels(Idle, Locals, NewLocals, Ambient, In'', In'),
 	self;
 
     In ? Start, Start =?= start(Signature, Operations, Message, Chosen),
@@ -516,8 +529,9 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
     Locus =?= parent(Kind) :
-      write_channel(lookup(self(Kind), PrivateChannel, SharedChannel, AddRefs),
-			Parent) |
+      write_vector(AMBIENT_CONTROL,
+		   lookup(self(Kind), PrivateChannel, SharedChannel, AddRefs),
+		   Parent, Parent') |
 	DEBUG(lookup/4 - parent(Kind, AddRefs) - PrivateChannel, pass),
 	ambient_lookup;
 
@@ -535,43 +549,46 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? enter(Enterer, Ready) :
       write_vector(AMBIENT_CONTROL,
-		change_parent(Ambient, Removed, Ready), Enterer) |
+		   change_parent(Ambient, Removed, Ready),
+		   Enterer, Enterer') |
 %	DEBUG("enter"(Removed, Ready), move_ambient),
-	remove_shared_communications(Enterer, SharedChannels, Scheduler,
+	remove_shared_communications(Enterer', SharedChannels, Scheduler,
 					Removed),
 	self;
 
     In ? exit(Exiter, Ready) :
       write_vector(AMBIENT_CONTROL,
-		change_parent(Parent, Removed, Ready), Exiter) |
+		   change_parent(Parent, Removed, Ready),
+		   Exiter, Exiter') |
 %	DEBUG("exit"(Removed, Ready), move_ambient),
-	remove_shared_communications(Exiter, SharedChannels, Scheduler,
+	remove_shared_communications(Exiter', SharedChannels, Scheduler,
 					Removed),
 	self;
 
     In ? merge(MergingAmbient, Ready),
     channel(MergingAmbient) :
       write_vector(AMBIENT_CONTROL,
-		extract(Goals, Ambient, Ready), MergingAmbient) |
+		   extract(Goals, Ambient, Ready),
+		   MergingAmbient, MergingAmbient') |
 %	DEBUG(merge/2, merge(Goals)),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
 	merge_local_channels(Idle, Goals, MergedGoals, pass,
-				MergingAmbient, Ambient),
+			     MergingAmbient', Ambient, In'', In'),
 	add_merged_goals(MergedGoals?, Requests, Requests', Ready),
 	self;
 
 /* Capability Services */
 
     In ? change_parent(Parent', false, Ready) :
-      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent),
-      write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent'),
+      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
+      write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Ready = true |
 %	DEBUG(change_parent, "no_remove"),
 	self;
 
     In ? change_parent(Parent', true, Ready) :
-      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent),
-      write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent'),
+      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
+      write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
 	DEBUG(change_parent, "remove p2c & all local communications"),
 	remove_shared_communications(Ambient, SharedChannels, Scheduler,
@@ -742,6 +759,16 @@ serve_ambient(In, Events, FromSub, Done,
     R =?= [] :
      Resolvent = NextResolvent.
 
+  copy_initial_commands(Commands, Ambient, NewAmbient) :-
+
+    Commands ? Command,
+    vector(Ambient) :
+      write_vector(AMBIENT_CONTROL, Command, Ambient, Ambient') |
+ 	self;
+
+    Commands =?= [] :
+      NewAmbient = Ambient.
+
   diagnose_unremoved(Unremoved, Ambient, SubAmbient, Debug) :-
 
     Unremoved ? Channel,
@@ -770,19 +797,19 @@ serve_ambient(In, Events, FromSub, Done,
     Unremoved =?= [Channel] :
       write_vector(AMBIENT_CONTROL,
 		   remove_channels({Channel}, Ambient),
-		   Parent) |
+		   Parent, Parent') |
 	serve_ambient;
 
     Unremoved =?= [Channel1, Channel2] :
       write_vector(AMBIENT_CONTROL,
 		   remove_channels({Channel1, Channel2}, Ambient),
-		   Parent) |
+		   Parent,Parent') |
 	serve_ambient;
 
     Unremoved =\= [], Unremoved =\= [_], Unremoved =\= [_, _] :
       write_vector(AMBIENT_CONTROL,
 		   remove_channels(ChannelTuple?, Ambient),
-		   Parent) |
+		   Parent, Parent') |
 	utils#list_to_tuple(Unremoved, ChannelTuple),
 	serve_ambient.
 
@@ -860,7 +887,8 @@ serve_ambient(In, Events, FromSub, Done,
 
     Children ? Child :
       write_vector(AMBIENT_CONTROL,
-		change_parent(MergedAmbient, Removed, _Ready), Child) |
+		   change_parent(MergedAmbient, Removed, _Ready),
+		   Child) |
 %	DEBUG("exit"(Removed, Ready), move_ambient),
 	remove_shared_communications(Child, SharedChannels, Scheduler,
 					Removed),
@@ -1038,7 +1066,7 @@ add_local_channel(Channel, LocalChannels, NewLocalChannels) :-
       Channel = _,
       NewLocalChannels = LocalChannels.
 
-remove_local_channels(ChannelTuple, Indices, LocalChannels, NewLocalChannels,
+remove_local_channels(Indices, ChannelTuple, LocalChannels, NewLocalChannels,
 	SharedChannels, NewSharedChannels, Unremoved) :-
 
     Indices =?= true(Indices') |
@@ -1158,15 +1186,52 @@ detach_channel_list(ChannelList, Scheduler) :-
       Tuple2 = Tuple1.
 
 
+copy_local_channels(Idle, Locals, NewLocals, Ambient, In, NextIn) :-
+
+    Locals =?= {A},
+    vector(A) |
+	merge_local_channels(Idle, Locals, NewLocals, copy, Ambient, Ambient,
+					In, NextIn);
+
+    Locals =?= {A, B},
+    vector(A),
+    vector(B) |
+	merge_local_channels(Idle, Locals, NewLocals, copy, Ambient, Ambient,
+					In, NextIn);
+
+    Locals =?= {A, B, C},
+    vector(A),
+    vector(B),
+    vector(C) |
+	merge_local_channels(Idle, Locals, NewLocals, copy, Ambient, Ambient,
+					In, NextIn);
+
+    arity(Locals, Arity),
+    Arity > 3 |
+	wait_for_vectors,
+	merge_local_channels(Idle, Locals, NewLocals, copy, Ambient, Ambient,
+					In, NextIn).
+
+  wait_for_vectors(Locals, Arity) :-
+
+    Arity > 0,
+    arg(Arity, Locals, V),
+    vector(V),
+    Arity -- |
+	self;
+
+    Arity =< 0 :
+      Locals = _.
+
 merge_local_channels(Idle, Argument, NewArgument, Action,
-			FromAmbient, Ambient) :-
+			FromAmbient, ToAmbient, In, NextIn) :-
     known(Idle),
     freeze(Argument, FrozenArgument, FrozenAtoms) :
       melt(FrozenArgument, MeltedArgument, MeltedAtoms) |
 	merge_channels.
 
   merge_channels(FrozenAtoms, MeltedAtoms, NewArgument, Action,
-			FromAmbient, Ambient, MeltedArgument) :-
+		FromAmbient, ToAmbient, In, NextIn, MeltedArgument) :-
     /* Variables are inherited by the new ambient,
      * not by the receiver of the channel tuple.
      */
@@ -1181,13 +1246,9 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
-    channel(Ambient),
     string(ChannelName),
     Action =?= copy :
-      write_vector(AMBIENT_CONTROL,
-		lookup(global, Channel, NewChannel), Ambient),
-/* Incorrect if channel is copied more than once (in Goal of new_ambient) */
-%      store_vector(SPI_CHANNEL_REFS, 2, Channel),
+      In ! lookup(global, Channel, NewChannel),
       MeltedAtoms ! NewChannel? |
 	self;
 
@@ -1195,12 +1256,10 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
-    channel(Ambient),
     string(ChannelName),
     Action =?= pass,
     read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
-      write_vector(AMBIENT_CONTROL,
-		lookup(global, Channel, NewChannel, Refs), Ambient),
+      In ! lookup(global, Channel, NewChannel, Refs),
       MeltedAtoms ! NewChannel? |
 	self;
 
@@ -1208,11 +1267,9 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
-    channel(Ambient),
     tuple(ChannelName),
     Action =?= copy :
-      write_vector(AMBIENT_CONTROL,
-		lookup("local", Channel, NewChannel), Ambient),
+      In ! lookup("local", Channel, NewChannel),
       MeltedAtoms ! NewChannel? |
 	self;
 
@@ -1220,17 +1277,15 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
-    channel(Ambient),
     tuple(ChannelName),
     Action =?= pass,
     read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
-      write_vector(AMBIENT_CONTROL,
-		lookup("local", Channel, NewChannel, Refs), Ambient),
+      In ! lookup("local", Channel, NewChannel, Refs),
       MeltedAtoms ! NewChannel? |
 	self;
 
     FrozenAtoms ? FromAmbient :
-      MeltedAtoms ! Ambient |
+      MeltedAtoms ! ToAmbient |
 	self;
 
     FrozenAtoms ? Other,
@@ -1240,8 +1295,9 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
 
     FrozenAtoms = [] :
       Action = _,
-      Ambient = _,
+      ToAmbient = _,
       FromAmbient = _,
+      In = NextIn,
       MeltedAtoms = [],
       MeltedArgument = NewArgument.
 
@@ -1581,7 +1637,8 @@ resolve_children(Children, NewChildren, Resolvent, NextResolvent) :-
     Children ? Child :
       NewChildren ! Child',
       write_vector(AMBIENT_CONTROL,
-		resolve(Resolvent, Resolvent'?), Child, Child') |
+		   resolve(Resolvent, Resolvent'?),
+		   Child, Child') |
 	self;
 
     Children =?= [] :
