@@ -1,0 +1,74 @@
+To debug coventryd, set the environment variable:
+
+    setenv DEBUG_COVENTRY 1
+
+before:
+
+    coventry start
+
+or a direct execution of coventryd.
+
+
+When executing coventryd directly, you may prefix the arguments (including
+-Qn) with the argument:
+
+    -D<path>
+
+to specify an alternative auxiliary directory, where conventryd looks for
+the applications getndpri and setndpri.
+
+
+When debugging is on, initially, coventryd reports its auxiliary directory
+and the ps command which it uses to extract information about the current
+processes.
+
+During execution, coventryd reports changes to the state of the current
+processes in the format:
+
+    <hh:mm:ss> <comment>: $user, $nice, $seconds, $pid, $pgid, $class, $comm
+
+See the ps man page for details.  Note that $nice is a relative value between
+its default and the value assigned to processes in coventry (20...30).  For a
+Gang scheduled process ($class = "bg"), 30 represents best batch scheduling
+class priority (128).  Note that Time-shared processes whose nice value lies
+outside the range 20...30, and Gang scheduled processes with non-deteriorating
+priorities are ignored by coventryd.
+
+The <comment> field has one of the following texts:
+
+    re-niced in society       The nice value of the process has been 
+                              incremented.
+
+    banned from society       The process has been sent to coventry.
+
+    banned gang process       The process is Gang scheduled, and its non-
+                              deteriorating priority has been set, putting
+                              in in the Gang Batch class.
+
+    changed to coventry       The process has been sent to coventry; when it
+                              is returned to society, its nice value will have
+                              been incremented by one.
+
+    freed from coventry       The process has been returned to society; its
+                              nice value depends on how it was sent to
+                              coventry.
+
+    to coventry forever       The process has nice value 30, and will never be
+                              returned to society.
+
+    taken from coventry       Some action outside of coventryd has changed the
+                              process's nice value or its non-deterioating
+                              priority.
+
+    stopped in coventry       The process was in coventry when it terminated.
+                              A process which has been changed by some outside
+                              action to a state in which it is ignored by
+                              coventryd, may appear to have stopped (e.g. its
+                              nice value has been set below 20).
+
+    returned to society       coventryd is terminating due to a signal.
+                              If this is a Gang scheduled process, it has been
+                              removed from its non-deteriorating priority set
+                              and returned to the normal Gang class ("gn").
+                              If it is a Time-shared process, its nice value
+                              depends on how it was sent to coventry.

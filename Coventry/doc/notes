@@ -4,23 +4,26 @@
 
    0 <= <nice> <= 40
 
-2. Get a list of processes and their states using:
+2. Get a list of processes and their states using (System V):
 
-      ps -A -o user,pid,nice,class,time,comm=...
+      ps -A -o user,nice,time,pid,pgid,class,comm=...
 
-   Results are "print"ed in 6 columns (separated by 1 or more spaces).
+   Results are "print"ed in 7 columns (separated by 1 or more spaces).
 
       <user> is alphanumeric.
 
-      0 < <pid> < MAXPID      // sys/param.h
-
-      0 <= <nice> <= 40  or it is a 2-letter mnemonic for a scheduling queue.
+      0 <= <nice> <= 40  or it is a 2-letter mnemonic for a scheduling queue
+                         (SGI only?).
 
       <time> has format [[<days>-]<hours>:]<minutes>:<seconds>
 
          <days> and <hours> are greater than 0 (if present)
          <minutes> one or two digits (may be "0")
          <seconds> is two digits
+
+      0 < <pid> < MAXPID      // sys/param.h
+
+      0 < <pgid> < MAXPID     // sys/param.h
 
    The option "-a" may be used instead of "-A" to get a reduced list of
    processes.
@@ -39,3 +42,7 @@
       users:     (daemon, root, 60001, ...)
       queues:    (OS, RT, ...)
       commands:  (bash, bsh, csh, sh, tcsh, ...)
+
+5. For monitoring Gang scheduled processes on SGI, the method schedctl
+   may be used to get/set their non-deteriorating priorities - see
+   c-apps, getndpri.c, setndpri.c and the schedctl man page.

@@ -6,7 +6,7 @@ It monitors the queue periodically, relegating processes which are
 using too much processor time to less favorable nice classes.  When
 more than one such "greedy" process is being executed by the same
 user, at most one may execute in each nice class - the others are 
-sent to coventry (the least favorable class).
+sent to "coventry" (the least favorable class).
 
 Certain users and processes are exempt from this scheduling.  These
 are listed in the coventryd daemon, declared as PERL hashes, %users
@@ -43,3 +43,12 @@ Example:
 To debug coventryd, set the environment variable:
 
     setenv DEBUG_COVENTRY 1
+
+See the document DEBUG in this directory for further information about
+debugging.
+
+
+Coventry may be freely started and stopped.  When stopped, any process
+which is in "coventry" is returned to the last class/priority which it
+occupied prior to being sent to "coventry".  You may stop coventryd 
+with any of the signals INT, QUIT, TERM (2, 3, 15).
