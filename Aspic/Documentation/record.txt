@@ -85,11 +85,11 @@ Annotation appears on c lines:
    process sent (->) or received (<-) a message, followed by the name
    within the process of the channel which transmitted the message.
 
-2. The "creator" format is similar, but with the global identifier of
+2. The "creator" format is similar, but with the created identifier of
    the channel instead of its name - this includes a unique index for
    each instance of a local channel.
 
-3. The "full" format is similar, providing both the name and the global
+3. The "full" format is similar, providing both the name and the created
    identifier,  separated by a colon (:).
 
 To analyze the file, producing a table suitable for plotting with

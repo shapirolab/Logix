@@ -16,7 +16,7 @@ Physical Chemistry, volume 81, pps 2340-2361.
 
 
 The user may specify custom computations using the notation for
-<weighter_declaration> in Documentation/BNF; the computation must
+<weighter_declaration> in Documentation/BNF.txt; the computation must
 be explicitly coded in the module Logix/<emulator name>/spiweight.c .
 
 
