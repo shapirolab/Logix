@@ -1,7 +1,5 @@
-rm ASPIC/README
-cp -p README ASPIC
-rm -f release/INSTALL
-cp -p INSTALL release
+rm -f release/README
+cp -p README release
 rm -f release/BioSpi/README
 cp -p BioSpi/README release/BioSpi
 
