@@ -41,12 +41,12 @@ $LOW_PRIORITY  =
 
 # Default exclusion hashes.
 
-%users = (
-	  daemon => 1,
-	  ftp    => 1,
-	  lp     => 1,
-	  root   => 1,
-	  60001  => 1,
+%nonusers = (
+	     daemon => 1,
+	     ftp    => 1,
+	     lp     => 1,
+	     root   => 1,
+	     60001  => 1,
 );
 
 # Maximum length of a command name is 30 characters (see below).
@@ -212,22 +212,24 @@ sub parse_process
 
     my $leader = 0;
 
+    # Watch out for class and comm, which can be blank on Solaris.
     ($user, $nice, $time, $pid, $pgid, $class, $comm) = split;
     $class =~ tr/A-Z/a-z/;
 
-    if ($class eq "gn" || $class eq "gb") {
-	$_ = `$AUXILIARY_DIR/getndpri $pid`;
-	return undef if !/^ndpri.* = (\d+)$/;
-	$nice = (int $1) ? $1 - $NDPRI_OFFSET : $NICE_DEFAULT;
-    }
-    if ($users{$user} || $commands{$comm} || 
-	($class ne "ts" && $class ne "gn" && $class ne "gb") ||
-	$NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
-	return undef;
-    }
-    if ($nice !~ /\s*\d\d\s*/) {
-	$nice = getpriority($PRIO_PROCESS, $pid) + $NICE_OFF;
-	print "$user($class) - $comm($pid), has nice = $nice\n";
+    return undef if ($nonusers{$user} || $commands{$comm});
+
+    if ($query eq "") {
+	# class gn and gb are used on SGI.
+	if ($class eq "gn" || $class eq "gb") {
+	    $_ = `$AUXILIARY_DIR/getndpri $pid`;
+	    return undef if !/^ndpri.* = (\d+)$/;
+	    $nice = (int $1) ? $1 - $NDPRI_OFFSET : $NICE_DEFAULT;
+	}
+	# class ts is used on both SGI and Solaris.
+	elsif ($class ne "ts" ||
+	    $NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
+	    return undef;
+	}
     }
 
     $seconds = 0;
@@ -330,13 +332,15 @@ sub query_processes #(query)
 		$secs = "0$secs" if $secs < 10;
 		
 		if ($seconds >= $minsecs) {
-		    if ($class eq "gn" || $class eq "gb") {
-			$nice = `ps -p $pid -o pri=`;
-			$nice =~ /^\s*(\d+)\s*$/;
-			$nice = 'g' . $1;
+		    # The following only applies to SGI, so far.
+		    if ($class eq "gn" || $class eq "gb" || $class eq "bt") {
+			$_ = `$AUXILIARY_DIR/getndpri $pid`;
+			/^ndpri.* = (\d+)$/;
+			$nice = (($class eq "bt") ? 'b' : 'g') . $1
+			    if (int $1);
 		    }
 		    print "    $user($nice) - $mins:$secs - $comm($pid)\n";
-	}
+		}
 	    }
 	}
 	return 1;
