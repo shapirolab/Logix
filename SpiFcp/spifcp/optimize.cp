@@ -76,6 +76,10 @@ note_parameters(Arity, LHS, Parameters) :-
       Parameters ! Variable |
 	self;
 
+    Arity > arity(LHS),
+    arity(LHS, Arity') |
+	self;
+
     Arity =< 1 :
       LHS = _,
       Parameters = [].
