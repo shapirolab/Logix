@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/14 08:50:56 $
+		       	$Date: 2002/08/16 08:44:53 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -301,15 +301,15 @@ expand(Command, Cs) :-
 
     string_to_dlist(Command,[X, CHAR_t, CHAR_r], []),
     CHAR_a =< X, X =< CHAR_d :
-      Command' = Command(all) |
+      Command' = Command("") |
 	self;
-    Command = Xtr(N),
+    Command = Xtr(Selector),
     string_to_dlist(Xtr,[X, CHAR_t, CHAR_r], []),
     CHAR_a =< X, X =< CHAR_d :
       Cs = [state(No,Goal,_,_),
 	    to_context(utils # append_strings(["<",No,"> "], IdG))
            | Commands]\Commands1 |
-	xtr_tree(Goal, X, N, Out),
+	xtr_tree(Goal, X, Selector, Out),
 	stream_out(Out?, true, IdG, Commands, Commands1);
 
     Command = c :
@@ -718,28 +718,28 @@ spi_channels(Kind, Status, Out) :-
 ** integer(Index) (negative implies only one ambient, -Index)
 ** Out = display_stream
 */
-xtr_tree(Goal, Kind, Index, Out) :-
+xtr_tree(Goal, Kind, Selector, Out) :-
 
     Goal =?= ambient_server#run(_Goals, Root),
     channel(Root) |
-	format_xtr(Kind, Index, [Root], Out, []);
+	format_xtr(Kind, Selector, [Root], Out, []);
 
     Goal =?= ambient_server#run(_Goals, Root, _Debug),
     channel(Root) |
-	format_xtr(Kind, Index, [Root], Out, []);
+	format_xtr(Kind, Selector, [Root], Out, []);
 
     otherwise :
-      Index = _,
+      Selector = _,
       Kind = _,
       Out = ["No ambient tree" - Goal].
 
-  format_xtr(Kind, Index, Ambients, Out, Out1) :-
+  format_xtr(Kind, Selector, Ambients, Out, Out1) :-
 
     Ambients ? Ambient,
     vector(Ambient) :
       write_channel(state(State), Ambient) |
 	extract_ambient_state,
-	format_xtr_parts(Kind, Index, Id, Channels, Children, Out, Out'),
+	format_xtr_parts(Kind, Selector, Id, Channels, Children, Out, Out'),
 	self;
 
     Ambients ? _ClosedAmbient,
@@ -747,7 +747,7 @@ xtr_tree(Goal, Kind, Index, Out) :-
 	self;
 
     Ambients = [] :
-      Index = _,
+      Selector = _,
       Kind = _,
       Out = Out1.
 
@@ -781,36 +781,42 @@ xtr_tree(Goal, Kind, Index, Out) :-
       Channels = [] .
 
 
-format_xtr_parts(Kind, Index, Id, Channels, Children, Out, Out1) :-
+format_xtr_parts(Kind, Selector, Id, Channels, Children, Out, Out1) :-
 
-    Index =?= all,
+    Selector =?= "",
     Id =?= system |
 	format_xtr_parts1;
 
-    Index =?= all,
+    Selector =?= "",
     Id =\= system :
       Out ! "+" |
 	format_xtr_parts1 + (Out1 = ["-" | Out1]);
 
-    Id =?= _Name(Index) :
-      Index' = all |
+    Selector =?= system,
+    Id =?= system |
+	format_xtr_parts1;
+
+    Id =?= Selector(_Index) |
+	format_xtr_parts1;
+
+    Id =?= _Name(Selector) :
+      Selector' = "" |
 	format_xtr_parts1;
 
     Id =?= _Name(I),
-    I =:= -Index :
-      Index' = none |
+    I =:= -Selector |
 	format_xtr_parts1;
 
     otherwise :
       Channels = _,
       Id = _ |
-	format_xtr(Kind, Index, Children, Out, Out1).
+	format_xtr(Kind, Selector, Children, Out, Out1).
 
-  format_xtr_parts1(Kind, Index, Id, Channels, Children, Out, Out1) :-
+  format_xtr_parts1(Kind, Selector, Id, Channels, Children, Out, Out1) :-
     true :
       Out = [Id, "+", "+" | Out'] |
 	format_channels(Kind, Channels, Out', ["-", "-" | Out'']),
-	format_xtr(Kind, Index, Children, Out'', Out1).
+	format_xtr(Kind, Selector, Children, Out'', Out1).
 
 format_channels(Kind, Channels, Out, Out1) :-
 
