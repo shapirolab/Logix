@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/21 07:08:23 $
+		       	$Date: 2003/04/01 13:04:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -153,7 +153,7 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       Arguments' = [Channel | VerifiedStatusList] |
 	verify_status_list,
 	verify_macro +
-	  (ArgTypes = [channel | strings]);
+	  (ArgTypes = [channel | attributes]);
 
     otherwise :
       Arguments = _,
@@ -186,7 +186,20 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
     otherwise :
       StatusList = _,
-      VerifiedStatusList = error(invalid_arguments(Remnant)).
+      VerifiedStatusList = error(invalid_attributes(Attributes)) |
+	strip_trailing_variable(Remnant, Attributes).
+
+  strip_trailing_variable(In, Out) :-
+
+    In ? Item, In' =\= [] :
+      Out ! Item |
+	self;
+
+    In =?= [Item], Item =\= `_ :
+      Out = In;
+
+    In =?= [`_] :
+      Out = [].
 
   verify_macro(ChannelNames, Locals, ArgTypes, Arguments,
 		 MacroedArguments) :-
@@ -228,18 +241,18 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	utilities#verify_channel("", Arg, ChannelNames, Locals, _,  Err, []),
 	verified_macro_channel;
 
-    ArgTypes =?= strings,
-    Arguments ? Arg, string(Arg) :
-      OkArgs ! [Arg | Strings],
-      OkArgs'' = [Strings | OkArgs'] |
-	self;
-
     ArgTypes =?= channels,
     Arguments ? Arg, string(Arg) :
       OkArgs ! [`Arg | OkChannelNames],
       OkArgs'' = [OkChannelNames | OkArgs'] |
 	utilities#verify_channel("", Arg, ChannelNames, Locals, _,  Err, []),
 	verified_macro_channel;
+
+    string(ArgTypes), ArgTypes =\= channels,
+    Arguments ? Arg, string(Arg) :
+      OkArgs ! [Arg | Args],
+      OkArgs'' = [Args | OkArgs'] |
+	self;
 
     string(ArgTypes),
     Arguments = [`Variable], string(Variable) :
@@ -270,8 +283,8 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	verified_macro_arguments(OkArguments, MacroedArguments);
 
     otherwise :
-      MacroedArguments = argument_error([Message | Mss]),
-      MacroedArguments' = argument_error(Mss) |
+      MacroedArguments = error([Message | Mss]),
+      MacroedArguments' = error(Mss) |
 	invalid_macro_argument.
 
   invalid_macro_argument(ChannelNames, Locals, ArgTypes, Arguments,
@@ -297,6 +310,14 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       ArgTypes' = [] |
 	verify_macro_arguments;
 
+    Arguments ? Arg,
+    string(ArgTypes),
+    string_to_dlist(ArgTypes, TL, []),
+    string_to_dlist("not_in_", NL, TL) :
+      Message = Ms?(Arg) |
+	list_to_string(NL, Ms),
+	verify_macro_arguments;
+
     Arguments =?= [],
     ArgTypes ? Type,
     string_to_dlist(Type, TL, []),
@@ -313,39 +334,51 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       NextErrors = Errors |
 	utils#list_to_tuple([Name | MacroArguments], Body2);
 
+    MacroArguments =?= error(MacroErrors),
+    MacroErrors =?= [MacroError] :
+      Name = _,
+      Body2 = true,
+      Errors = [ProcessName-Body1-MacroError | NextErrors];
+
+    MacroArguments =?= error(MacroErrors),
+    MacroErrors =\= [_] :
+      Name = _,
+      Body2 = true,
+      Errors = [ProcessName-Body1-MacroErrors | NextErrors];
+
     otherwise :
       Name = _,
       Body2 = true,
       Errors = [ProcessName-Body1-MacroArguments | NextErrors].
 
   verified_macro_channel(ChannelNames, Locals, ArgTypes, Arguments,
-			  OkArguments, OkArgs, MacroedArguments, Arg, Err) :-
+		    OkArguments, OkArgs, MacroedArguments, Arg, Err) :-
 
     Err =?= [] :
       Arg = _ |
 	verify_macro_arguments;	
 
     Err =\= [] :
-      MacroedArguments = argument_error([invalid_macro_channel(Arg) | Mss]),
-      MacroedArguments' = argument_error(Mss) |
+      MacroedArguments = error([invalid_channel(Arg) | Mss]),
+      MacroedArguments' = error(Mss) |
 	verify_macro_arguments.
 	
   verified_macro_arguments(OkArguments, OkArguments?^).
-  verified_macro_arguments(_OkArguments, argument_error([]^)).
+  verified_macro_arguments(_OkArguments, error([]^)).
 
 
 verify_call_channels(Name, Goal, ChannelNames, Locals, Errors, NextErrors)
-			+ (Index = 2) :-
+				+ (Index = 2) :-
 
     arg(Index, Goal, (_ = String)), String =\= "_",
     Index++ |
-	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkChannel,
+	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkCh,
 				Errors, Errors'?),
 	self;
 
     arg(Index, Goal, String), String =\= "_",
     Index++ |
-	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkChannel,
+	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkCh,
 				Errors, Errors'?),
 	self;
 
@@ -587,16 +620,18 @@ prime_macro_arguments(Primes, MacroedArguments, PrimedArguments, Variables) :-
 	prime_local_channels(Primes, [Channel], [Channel']),
 	self;
 
-    MacroedArguments ? List, List = [`_ | _] :
-      Variables = [Reply? | List'?],
-      PrimedArguments = [List'?, Reply] |
-	prime_local_channels(Primes, List, List'),
-	prime_local_channels(Primes, MacroedArguments', [Reply]);
+    MacroedArguments =?= [Channels, Reply],
+    Channels =?= [`_ | _] :
+      Variables = [Reply'? | PrimedChannels?],
+      PrimedArguments = [PrimedChannels?, Reply'?] |
+	prime_local_channels(Primes, Channels, PrimedChannels),
+	prime_local_channels(Primes, [Reply], [Reply']);
 
-    MacroedArguments ? List, List =\= [`_ | _], List =\= _(_) :
-      Variables = [Reply],
-      PrimedArguments = [List, Reply] |
-	prime_local_channels(Primes, MacroedArguments', [Reply]);
+    MacroedArguments =?= [NonChannels, Reply], list(NonChannels),
+    NonChannels =\= [`_ | _] :
+      Variables = [Reply'?],
+      PrimedArguments = [NonChannels, Reply'?] |
+	prime_local_channels(Primes, [Reply], [Reply']);
 
     MacroedArguments =?= [`_] :
       Variables = PrimedArguments? |
