@@ -2,8 +2,12 @@
 #
 # Coventry - Monitor and re-nice TS queue processes.
 #
+IS_ON=/etc/chkconfig
+COVENTRY=/usr/local/sbin
+COVENTRYD=$COVENTRY/coventryd
+PATH=$COVENTRY:$PATH
 
-if chkconfig verbose 
+if $IS_ON verbose 
 then
     ECHO=echo
 else
@@ -12,12 +16,17 @@ fi
 
 case $1 in
 	'start')
-	    killall coventryd
-	    $ECHO Starting coventry daemon.
-	    coventryd
+            if $IS_ON coventry && test -x $COVENTRYD; then
+	        killall coventryd
+	        $ECHO Starting coventry daemon
+	        $COVENTRYD &
+	    fi
 	;;
 	'stop')
 	    $ECHO Stopping coventry daemon.
 	    killall coventryd
 	;;
+	*)
+            echo "usage: $0 {start|stop}"
+
 esac
