@@ -64,6 +64,19 @@ pi_receive(Channel, Message) :-
       Message = _ |
 	computation#display(('pi_utils: Can''t receive from' : Channel)).
 
+pi_wait_to_send(Ready, PiMessage, PiChannel, Sent) :-
+    PiMessage = _Sender(_Message, _ChoiceTag, Choice),
+    unknown(Choice),
+    known(Ready),
+    PiChannel =?= _Creator(FcpChannel, _Stream, _Receive, _Send),
+    channel(FcpChannel) :
+      write_channel(PiMessage, FcpChannel),
+      Sent = Ready;
+    PiMessage = _Sender(_Message, _ChoiceTag, Choice),
+    known(Choice) :
+      Ready = _,
+      PiChannel = _,
+      Sent = _.
 
 "
 

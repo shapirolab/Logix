@@ -23,6 +23,8 @@ MERGE(Merger, Sorted, List1, List2, Pair) =>
 RAN =>  4.					/* random real number */
 LN  =>  9.					/* natural logarithm */
 
+CREATIONS => 4.					/* for info(I, V) */
+
 serve(In) :-
 
     In =?= [] |
@@ -187,7 +189,7 @@ scheduling(Schedule, Offset, NegativeExponential,
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
     Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
     Waiting =\= true,
-    WakeupTime := integer(Now - Mean*NegativeExponential) :
+    WakeupTime := Now - Mean*NegativeExponential :
 /**************************** Debugging line ********************************/
       Debug ! receive(Ic, WakeupTime),
       Wakeup = _,
@@ -202,7 +204,7 @@ scheduling(Schedule, Offset, NegativeExponential,
     Schedule ? schedule([send(Channel, WakeVar) | More]),
     Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
     Waiting =\= true,
-    WakeupTime := integer(Now - Mean*NegativeExponential) :
+    WakeupTime := Now - Mean*NegativeExponential :
 /**************************** Debugging line ********************************/
       Debug ! send(Ic, WakeupTime),
       Wakeup = _,
@@ -217,7 +219,7 @@ scheduling(Schedule, Offset, NegativeExponential,
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
     Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
     Waiting =?= true,
-    WakeupTime := integer(Now - Mean*NegativeExponential) :
+    WakeupTime := Now - Mean*NegativeExponential :
       Debug ! receive(Ic, WakeupTime),
       Schedule'' = [schedule(More) | Schedule'],
       NewList' = [{WakeupTime, WakeVar} | NewList],
@@ -228,7 +230,7 @@ scheduling(Schedule, Offset, NegativeExponential,
     Schedule ? schedule([send(Channel, WakeVar) | More]),
     Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
     Waiting =?= true,
-    WakeupTime := integer(Now - Mean*NegativeExponential) :
+    WakeupTime := Now - Mean*NegativeExponential :
 /**************************** Debugging line ********************************/
       Debug ! send(Ic, WakeupTime),
       Schedule'' = [schedule(More) | Schedule'],
@@ -237,7 +239,9 @@ scheduling(Schedule, Offset, NegativeExponential,
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
 	self;
 
-    Schedule ? schedule([]) |
+    Schedule ? schedule(TheEnd), TheEnd =\= [_|_] :
+/**************************** Debugging line ********************************/
+      Debug ! process(TheEnd) |
 	self;
 
     Schedule =?= [] :
@@ -267,9 +271,10 @@ scheduling(Schedule, Offset, NegativeExponential,
 
     Wakeup =?= done,
     PairList =?= [],
-    NewList =?= [] :
-/**************************** Debugging line ********************************/
-      Debug ! Now-none,
+    NewList =?= [],
+/**************************** Debugging lines *******************************/
+    info(CREATIONS, Creations) :
+      Debug ! idle(Now, Creations),
       Waiting = _,
       Waiting' = false,
       Wakeup' = _ |
@@ -277,9 +282,10 @@ scheduling(Schedule, Offset, NegativeExponential,
 
     Wakeup =?= done,
     PairList ? {Now', Signal}, PairList' =?= [],
-    NewList =?= [] :
-/**************************** Debugging line ********************************/
-      Debug ! Now-Now',
+    NewList =?= [],
+/**************************** Debugging lines *******************************/
+    info(CREATIONS, Creations) :
+      Debug ! time(Now', Creations),
       Now = _,
       Waiting = _,
       Signal = true, % done(Now, Now'),
@@ -289,18 +295,20 @@ scheduling(Schedule, Offset, NegativeExponential,
 
     Wakeup =?= done,
     PairList ? {Now', Signal}, PairList' =\= [],
-    NewList =?= [] :
-/**************************** Debugging line ********************************/
-      Debug ! Now-Now',
+    NewList =?= [],
+/**************************** Debugging lines *******************************/
+    info(CREATIONS, Creations) :
+      Debug ! time(Now', Creations),
       Now = _,
       Signal = true | % done(Now, Now') |
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Wakeup =?= done,
-    NewList =\= [] :
-/**************************** Debugging line ********************************/
-      Debug ! Now-Now',
+    NewList =\= [],
+/**************************** Debugging lines *******************************/
+    info(CREATIONS, Creations) :
+      Debug ! time(Now', Creations),
       Now = _,
       Pair = {Now', true}, % done(Now, Now')},
       NewList' = [] |
