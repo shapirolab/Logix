@@ -1,6 +1,6 @@
 -language(spifcp).
 
-global(c).
+public(c).
 
 Test+(t,f) ::= c!{t,f},
 		<<

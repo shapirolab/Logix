@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/04 15:42:06 $
+		       	$Date: 2003/04/30 07:04:36 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -81,19 +81,19 @@ program(Source, Exported, Exports, Terms, Errors) :-
 	spc#stochasticize(Terms'?, Terms).
 
 
-/* Extract Exports and Global channel declarations, base rate and weighter. */
+/* Extract Exports and Public channel declarations, base rate and weighter. */
 filter_spifcp_attributes(Source, Exported, Controls, NextSource,
 			Errors, NextErrors) +
-	(GlobalDescriptors = [], Defaults = {_Weighter, _Rate},
+	(PublicDescriptors = [], Defaults = {_Weighter, _Rate},
 	 SpiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
-	spifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
+	spifcp_attribute(String, PublicDescriptors, PublicDescriptors',
 		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
 	self;
 
     Source ? Tuple, Tuple =\= (_ :- _) |
-	spifcp_attribute(Tuple, GlobalDescriptors, GlobalDescriptors',
+	spifcp_attribute(Tuple, PublicDescriptors, PublicDescriptors',
 		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
 	self;
 
@@ -107,19 +107,21 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
   spifcp_attribute(Attribute, OldDescriptors, NewDescriptors,
 	Defaults, NewDefaults, Exports, NextExports, Errors, Errors') :-
 
-    /* obsolescent - allow for global(list) */
-    Attribute = global(Gs) :
-      Exports = NextExports,
-      NewDefaults = Defaults |
-	validate_globals(Gs, Defaults, OldDescriptors, NewDescriptors,
-				Errors, Errors');
-
-    tuple(Attribute), arity(Attribute) > 2,
+    /* Obsolescent */
+    tuple(Attribute), arity(Attribute) >= 2,
     arg(1, Attribute, global) :
       Exports = NextExports,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
-	validate_globals(Gs?, Defaults, OldDescriptors, NewDescriptors,
+	validate_publics(Gs?, Defaults, OldDescriptors, NewDescriptors,
+				Errors, Errors');
+
+    tuple(Attribute), arity(Attribute) >= 2,
+    arg(1, Attribute, public) :
+      Exports = NextExports,
+      NewDefaults = Defaults |
+	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
+	validate_publics(Gs?, Defaults, OldDescriptors, NewDescriptors,
 				Errors, Errors');
 
     tuple(Attribute), arity(Attribute) >= 2,
@@ -167,23 +169,23 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
 	utilities#concatenate_lists([FcpExports, SpiExports], Exports).
 
 
-complete_spifcp_attributes(Exported, Defaults, GlobalDescriptors, Controls) :-
+complete_spifcp_attributes(Exported, Defaults, PublicDescriptors, Controls) :-
 
     Defaults =?= {DefaultWeighter, DefaultRate} :
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Defaults} |
-	extract_global_names,
+      Controls = {Exported?, PublicDescriptors, PublicNames?, Defaults} |
+	extract_public_names,
 	unify_without_failure(DefaultWeighter, SPI_DEFAULT_WEIGHT_NAME),
 	unify_without_failure(DefaultRate, infinite).
 
-  extract_global_names(GlobalDescriptors, GlobalNames) :-
+  extract_public_names(PublicDescriptors, PublicNames) :-
 
-    GlobalDescriptors ? Global,
-    arg(1, Global, Name) :
-      GlobalNames ! Name |
+    PublicDescriptors ? Public,
+    arg(1, Public, Name) :
+      PublicNames ! Name |
 	self;
 
-    GlobalDescriptors =?= [] :
-      GlobalNames = [].
+    PublicDescriptors =?= [] :
+      PublicNames = [].
 
 
 validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
@@ -259,7 +261,7 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
       DefaultWeighter = NewWeighter?,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
-	validate_global_weighter_params,
+	validate_public_weighter_params,
 	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
 
     otherwise :
@@ -267,67 +269,67 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
       Errors = [invalid_default_weighter(Weighter) | NextErrors].
 
 
-validate_globals(GlobalDescriptors, Defaults, Old, New,
+validate_publics(PublicDescriptors, Defaults, Old, New,
 			Errors, NextErrors) +
 			(Head = Tail?, Tail) :-
 
-    GlobalDescriptors ? Global, string(Global),
-    nth_char(1, Global, C),
+    PublicDescriptors ? Public, string(Public),
+    nth_char(1, Public, C),
     CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, Rate} :
-      Tail ! Global(Rate) |
+      Tail ! Public(Rate) |
 	self;
 
-    GlobalDescriptors ? Global, string(Global),
-    nth_char(1, Global, C),
+    PublicDescriptors ? Public, string(Public),
+    nth_char(1, Public, C),
     CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
-      Tail ! Global(Rate, Weighter) |
+      Tail ! Public(Rate, Weighter) |
 	self;
 
-    GlobalDescriptors ? Global(Rate), string(Global),
-    nth_char(1, Global, C),
+    PublicDescriptors ? Public(Rate), string(Public),
+    nth_char(1, Public, C),
     CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, _Rate} :
-      Tail ! Global(Rate'?) |
-	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+      Tail ! Public(Rate'?) |
+	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	self;
 
-    GlobalDescriptors ? Global(Rate), string(Global),
-    nth_char(1, Global, C),
+    PublicDescriptors ? Public(Rate), string(Public),
+    nth_char(1, Public, C),
     CHAR_a =< C, C =< CHAR_z,
     Defaults = {Weighter, _Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
-      Tail ! Global(Rate'?, Weighter) |
-	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+      Tail ! Public(Rate'?, Weighter) |
+	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
 	self;
 
-    GlobalDescriptors ? Global(Rate, Weighter), string(Global),
-    nth_char(1, Global, C),
+    PublicDescriptors ? Public(Rate, Weighter), string(Public),
+    nth_char(1, Public, C),
     CHAR_a =< C, C =< CHAR_z :
-      Tail ! Global(Rate'?, Weighter'?) |
-	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
-	validate_global_channel_weighter(Weighter, Defaults, Weighter',
+      Tail ! Public(Rate'?, Weighter'?) |
+	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	validate_public_channel_weighter(Weighter, Defaults, Weighter',
 						Errors', Errors''),
 	self;
 
-    GlobalDescriptors ? Other, otherwise :
-      Errors ! invalid_global_channel_descriptor(Other) |
+    PublicDescriptors ? Other, otherwise :
+      Errors ! invalid_public_channel_descriptor(Other) |
 	self;
 
-    GlobalDescriptors =\= [], GlobalDescriptors =\= [_|_] :
-      GlobalDescriptors' = [GlobalDescriptors] |
+    PublicDescriptors =\= [], PublicDescriptors =\= [_|_] :
+      PublicDescriptors' = [PublicDescriptors] |
 	self;
 
-    GlobalDescriptors =?= [] :
+    PublicDescriptors =?= [] :
       Defaults = _,
       Tail = [],
-      Diagnostic = duplicate_global_channel |
+      Diagnostic = duplicate_public_channel |
 	utilities#sort_out_duplicates([Head], Head', Reply),
 	diagnose_duplicates(Reply, Diagnostic, Errors, Errors'?),
 	utilities#sort_out_duplicates([Old, Head'?], New, Reply'),
-	diagnose_duplicates + (Diagnostic = duplicate_global_channel).
+	diagnose_duplicates + (Diagnostic = duplicate_public_channel).
 
   diagnose_duplicates(Reply, Diagnostic, Errors, NextErrors) :-
 
@@ -344,7 +346,7 @@ validate_globals(GlobalDescriptors, Defaults, Old, New,
       Errors = [Diagnostic | NextErrors].
 
 
-validate_global_channel_rate(Rate, Defaults, Rate', Errors, NextErrors) :-
+validate_public_channel_rate(Rate, Defaults, Rate', Errors, NextErrors) :-
 
     number(Rate), 0 =< Rate :
       Defaults = _,
@@ -371,10 +373,10 @@ validate_global_channel_rate(Rate, Defaults, Rate', Errors, NextErrors) :-
     otherwise,
     Defaults  = _Weighter(DefaultRate) :
       Rate' = DefaultRate,
-      Errors = [invalid_global_channel_rate(Rate) | NextErrors].
+      Errors = [invalid_public_channel_rate(Rate) | NextErrors].
 
 
-validate_global_channel_weighter(Weighter, Defaults, NewWeighter,
+validate_public_channel_weighter(Weighter, Defaults, NewWeighter,
 					Errors, NextErrors) :-
 
     string(Weighter), nth_char(1, Weighter, C),
@@ -388,16 +390,16 @@ validate_global_channel_weighter(Weighter, Defaults, NewWeighter,
     CHAR_a =< C, C =< CHAR_z :
       Defaults = _ |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
-	validate_global_weighter_params,
+	validate_public_weighter_params,
 	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
 
     otherwise,
     Defaults = DefaultWeighter(_DefaultRate) :
       NewWeighter = DefaultWeighter,
-      Errors = [invalid_global_channel_weighter(Weighter) | NextErrors].
+      Errors = [invalid_public_channel_weighter(Weighter) | NextErrors].
 
 
-validate_global_weighter_params(Args, Params, Errors, NextErrors) :-
+validate_public_weighter_params(Args, Params, Errors, NextErrors) :-
 
     Args ? Arg, number(Arg) :
       Params ! Arg |
@@ -414,7 +416,7 @@ validate_global_weighter_params(Args, Params, Errors, NextErrors) :-
 	self;
 
     Args ? Arg, otherwise :
-      Errors ! invalid_default_global_weighter_parameter(Arg) |
+      Errors ! invalid_default_public_weighter_parameter(Arg) |
 	self;
 
     Args = [] :

@@ -3,7 +3,7 @@
 
 export(BASAL_TRANSCRIPTION , BASAL_TRANSLATION , RNA_DEGRADATION , 
        PROTEIN_DEGRADATION).
-global(bA(R2),bR(R8),utrA(R3),utrR(R9),degmA(R4),degmR(R10),
+public(bA(R2),bR(R8),utrA(R3),utrR(R9),degmA(R4),degmR(R10),
        degpA(R12), degpR(R11)).
 
 

@@ -2,7 +2,7 @@
 -include(rates).
 
 export(TAU).
-global(t2a(Think2a) , t6a(Think6a)).
+public(t2a(Think2a) , t6a(Think6a)).
 
 
 TAU ::=

@@ -1,6 +1,6 @@
 -language(spifcp).
 
-global(b).
+public(b).
 
 RunT ::= btest#Test | boolean#TT(b) | bnot#NotB .
 

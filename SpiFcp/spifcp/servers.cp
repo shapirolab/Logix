@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/04 15:42:06 $
+		       	$Date: 2003/04/30 07:04:36 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,11 +43,11 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
-**   Controls = {Exported, GlobalDescriptors, WeightRate}
+**   Controls = {Exported, PublicDescriptors, WeightRate}
 **
 **          Exported is "all" or a list of exported  Name  or  Name/Arity.
 **
-**          GlobalDescriptors is a list of global channels, Name(BaseRate).
+**          PublicDescriptors is a list of public channels, Name(BaseRate).
 **
 **          WeightRate = Weighter(BaseRate) rate for new channels,
 **
@@ -83,14 +83,14 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 	self;
 
     In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
-    Controls = {Exported, GlobalDescriptors, GlobalNames, WeightRate} |
+    Controls = {Exported, PublicDescriptors, PublicNames, WeightRate} |
 	make_process_scope(PiLHS, WeightRate, ProcessScope, [],
 				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
-	make_prefix_call(Export, GlobalNames, Prefix),
-	create_entry(GlobalDescriptors, GlobalNames, Prefix?,
+	make_prefix_call(Export, PublicNames, Prefix),
+	create_entry(PublicDescriptors, PublicNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
 			Entries, Entries'?, Optimize, Optimize'?),
 	add_process_definition(NewDefinition?, LHSS, Progeny, Progeny'),
@@ -113,23 +113,23 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 	/* sum_procedures. */
 	call#sum_procedures(Summed, Entries, Optimize, [/*develope*/], Errors).
 
-  make_prefix_call(Export, GlobalNames, Prefix) :-
+  make_prefix_call(Export, PublicNames, Prefix) :-
 
     Export =?= true,
-    GlobalNames = [] |
+    PublicNames = [] |
       Prefix = scheduler(`"Scheduler.");
 
     Export =?= true,
-    GlobalNames =\= [] |
-      Prefix = global_channels(_GlobalPairList, `"Scheduler.");
+    PublicNames =\= [] |
+      Prefix = public_channels(_PublicPairList, `"Scheduler.");
 
     otherwise :
       Export = _,
-      GlobalNames = _,
+      PublicNames = _,
       Prefix = [].
 
 
-create_entry(GlobalDescriptors, GlobalNames, Prefix,
+create_entry(PublicDescriptors, PublicNames, Prefix,
 		ProcessDefinition, NewDefinition,
 		Entries, NextEntries, Optimize, NextOptimize) :-
 
@@ -149,16 +149,16 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 	list_to_string([CHAR_DOT | NL], Name'),
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
-	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
+	initialize_public_channels(Index', OuterLHS'?, PublicDescriptors,
 					Initializer, Prefix);
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
     LHSS = {OuterLHS, _InnerLHS},
     Name =\= "_",
     Prefix = [],
-    GlobalNames =\= [],
+    PublicNames =\= [],
     Index := arity(OuterLHS) :
-      GlobalDescriptors = _,
+      PublicDescriptors = _,
       NextEntries = Entries,
       NextOptimize = Optimize,
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
@@ -167,8 +167,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 	make_lhs_tuples;
 	
     otherwise :
-      GlobalDescriptors = _,
-      GlobalNames = _,
+      PublicDescriptors = _,
+      PublicNames = _,
       Prefix = _,
       NewDefinition = ProcessDefinition,
       Entries = NextEntries,
@@ -195,43 +195,43 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
       ChannelNameList = [].
 
 
-  initialize_global_channels(Index, Tuple, GlobalDescriptors,
+  initialize_public_channels(Index, Tuple, PublicDescriptors,
 				Initializer, Prefix) + (List = Tail?, Tail) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? DuplicateName(_BaseRate),
+    PublicDescriptors ? DuplicateName(_BaseRate),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? DuplicateName(_BaseRate, _Weighter),
+    PublicDescriptors ? DuplicateName(_BaseRate, _Weighter),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? ChannelName(BaseRate),
+    PublicDescriptors ? ChannelName(BaseRate),
     Index++ :
       Tail ! ChannelName(`ChannelName, BaseRate) |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? ChannelName(BaseRate, Weighter),
+    PublicDescriptors ? ChannelName(BaseRate, Weighter),
     Index++ :
       Tail ! ChannelName(`ChannelName, Weighter, BaseRate) |
 	self;
 
     otherwise,
     arg(1, Tuple, ProcedureName),
-    arg(2, Prefix, GlobalPairList) :
+    arg(2, Prefix, PublicPairList) :
       Index = _,
-      GlobalDescriptors = _,
+      PublicDescriptors = _,
       Tail = [],
       Initializer = (spi_monitor#Prefix, ProcedureName) |
-	unify_without_failure(GlobalPairList, List).
+	unify_without_failure(PublicPairList, List).
 
 
 /*
@@ -381,8 +381,8 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 
     In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
-	utilities#concatenate_lists([Locals, ChannelNames], GlobalNames),
-	make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
+	utilities#concatenate_lists([Locals, ChannelNames], PublicNames),
+	make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
 				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
@@ -598,7 +598,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   WeightRate is the module type and the default base rate.
 **
-**   GlobalNames is a list of channel descriptors (<stochactic_channel_list>)
+**   PublicNames is a list of channel descriptors (<stochactic_channel_list>)
 **   which are global to the module, and which may be shared by other modules.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
@@ -616,7 +616,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
+make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
 		NewChannelList1, Out, NextOut,
 		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
@@ -640,7 +640,7 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 				Errors''', Errors''''?),
 	correct_for_duplication(LocalList?, LocalList1?, ParamList,
 				ChannelList1?, ChannelList2),
-	make_lhs_tuples(Name?, ParamList1?, GlobalNames, ChannelList2?,
+	make_lhs_tuples(Name?, ParamList1?, PublicNames, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
 	extract_parameters(NewChannelList1?, Parameters, ParameterNames),
 	atom_to_arguments(OuterLHS, Arguments),
@@ -1052,12 +1052,12 @@ extract_arglist(PiLHS, ParamList, Errors, NextErrors) +
 	self.
 
 
-make_lhs_tuples(Name, ParamList, GlobalNames, ChannelList,
+make_lhs_tuples(Name, ParamList, PublicNames, ChannelList,
 			ChannelNames, OuterLHS, InnerLHS) :-
 
     Name =?= "_" :
       ParamList = _,
-      GlobalNames = _,
+      PublicNames = _,
       ChannelList = _,
       OuterLHS = [],
       InnerLHS = [],
@@ -1066,23 +1066,23 @@ make_lhs_tuples(Name, ParamList, GlobalNames, ChannelList,
     Name =\= "_",
     ChannelList =?= [] :
       InnerLHS = OuterLHS?|
-	utilities#subtract_list(GlobalNames, ParamList, GlobalNames1),
-	utilities#concatenate_lists([ParamList, GlobalNames1?],	ChannelNames),
+	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
+	utilities#concatenate_lists([ParamList, PublicNames1?],	ChannelNames),
 	construct_lhs_tuple(Name, "", ChannelNames?, OuterLHS);
 
     Name =\= "_",
     ChannelList =\= [],
-    GlobalNames =?= [] |
+    PublicNames =?= [] |
 	construct_lhs_tuple(Name, "", ParamList, OuterLHS),
 	utilities#concatenate_lists([ParamList, ChannelList?], ChannelNames),
 	construct_lhs_tuple(Name, ".", ChannelNames?, InnerLHS);
 
     Name =\= "_",
     ChannelList =\= [],
-    GlobalNames =\= [] |
-	utilities#subtract_list(GlobalNames, ParamList, GlobalNames1),
-	utilities#subtract_list(GlobalNames1, ChannelList, GlobalNames2),
-	utilities#concatenate_lists([ParamList, GlobalNames2?], OuterList),
+    PublicNames =\= [] |
+	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
+	utilities#subtract_list(PublicNames1, ChannelList, PublicNames2),
+	utilities#concatenate_lists([ParamList, PublicNames2?], OuterList),
 	construct_lhs_tuple(Name, "", OuterList?, OuterLHS),
 	utilities#concatenate_lists([OuterList?, ChannelList], ChannelNames),
 	construct_lhs_tuple(Name, ".", ChannelNames?, InnerLHS).

@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/03/04 15:42:06 $
+		       	$Date: 2003/04/30 07:04:37 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -79,9 +79,9 @@ output(In, ProcessTable, Terms) :-
     In ? export(Atom, RHSS, _Procedure) :
       Terms ! (Atom'? :- NewRHSS?) |
 	utilities#tuple_to_atom(Atom, Atom'),
-	/* Eliminate unused global channels for this export. */
-	update_globals(RHSS, RHSS', ProcessTable, ProcessTable'?),
-	kluge_globals,
+	/* Eliminate unused public channels for this export. */
+	update_publics(RHSS, RHSS', ProcessTable, ProcessTable'?),
+	kluge_publics,
 	self;
 
     In ? outer(Atom, RHSS, _Procedure),
@@ -199,42 +199,48 @@ stochastic(In, ProcessTable, Terms, ProcessId, RHSS, Prototype, Procedure,
       Prototype = [].
 
 
-update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
+update_publics(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
 
-    RHSS =?=  (spi_monitor # global_channels(Globals, Scheduler), Body) :
-      NewRHSS = (spi_monitor # global_channels(NewGlobals?, Scheduler), Body),
+    /* Obsolescent */
+    RHSS =?=  (spi_monitor # global_channels(Publics, Scheduler), Body) :
+      NewRHSS = (spi_monitor # public_channels(NewPublics?, Scheduler), Body),
       ProcessTable = [member(Body, Channels, Ok) | NextProcessTable] |
-	update_globals1;
+	update_publics1;
+
+    RHSS =?=  (spi_monitor # public_channels(Publics, Scheduler), Body) :
+      NewRHSS = (spi_monitor # public_channels(NewPublics?, Scheduler), Body),
+      ProcessTable = [member(Body, Channels, Ok) | NextProcessTable] |
+	update_publics1;
 
     otherwise :
       NewRHSS = RHSS,
       NextProcessTable = ProcessTable.
 
-  update_globals1(Globals, Channels, NewGlobals, Ok) :-
+  update_publics1(Publics, Channels, NewPublics, Ok) :-
 
     Ok = true,
-    Globals ? Global, arg(1, Global, Name) |
-	update_global_list(Name, Channels, Global, NewGlobals, NewGlobals'?),
+    Publics ? Public, arg(1, Public, Name) |
+	update_public_list(Name, Channels, Public, NewPublics, NewPublics'?),
 	self;
 
     otherwise :
       Ok = _,
       Channels = _,
-      NewGlobals = Globals.
+      NewPublics = Publics.
 
-  update_global_list(Name, Channels, Global, NewGlobals, NextNewGlobals) :-
+  update_public_list(Name, Channels, Public, NewPublics, NextNewPublics) :-
 
     Channels ? Name :
       Channels' = _,
-      NewGlobals = [Global | NextNewGlobals];
+      NewPublics = [Public | NextNewPublics];
 
     Channels ? Other, Other =\= Name |
 	self;
 
     Channels =?= [] :
       Name = _,
-      Global = _,
-      NewGlobals = NextNewGlobals.
+      Public = _,
+      NewPublics = NextNewPublics.
 
 
 rewrite_clauses(Communicate1, Requests, Communications, Communicate2) :-
@@ -740,37 +746,44 @@ kluge_news(Asks, Tells, Channels, Ok, NewAsks, NewTells) :-
       NewConvert = Convert.
 
 	
-kluge_globals(RHSS, NewRHSS) :-
+kluge_publics(RHSS, NewRHSS) :-
 
-    RHSS =?= (spi_monitor#global_channels(Globals, Scheduler), Goals) :
+    /* Obsolescent */
+    RHSS =?= (spi_monitor#global_channels(Publics, Scheduler), Goals) :
       NewRHSS =
-	(Ask? | spi_monitor#global_channels(NewGlobals?, Scheduler), Goals) |
-	kluge_global_channels + (Convert = []),
+	(Ask? | spi_monitor#public_channels(NewPublics?, Scheduler), Goals) |
+	kluge_public_channels + (Convert = []),
+	utilities#make_predicate_list(",", NewConvert?, Ask);
+
+    RHSS =?= (spi_monitor#public_channels(Publics, Scheduler), Goals) :
+      NewRHSS =
+	(Ask? | spi_monitor#public_channels(NewPublics?, Scheduler), Goals) |
+	kluge_public_channels + (Convert = []),
 	utilities#make_predicate_list(",", NewConvert?, Ask);
 
     otherwise :
       NewRHSS = RHSS.
 
 
-  kluge_global_channels(Globals, Convert, NewGlobals, NewConvert) :-
+  kluge_public_channels(Publics, Convert, NewPublics, NewConvert) :-
 
-    Globals ? Global, Global =?= Name(Channel, ComputeWeight, BaseRate),
+    Publics ? Public, Public =?= Name(Channel, ComputeWeight, BaseRate),
     tuple(ComputeWeight), ComputeWeight =\= `_,
     arity(ComputeWeight, A),
     make_tuple(A, ComputeWeight') :
-      NewGlobals ! Name(Channel, ComputeWeight'?, BaseRate) |
+      NewPublics ! Name(Channel, ComputeWeight'?, BaseRate) |
 	kluge_real_parameters(ComputeWeight, Convert, 0,
 				ComputeWeight', Convert'),
 	self;
 
-    Globals ? Global,
+    Publics ? Public,
     otherwise :
-      NewGlobals ! Global |
+      NewPublics ! Public |
 	self;
 
-    Globals =?= [] :
+    Publics =?= [] :
       NewConvert = Convert,
-      NewGlobals = [].
+      NewPublics = [].
 
 kluge_real_parameters(Tuple, Convert, Index, NewTuple, NewConvert) :-
 

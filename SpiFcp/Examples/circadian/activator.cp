@@ -2,7 +2,7 @@
 -include(rates).
 
 export(A_GENE , A_RNA , A_PROTEIN).
-global(pA(R1) , bA(R2) , t2a(Think2a) , utrA(R3) , degmA(R4) , degpA(R12) ,
+public(pA(R1) , bA(R2) , t2a(Think2a) , utrA(R3) , degmA(R4) , degpA(R12) ,
        pR(R5) , rbs(R6)).
 
 

@@ -1,6 +1,6 @@
 -language(spifcp).
 
-global(b1,b2).
+public(b1,b2).
 
 RunTT ::= btest#Test |  boolean#TT(b1) |  boolean#TT(b2) |  band#AndB .
 

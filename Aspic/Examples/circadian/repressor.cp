@@ -2,7 +2,7 @@
 -include(rates).
 
 export(R_GENE , R_RNA , R_PROTEIN).
-global(bR(R8),t6a(Think6a),utrR(R9),degmR(R10),degpR(R11),pR(R5),rbs(R6)).
+public(bR(R8),t6a(Think6a),utrR(R9),degmR(R10),degpR(R11),pR(R5),rbs(R6)).
 
 R_GENE ::=
 
