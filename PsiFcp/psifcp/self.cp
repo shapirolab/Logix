@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/22 12:49:22 $
+		       	$Date: 2000/11/23 12:42:23 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -460,43 +460,43 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 	list_to_string(PH, ChannelId),
 	parameters_to_asks([BaseRate], [number], Asks, NextAsks);
 
-    Descriptor = ChannelName(BaseRate, Weighter),
-    string(Weighter),
+    Descriptor = ChannelName(BaseRate, ComputeWeight),
+    string(ComputeWeight),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       Make = [write_channel(
-		new_channel(ChannelId, `ChannelName, BaseRate, Weighter),
+		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
 	      NextMake],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	parameters_to_asks([BaseRate], [number], Asks, NextAsks);
 
-    Descriptor = ChannelName(BaseRate, Weighter),
-    tuple(Weighter), Weighter =?= `_,
+    Descriptor = ChannelName(BaseRate, ComputeWeight),
+    tuple(ComputeWeight), ComputeWeight =?= `_,
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       Make = [write_channel(
-		new_channel(ChannelId, `ChannelName, BaseRate, Weighter),
+		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
 	      NextMake],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
-	parameters_to_asks([BaseRate, Weighter], [number, string],
+	parameters_to_asks([BaseRate, ComputeWeight], [number, string],
 				Asks, NextAsks);
 
-    Descriptor = ChannelName(BaseRate, Weighter),
-    tuple(Weighter), Weighter =\= `_,
+    Descriptor = ChannelName(BaseRate, ComputeWeight),
+    tuple(ComputeWeight), ComputeWeight =\= `_,
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       Make = [write_channel(
-		new_channel(ChannelId, `ChannelName, BaseRate, Weighter),
+		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
 	      NextMake],
       Ops = [number | Ops],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
-	utils#tuple_to_dlist(Weighter, [Functor, _ | List], []),
+	utils#tuple_to_dlist(ComputeWeight, [Functor, _ | List], []),
 	parameters_to_asks([BaseRate, Functor | List], [number, string | Ops],
 				Asks, NextAsks);
 
