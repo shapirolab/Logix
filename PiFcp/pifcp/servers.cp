@@ -4,21 +4,21 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/23 11:47:49 $
+		       	$Date: 2000/02/27 07:56:34 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--export([serve_empty_scope/6, make_guard_receive/5]).
+-export([serve_empty_scope/5, make_guard_receive/5]).
 -mode(interrupt).
 -language(compound).
 
 /*
-** serve_empty_scope/6+5
+** serve_empty_scope/5+5
 **
 ** Serve requests from first-level processes.  See serve_process_scope/6+6
 **
@@ -42,11 +42,19 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
-**   GlobalList is a list of global channels.
+**   Controls = {Exported, GlobalDescriptors, Means}
 **
-**   Exported is a list of exported  Name  or  Name/Arity.
+**          Exported is "all" or a list of exported  Name  or  Name/Arity.
+**
+**          GlobalDescriptors is a list of global channels, Name(Receive, Send).
+**
+**          Means = Delay(ReceiveDefault, SendDefault) means for new channels,
+**
+**          where Delay is in {none, stochastic}.
 **
 ** Output:
+**
+**   Exports is a list of exported procedures, name/arity.
 **
 **   Entries is a list of generated processes for first level procedure entry.
 **
@@ -59,7 +67,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **   Refs, AddRef is a list of deferred lookup_functor/3 requests.
 */
 
-serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
+serve_empty_scope(In, Controls, Exports, Entries, Errors) +
 		(Progeny = [], Refs = AddRef?, AddRef,
 		 Sums, Summed = Sums?) :-
 
@@ -71,13 +79,15 @@ serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(PiLHS, Status, ProcessScope) |
-	make_process_scope(PiLHS, ProcessScope, [], In'', In'?,
+    In ? process(PiLHS, Status, ProcessScope),
+    Controls = {Exported, GlobalDescriptors, GlobalNames, Means} |
+	make_process_scope(PiLHS, Means, ProcessScope, [], In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	compute_status,
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
-	create_entry(GlobalList, Export?, ProcessDefinition?, NewDefinition,
+	create_entry(GlobalDescriptors, GlobalNames, Export?,
+			ProcessDefinition?, NewDefinition,
 			Entries, Entries'?),
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
@@ -87,8 +97,7 @@ serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
 	self;
 
     In = [] :
-      GlobalList = _,
-      Exported = _,
+      Controls = _,
       AddRef = [],
       Exports = [],
       Sums = [] |
@@ -97,20 +106,20 @@ serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
 	call#sum_procedures(Summed, Entries, Errors).
 
 
-create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
-		Entries, NextEntries) :-
+create_entry(GlobalDescriptors, GlobalNames, Export,
+		ProcessDefinition, NewDefinition, Entries, NextEntries) :-
 
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
 					CodeTuple},
     Name =\= "_",
-    GlobalList =\= [],
+    GlobalNames =\= [],
     Export = true,
     Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
       ascii(' ', Space),
-      Entries ! (Atom? :- Initializer?),
+      Entries ! export(Atom?, Initializer?, []),
       NextEntries = Entries',
       NewDefinition = {Name, Arity, ChannelNames'?, OuterLHS'?, InnerLHS'?,
 					CodeTuple} |
@@ -118,14 +127,16 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 	list_to_string([Space|NL], Name'),
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
-	initialize_global_channels(Index', OuterLHS'?, Initializer);
+	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
+					Initializer);
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, OuterLHS, _InnerLHS,
 					CodeTuple},
     Name =\= "_",
-    GlobalList =\= [],
+    GlobalNames =\= [],
     Export = false,
     Index := arity(OuterLHS) :
+      GlobalDescriptors = _,
       NextEntries = Entries,
       NewDefinition = {Name, Arity, ChannelNames'?, OuterLHS'?, InnerLHS'?,
 					CodeTuple} |
@@ -133,7 +144,8 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 	make_lhs_tuples;
 	
     otherwise :
-      GlobalList = _,
+      GlobalDescriptors = _,
+      GlobalNames = _,
       Export = _,
       NewDefinition = ProcessDefinition,
       Entries = NextEntries.
@@ -159,23 +171,31 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
       ChannelNameList = [].
 
 
-  initialize_global_channels(Index, Tuple, Initializer)
+  initialize_global_channels(Index, Tuple, GlobalDescriptors, Initializer)
 				+ (List = Tail?, Tail) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
+    GlobalDescriptors ? DuplicateName(_Receive, _Send),
+    DuplicateName =\= ChannelName |
+	self;
+
+    Index =< arity(Tuple),
+    arg(Index, Tuple, `ChannelName),
+    GlobalDescriptors ? ChannelName(Receive, Send),
     Index++ :
-      Tail ! ChannelName(`ChannelName, 0, 0) |
+      Tail ! ChannelName(`ChannelName, Receive, Send) |
 	self;
 
     Index > arity(Tuple),
     arg(1, Tuple, ProcedureName) :
+      GlobalDescriptors = _,
       Tail = [],
       Initializer = (pi_monitor#global_channels(List), ProcedureName).
 
 
 /*
-** serve_process_scope/6+3
+** serve_process_scope/7+6
 **
 ** Serve requests from first-level processes.  See serve_process_scope/6+6
 **
@@ -217,10 +237,11 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 **
 **   Errors is defined in serve_empty_scope.
 **
-** Local: see serve_empty_scope/6+3 above.
+** Local: see serve_empty_scope/5+5 above.
 */
 
-serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
+serve_process_scope(In, ProcessDefinition, Means,
+			Out, NextOut, Errors, NextErrors) +
 		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
 		 Refs = AddRef?, AddRef) :-
 
@@ -331,8 +352,8 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
     In ? process(PiLHS, Status, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
 					_CodeTuple} |
-	piutils#concatenate_lists([Locals, ChannelNames], GlobalList),
-	make_process_scope(PiLHS, ProcessScope, GlobalList,
+	piutils#concatenate_lists([Locals, ChannelNames], GlobalNames),
+	make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	compute_status,
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
@@ -360,6 +381,7 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
     In = [],
     ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _OuterLHS, _InnerLHS,
 					CodeTuple} :
+      Means = _,
       IdIndex = _,
       Locals = _,
       Primes = _,
@@ -493,7 +515,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
       NextOut = [].
 
 /*
-** make_process_scope/9
+** make_process_scope/10
 **
 ** Analyze PiLHS, producing a ProcessDefinition and a process scope server,
 ** serve_process_scope.
@@ -502,7 +524,9 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   PiLHS is from a process/2 request.
 **
-**   GlobalList is a list of channel names which are global to the process.
+**   Means is a pair of integer default Receive and Send means.
+**
+**   GlobalNames is a list of channel descriptors which are global to the process.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
 **
@@ -519,29 +543,29 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, ProcessScope, GlobalList,
+make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
 	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
       ProcessDefinition =?= {Name?, Arity?, ChannelNames?,
 				OuterLHS?, InnerLHS?, _CodeTuple} |
-	parse_lhs(PiLHS, Name, Arity,
-		ParamList, ChannelList, Errors, Errors'?),
+	parse_lhs(PiLHS, Name, Arity, ParamList, ChannelList,
+				Errors, Errors'?),
 	diagnose_duplicates(ParamList?, ParamList1,
 			Name?, duplicate_parameter,
 				Errors', Errors''?),
 	diagnose_duplicates(ChannelList?, ChannelList1,
 			Name?, duplicate_channel,
-			Errors'', Errors'''?),
+				Errors'', Errors'''?),
 	piutils#concatenate_lists([ParamList1?, ChannelList1?], LocalList),
 	diagnose_duplicates(LocalList?, LocalList1,
 			Name?, channel_duplicates_parameter,
-			Errors''', Errors''''?),
+				Errors''', Errors''''?),
 	correct_for_duplication(LocalList?, LocalList1?, ParamList,
 				ChannelList1?, ChannelList2),
-	make_lhs_tuples(Name?, ParamList1?, GlobalList, ChannelList2?,
+	make_lhs_tuples(Name?, ParamList1?, GlobalNames, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
-	serve_process_scope(ProcessScope?, NewDefinition,
+	serve_process_scope(ProcessScope?, NewDefinition, Means,
 				Out, NextOut, Errors'''', NextErrors).
 
   correct_for_duplication(L1, L2, P, C1, C2) :-
@@ -722,12 +746,12 @@ extract_arglist(PiLHS, ParamList, Errors, NextErrors) +
 	self.
 
 
-make_lhs_tuples(Name, ParamList, GlobalList, ChannelList,
+make_lhs_tuples(Name, ParamList, GlobalNames, ChannelList,
 		ChannelNames, OuterLHS, InnerLHS) :-
 
     Name =?= "_" :
       ParamList = _,
-      GlobalList = _,
+      GlobalNames = _,
       ChannelList = _,
       OuterLHS = [],
       InnerLHS = [],
@@ -736,23 +760,23 @@ make_lhs_tuples(Name, ParamList, GlobalList, ChannelList,
     Name =\= "_",
     ChannelList =?= [] :
       InnerLHS = OuterLHS?|
-	piutils#subtract_list(GlobalList, ParamList, GlobalList1),
-	piutils#concatenate_lists([ParamList, GlobalList1?], ChannelNames),
+	piutils#subtract_list(GlobalNames, ParamList, GlobalNames1),
+	piutils#concatenate_lists([ParamList, GlobalNames1?], ChannelNames),
 	construct_lhs_tuple(Name, "", ChannelNames?, OuterLHS);
 
     Name =\= "_",
     ChannelList =\= [],
-    GlobalList =?= [] |
+    GlobalNames =?= [] |
 	construct_lhs_tuple(Name, "", ParamList, OuterLHS),
 	piutils#concatenate_lists([ParamList, ChannelList?], ChannelNames),
 	construct_lhs_tuple(Name, ".", ChannelNames?, InnerLHS);
 
     Name =\= "_",
     ChannelList =\= [],
-    GlobalList =\= [] |
-	piutils#subtract_list(GlobalList, ParamList, GlobalList1),
-	piutils#subtract_list(GlobalList1, ChannelList, GlobalList2),
-	piutils#concatenate_lists([ParamList, GlobalList2?], OuterList),
+    GlobalNames =\= [] |
+	piutils#subtract_list(GlobalNames, ParamList, GlobalNames1),
+	piutils#subtract_list(GlobalNames1, ChannelList, GlobalNames2),
+	piutils#concatenate_lists([ParamList, GlobalNames2?], OuterList),
 	construct_lhs_tuple(Name, "", OuterList?, OuterLHS),
 	piutils#concatenate_lists([OuterList?, ChannelList], ChannelNames),
 	construct_lhs_tuple(Name, ".", ChannelNames?, InnerLHS).
@@ -773,20 +797,20 @@ make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
 
       Iterates =
 	{(`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
-				`spcm(receive), `spcm(send)},
+				`pifcp(receive), `pifcp(send)},
 	   `pifcp(mss) = [{`"_", `"_", `"_", `pifcp(choice)}
 			 | `pifcp(mssp)],
 	   not_we(`pifcp(choice)) :
 	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
-					`spcm(receive), `spcm(send)} |
+					`pifcp(receive), `pifcp(send)} |
 		self),
 
 	  (`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
-				`spcm(receive), `spcm(send)},
+				`pifcp(receive), `pifcp(send)},
 	   `pifcp(mss) =?= [{`SendId, `"_", `"_", `pifcp(chosen)}
 			   | `pifcp(mssp)] :
 	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
-					`spcm(receive), `spcm(send)} |
+					`pifcp(receive), `pifcp(send)} |
 		self)
 	},
 
@@ -796,7 +820,8 @@ make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
 	  ExcludeSender? :
 /* This may only be done if we can handle multiple primes - e.g.
 ** when the message is a <channel_list> which includes  ChannelName .
-**		    `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp)},
+**		    `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
+**					`pifcp(receive), `pifcp(send)} 
 */
 	    CancelSends?) |
 

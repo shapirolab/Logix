@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/23 11:47:49 $
+		       	$Date: 2000/02/27 07:56:33 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -39,16 +39,21 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
 	/* Extract Global channel declarations, and get Exported list. */
-	filter_attributes(Attributes1, [], GlobalList, Attributes1', Exported,
+	filter_attributes(Attributes1, Attributes1', Controls, Delay,
 				Errors, Errors'?),
 	Attributes2 = [export(Exports?) | Attributes1'?],
 	program.
 
-  filter_attributes(In, GlobalList, NewGlobalList, Out, Exported,
-			Errors, NextErrors) :-
+  filter_attributes(In, Out, Controls, Delay, Errors, NextErrors) +
+	(Exported = _, GlobalDescriptors = [],
+	 Means = _Delay(_Receive, _Send)) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
+	self;
+
+    In ? export(all) :
+      Exported = all |
 	self;
 
     In ? export(Es), list(Es) :
@@ -56,37 +61,103 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 	self;
 
     In ? global(Gs) |
-	validate_globals(Gs, GlobalList, GlobalList', Errors, Errors'?),
+	validate_globals(Gs, Means, GlobalDescriptors, GlobalDescriptors',
+				Errors, Errors'?),
 	self;
 
+    In ? stochastic :
+      Means = _(Receive, Send),
+      Means' = stochastic(Receive, Send) |
+	self;
+
+    In ? stochastic(Both) :
+      Means' = stochastic(_Receive, _Send) |
+	validate_means(Both, Both, Means, Means', Errors, Errors'),
+	update_means(Means, Means', Means''),
+	self + (Means = Means''?);
+
+    In ? stochastic(Receive, Send) :
+      Means' = stochastic(_Receive, _Send) |
+	validate_means(Receive, Send, Means, Means', Errors, Errors'),
+	update_means(Means, Means', Means''),
+	self + (Means = Means''?);
+
     In ? Other,
-    Other =\= export(_), Other =\= global(_) :
+    Other =\= export(_), Other =\= global(_),
+    Other =\= stochastic, Other =\= stochastic(_), Other =\= stochastic(_, _) :
       Out ! Other |
 	self;
 
-    In = [] :
-      NewGlobalList = GlobalList,
-      Out = [],
+    In = [], Means =?= stochastic(_Receive, _Send) :
+      Out = [stochastic],
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Means?},
+      Delay = stochastic,
       Errors = NextErrors |
+	extract_global_names,
+	unify_without_failure(Exported, all),
+	unify_without_failure(Means, _(0, 0));
+
+    In = [] :
+      Out = [],
+      Means = none(0, 0),
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Means},
+      Delay = none,
+      Errors = NextErrors |
+	extract_global_names,
 	unify_without_failure(Exported, all).
 
+  update_means(Means1, Means2, Means3) :-
 
-  validate_globals(GlobalList, Old, New, Errors, NextErrors) +
-			(Head = Tail?, Tail) :-
+    true :
+      Means1 = Means2,
+      Means3 = Means2;
 
-    GlobalList ? String, String =\= "", String =\= "_" :
-      Tail ! String |
+    otherwise :
+      Means1 = _,
+      Means3 = Means2.
+
+  extract_global_names(GlobalDescriptors, GlobalNames) :-
+
+    GlobalDescriptors ? Name(_Receive, _Send) :
+      GlobalNames ! Name |
 	self;
 
-    GlobalList ? Other, otherwise :
+    GlobalDescriptors =?= [] :
+      GlobalNames = [].
+
+  validate_globals(GlobalDescriptors, Means, Old, New, Errors, NextErrors) +
+			(Head = Tail?, Tail) :-
+
+    GlobalDescriptors ? String,
+    string(String), String =\= "", String =\= "_",
+    Means =?= _Type(Receive, Send) :
+      Tail ! String(Receive, Send) |
+	self;
+
+    GlobalDescriptors ? String(Both),
+    string(String), String =\= "", String =\= "_" :
+      Global = String(_Receive, _Send),
+      Tail ! Global |
+	validate_means(Both, Both, Means, Global, Errors, Errors'),
+	self;
+
+    GlobalDescriptors ? String(Receive, Send),
+    string(String), String =\= "", String =\= "_" :
+      Global = String(_Receive, _Send),
+      Tail ! Global |
+	validate_means(Receive, Send, Means, Global, Errors, Errors'),
+	self;
+
+    GlobalDescriptors ? Other, otherwise :
       Errors ! invalid_global_channel_name(Other) |
 	self;
 
-    GlobalList =\= [], GlobalList =\= [_|_] :
-      GlobalList' = [GlobalList] |
+    GlobalDescriptors =\= [], GlobalDescriptors =\= [_|_] :
+      GlobalDescriptors' = [GlobalDescriptors] |
 	self;
 
-    GlobalList =?= [] :
+    GlobalDescriptors =?= [] :
+      Means = _,
       Tail = Old,
       Errors = NextErrors |
 	piutils#sort_out_duplicates([Head], New, Reply),
@@ -107,13 +178,27 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
       Reply = _,
       Errors = [Diagnostic | NextErrors].
 
+  validate_means(ReceiveMean, SendMean, Means, Global, Errors, NextErrors) :-
+
+    integer(ReceiveMean), 0 =< ReceiveMean,
+    integer(SendMean), 0 =< SendMean :
+      Means = _,
+      Global = _Name(ReceiveMean, SendMean),
+      Errors = NextErrors;
+
+    otherwise,
+    Means = _Type(Receive, Send) :
+      Global = _Name(Receive, Send),
+      Errors = [invalid_means(ReceiveMean, SendMean) | NextErrors].
+
 /************************* Program Transformations ***************************/
 
-program(Source, GlobalList, Exported, Exports, Terms, Errors) :-
+program(Source, Controls, Delay, Exports, Terms, Errors) :-
 
-	servers#serve_empty_scope(Scope?, GlobalList, Exported, Exports,
+	servers#serve_empty_scope(Scope?, Controls, Exports,
 					NextTerms, Errors),
-	process_definitions+(Processes = [], NextScope = []).
+	process_definitions+(Processes = [], NextScope = []),
+	spc#output(Terms'?, Exports, Delay, Terms).
 
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
@@ -147,7 +232,7 @@ process(Status, RHSS, Scope, Process, Nested) :-
 
     Status = double :
       Scope ! lhss(OuterLHS, InnerLHS),    
-      Nested ! (Atom? :- Initializer?),
+      Nested ! outer(Atom?, Initializer?, []),
       Status' = initialized |
 	piutils#tuple_to_atom(OuterLHS?, Atom),
 	Index := arity(OuterLHS) + 1,
@@ -158,14 +243,14 @@ process(Status, RHSS, Scope, Process, Nested) :-
     Status =\= nil, Status =\= double, /* single or initialized */
     RHSS =\= (_|_), RHSS =\= (_;_)  :
       Scope = [lhss(_OuterLHS, InnerLHS), code(no_guard, [], []) | Scope'?],
-      Process = (Atom? :- RHSS'?) |
+      Process = no_guard(Atom?, RHSS'?, []) |
 	piutils#tuple_to_atom(InnerLHS?, Atom),
 	transform_body(RHSS, RHSS', Nested, [], Scope', []);
 
     Status =\= nil, Status =\= double, /* single or initialized */
     otherwise :
       Scope ! lhss(_OuterLHS, InnerLHS),
-      Process = (Atom? :- RHSS'?) |
+      Process = _Type(Atom?, RHSS'?, _Action) |
 	piutils#tuple_to_atom(InnerLHS?, Atom),
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope').
 
@@ -227,7 +312,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       NextRHSS = [Clauses?],
       FinalMode = Mode'? |
 	guarded_clause(RHS1, GuardMode(SendId?, Index'), Clauses,
-			Nested, Nested'?, Scope, Scope'?),
+			Nested, [], Scope, Scope'?),
 	piutils#update_process_mode(Mode, GuardMode, Mode'),
 	make_right_hand_side + (Index = 1),
 	make_rhs2 + (Scope = Scope', NextScope = Scope''?),
@@ -251,23 +336,20 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 	make_right_hand_side + (Index = 1),
 	make_rhs2 + (SendProcedure = _, NextScope = []).
 
-  code_reply(Process, FinalMode, SendProcedure, Nested, Scope) :-
+  code_reply(Process, FinalMode, SendProcedure, Scope) :-
 
-    FinalMode =?= receive,
-    Process =?= (_ :- ProcessRHS) :
+    FinalMode =?= receive :
+      Process = receive(_Atom, ProcessRHS, []),
       SendProcedure = _,
-      Nested = [],
       Scope = [code(receive, [], ProcessRHS)];
 
-    SendProcedure =?= (_ :- SendRHS),
-    Process =?= (_ :- ProcessRHS) :
-      Nested = [SendProcedure],
+    SendProcedure =?= (_ :- SendRHS) :
+      Process = FinalMode(_Atom, ProcessRHS, SendProcedure),
       Scope = [code(FinalMode, ProcessRHS, SendRHS)];
 
     otherwise :
-      Process = _,
       SendProcedure = _,
-      Nested = [],
+      Process = FinalMode(_Atom, _RHSS, []),
       Scope = [code(FinalMode, [], [])].
 
   make_rhs2(Mode, SendId, ClauseList, Sends, RHS2,

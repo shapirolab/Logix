@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/23 11:47:48 $
+		       	$Date: 2000/02/27 07:56:33 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -712,7 +712,7 @@ add_receives(Receives, Sender, Code, NextCode) :-
 make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
 
     Mode =?= send :
-      Entries = [(Atom? :- (Writes | SendChoices?)), (ChoiceAtom? :- RHS)
+      Entries = [Mode(Atom?, (Writes | SendChoices?), (ChoiceAtom? :- RHS))
 		| NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom),
 	make_choice_name(Name, ".sends", SendChoices),
@@ -721,10 +721,10 @@ make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
 
     Mode =?= mixed :
       Sender = `pifcp(sendid),
-      Entries = [(Atom? :- Writes? |
-			pi_monitor#unique_sender(Name, Sender),
-			MixedChoices?),
-		 (ChoiceAtom? :- RHS?)
+      Entries = [Mode(Atom?, (Writes? |
+				pi_monitor#unique_sender(Name, Sender),
+				MixedChoices?),
+		 (ChoiceAtom? :- RHS?))
 		| NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom),
 	make_choice_name(Name, ".mixed", MixedChoices),
@@ -735,7 +735,7 @@ make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
     Mode =\= send, Mode =\= mixed :
       Name = _,
       Writes = _,
-      Entries = [(Atom? :- RHS) | NextEntries] |
+      Entries = [Mode(Atom?, RHS, []) | NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom).
 
   make_choice_name(Prefix, Suffix, Name) :-
