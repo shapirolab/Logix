@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/16 08:04:01 $
+		       	$Date: 2000/05/07 09:05:50 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -47,6 +47,7 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 	/* Get Exported list. */
 	filter_attributes(Attributes1, Attributes1', Exported),
 	Attributes2 = [export(Exports?) | Attributes1'?],
+	pctopifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
   filter_attributes(In, Out, Exported) :-
@@ -446,8 +447,12 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       SendId = "_",
       RHS2 = FcpClauses?,
       PrepareProcedure = [],
-      Scope = [error("missing_otherwise") | NextScope] |
-	piutils#make_predicate_list(';', ClauseList, FcpClauses);
+      Scope = [lhss(_Outer, Inner) | NextScope] |
+	arg(1, Inner, Name),
+	piutils#concatenate_lists(
+			[ClauseList,[(otherwise | fail(Name-compare))]],
+					ClauseList'),
+	piutils#make_predicate_list(';', ClauseList'?, FcpClauses);
 
     Mode =?= conflict :
       Prepares = _,

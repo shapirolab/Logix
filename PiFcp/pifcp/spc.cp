@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/16 08:04:02 $
+		       	$Date: 2000/05/07 09:05:50 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -114,7 +114,9 @@ stochastic(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
     arg(1, Atom, ProcName),
     string_to_dlist(ProcName, PNL, []) : Mode = _,
       Terms ! (LHS :- RHS?),
-      Terms' ! (Atom :- Communicate2?) |
+      Terms' ! (Atom'? :- Communicate2?) |
+	utils#tuple_to_dlist(Atom, ADL, [`pifcp(count)]),
+	utils#list_to_tuple(ADL?, Atom'),
 	remake_rhs(RHSS, Prepares, RHSS'),
 	reform_rhs(RHSS',
 		write_channel(schedule(WaitList?), `pifcp(schedule)), RHS),
@@ -218,7 +220,7 @@ rewrite_rhss(ProcName, RefName, CL1, Prepares, WaitList, CL2) :-
     Ask = (_Stream ? _Message, Identify, _We),
     Identify = (`ChannelName = _Creator(_FcpVector, _Arguments)) :
       WaitList ! receive(`ChannelName, `sprfcp(ChannelName)),
-      CL2 ! (Ask : write_channel(terminate(RefName, `pifcp(count)),
+      CL2 ! (Ask : write_channel(terminate(RefName-ChannelName, `pifcp(count)),
 					`pifcp(schedule)), Tell |
 			Body) |
 	self;
