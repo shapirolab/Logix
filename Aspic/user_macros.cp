@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/07 07:07:11 $
+		       	$Date: 2002/08/14 08:50:22 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -356,7 +356,9 @@ expand(Command, Cs) :-
     Command = h :
       CL = [	" a / a(No)          - abort computation No",
 		" at / at(Service)   - attributes(Service)",
+		" bta                - busy channels",
 		" c / c(Module)      - compile(Module)",
+		" cta                - communicating channels",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" goal / goal(No)    - goal of computation No",
 		" h                  - get this list",
@@ -784,7 +786,7 @@ format_channels(Kind, Channels, Out, Out1) :-
       FormattedChannel = "";
 
     SendWeight =\= 0, ReceiveWeight =\= 0,
-    Kind =?= CHAR_b,
+    CHAR_b =< Kind, Kind =< CHAR_c,
     read_vector(SPI_CHANNEL_RATE, Channel, Rate),
     Weight := Rate * SendWeight * ReceiveWeight :
       Refs = _,
