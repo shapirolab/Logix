@@ -154,12 +154,7 @@ BNF for AmbFcp
                            0
 <nested_scope>         ::= << <new_scope> >>
 
-<ambient>              ::= <ambient_type> << <new_scope> >>
-                           <ambient_name>( << <new_scope> >> )
-
-<ambient_type>         ::= cell
-                           membrane
-                           molecule
+<ambient>              ::= <ambient_name>(<< <new_scope> >>)
 
 <local_sum>            ::= <local_call>
                            <local_call> + <local_sum>
