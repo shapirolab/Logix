@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/dfcp.cp,v 1.1 1999/07/09 07:03:16 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/dfcp.cp,v 1.2 2002/06/26 06:51:55 bill Exp $ */
 -language([compound,colon]).
 -export([clauses/3, clauses/4, transform/5]).
 -mode(trust).
@@ -367,6 +367,11 @@ partition_guard(Guard, HEs, TGs) + (Ts = [], Hs = []) :-
       HEs = [Guard | Hs],
       TGs = Ts ;
 
+    Guard = info(_Integer, `X),
+    X =\= "_" :
+      HEs = [Guard | Hs],
+      TGs = Ts ;
+
     Guard = known(`X), X =\= "_" :
       TGs = [test(Guard) | Ts],
       HEs = Hs ;
@@ -512,6 +517,11 @@ headers(Headers, Asks, Guards, Assigns, BodyAssigns, AskRs, EndReadRs)
       AskRs ! find(VId, Answer),
       Headers'' = [connect_arg(Arg, AId, Connected?) | Headers'] |
 	arg_arguments(Answer, Integer, AskRs', AskRs''?, Connected),
+	self;
+
+    Headers ? Info, Info = info(Integer, `AId) :
+      Headers'' = [connect_arg(Info, AId, Connected?) | Headers'] |
+	arg_arguments(old, Integer, AskRs, AskRs'?, Connected),
 	self;
 
     Headers ? connect_arg(Arg, AId, true) :
