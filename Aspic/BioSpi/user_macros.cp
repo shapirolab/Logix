@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2004/12/24 16:27:54 $
+		       	$Date: 2005/01/01 10:24:32 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.17 $
+			$Revision: 1.18 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -539,7 +539,8 @@ format_tree_parts(Selector, Aux, SubTree, Out, Out1, Id, List) :-
 
 ambient_run(Goals, Run, Action, Cs) :-
 
-    Goals =?= (Service # _Call) :
+    Goals =?= (Service # _Call),
+    Goals =\= (_ * _ # _) :
       Run = Goals |
       Cs = [to_context(spi_monitor#reset),
 	    ambient_server#run(Action, _ControlChannel),
