@@ -6,12 +6,18 @@ BNF for PiFcp
 <psi_attributes>       ::= <psi_attribute>
                            <psi_attribute> . <psi_attributes>
 
-<psi_attribute>        ::= <global_declaration>
-                           <default_base_rate_declaration>
+<psi_attribute>        ::= <export_declaration>
+                           <global_declaration>
+                           <base_rate_declaration>
 
-<global_declaration>   ::= global([<communicator_list>])
+<export_declaration>   ::= export(<process_name_list>)
+
+<global_declaration>   ::= global(<communicator_list>)
 
 <baserate_declaration> ::= baserate(<base_rate>)
+
+<process_name_list>    ::= <process_name>
+                           <process_name> , <process_name_list>
 
 <communicator_list>    ::= <communicator_declaration>
                            <communicator_declaration> , <communicator_list>
@@ -32,8 +38,8 @@ BNF for PiFcp
                            <atom>+<channel_declaration>
                            <atom>+(<declaration_list>)
 
-<atom>                 ::= <name>
-                           <name>(<channel_list>)
+<atom>                 ::= <process_name>
+                           <process_name>(<channel_list>)
 
 <declaration_list>     ::= <channel_declaration>
                            <channel_declaration> , <declaration_list>
@@ -121,7 +127,7 @@ BNF for PiFcp
                            <local_sum> + <local_call>
 
 <local_call>           ::= <atom>
-                           <name>( <substitution_list> )
+                           <process_name>( <substitution_list> )
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
@@ -148,8 +154,8 @@ A <communicator> is an alpha-numeric string, beginning with a lower-case
 alphabetic character; the string which may contain underscore (_) characters.
 
 
-A <name> is an alpha-numeric string, beginning with an upper case letter, which
-may contain underscore (_) characters.
+A <process_name> is an alpha-numeric string, beginning with an upper case
+letter, which may contain underscore (_) characters.
 
 
 A <logix_variable> is an alpha-numeric string, beginning with an upper-case
