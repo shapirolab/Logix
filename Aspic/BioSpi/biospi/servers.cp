@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:56:38 $
+		       	$Date: 2004/12/24 16:55:34 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -1197,15 +1197,22 @@ message_to_channels(Message, Name, ChannelNames, Privates, MsChannelNames,
 	self;
 
     arg(Index, Message, Var), Var =?= `Channel,
-    Var =\= BIO_SCHEDULER, Index++ :
+    Channel =\= SCHEDULER_DOT,
+      Index++ :
       MsChannelNames ! OkChannelName? |
-	utilities#verify_channel(Name, Channel, ChannelNames, Privates,
+	utilities#verify_channel(Name, Var, ChannelNames, Privates,
 					OkChannelName, Errors, Errors'),
 	self;
 
     arg(Index, Message, Var), Var =?= `Channel,
-    Var =?= BIO_SCHEDULER, Index++ :
+    Channel =?= SCHEDULER_DOT,
+    Index++ :
       MsChannelNames ! Channel |
+/*
+screen#display(message_to_channels(Message, Name,
+		ChannelNames, Privates, MsChannelNames,
+		Errors, NextErrors, Index)),
+*/
 	self;
 
 
