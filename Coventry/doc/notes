@@ -1,24 +1,24 @@
 1. Set nice for process on SGI using:
 
-      npri -p <pid> -n <nice>
+      setpriority(PRIO_PROCESS, <pid>, <nice>-20);
 
-   0 <= <nice> <= 39
+   0 <= <nice> <= 40
 
 2. Get a list of processes and their states using:
 
-      ps -A -o user=,pid=,nice=,time=
+      ps -A -o user,pid,nice,class,time,comm=...
 
-   Results are "print"ed in 4 columns (separated by 1 or more spaces).
+   Results are "print"ed in 6 columns (separated by 1 or more spaces).
 
       <user> is alphanumeric.
 
       0 < <pid> < MAXPID      // sys/param.h
 
-      0 <= <nice> < 39  or it is a 2-letter mnemonic for a scheduling queue.
+      0 <= <nice> <= 40  or it is a 2-letter mnemonic for a scheduling queue.
 
       <time> has format [[<days>-]<hours>:]<minutes>:<seconds>
 
-         <days> and <hours> are greter than 0 (if present)
+         <days> and <hours> are greater than 0 (if present)
          <minutes> one or two digits (may be "0")
          <seconds> is two digits
 
@@ -27,21 +27,15 @@
 
 3. To get the actual nice value when <nice> is a queue mnemonic, use:
 
-      <nice> = schedctl(GETNICE_PROC, <pid>);  // sys/schedctl.h
+      <nice> = getpriority(PRIO_PROCESS,  <pid>) + 20;
 
-   The result is a single line string of the form:
-
-      "nice = #"
-
-   This is implemented as a small c application, nices.c, which returns the 
-   relative nice value (in range 0..39) of a given process.  It can also be 
-   used to set the nice value of a given process.
+   This is only useful for the GN queue; note that the nice value is
+   ignored in scheduling processes in the GN queue.
 
 4. In addition to ignoring a list of users , we should also ignore (possibly 
-   empty) list of groups, queues and applications.  All lists  should be 
-   keyed arguments of the daemon's launch, with appropriate defaults:
+   empty) lists of, queues and commands.  All lists  should be keyed
+   arguments of the daemon's launch (later), with appropriate defaults:
 
       users:     (daemon, root, 60001, ...)
-      groups:    (staff, system, wheel, ...)
       queues:    (OS, RT, ...)
       commands:  (bash, bsh, csh, sh, tcsh, ...)

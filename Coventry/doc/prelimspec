@@ -31,12 +31,13 @@ a member of one of a list of privileged groups, its scheduling class is in
 a list of exceptional scheduling classes, or its command is in a list of
 distinguished command.  Defaults for these lists are:
 
-   * owners:   daemon, root, 60001
-   * groups:   staff, system, wheel
-   * classes:  Operating System, Real Time
-   * commands: csh, sh, tcsh
+   * users:    daemon, root, 60001
+   * queues:   Operating System (OS), Real Time (RT), ...
+   * commands: csh, sh, tcsh, ...
 
-The lists may be set or augmented when the daemon is launched.
+The lists may be set or augmented when the daemon is launched.  Note that
+the nice value is ignored in scheduling processes except in the Time Sharing
+(TS) queue.
 
 A process in society is anti-social if: 
 
