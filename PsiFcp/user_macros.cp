@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/27 11:01:00 $
+		       	$Date: 2000/07/03 04:59:09 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -53,8 +53,8 @@ expand(Command, Cs) :-
     Command = pc(N) :
       Cs = [to_context(psi_utils # make_channel(N)) | Commands]\Commands;
 
-    Command = pc(N, R, S) :
-      Cs = [to_context(psi_utils # make_channel(N, R, S)) | Commands]\Commands;
+    Command = pc(N, S, R) :
+      Cs = [to_context(psi_utils # make_channel(N, S, R)) | Commands]\Commands;
 
     Command = pdb(Service) :
       Cs = [to_context(psi_monitor # options(O, O)),
