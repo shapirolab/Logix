@@ -59,6 +59,39 @@ initialize(In) :-
     Ok =?= true :
       SpiOffsets = DefaultSpiOffsets.
 
+/*
+** server monitors the input stream (In).
+**
+** It recognises:
+**
+**    get_global_channels(List?^)
+**    global_channels(List)
+**    global_channels(List, Scheduler^)
+**    new_channel(ChannelName, Channel, BaseRate)
+**    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
+**    options(New, Old?^)
+**    record(List?^)
+**    reset
+**    reset(DefaultWeighter, SpiOffsets, Ordinal)
+**    scheduler(Scheduler^)
+**    spifunctions(List)
+**    status(List?^)
+**
+** and the debugging aids:
+**
+**    debug(Debug?^)
+**    end_debug
+**
+** State
+**
+**   Options - for spi_utils functions
+**   Globals - sorted (bounded) list of global channel {name,basrate}
+**   Scheduler - Channel to Scheduling input
+**
+** Side-effects
+**
+**   Close Scheduler at end of In or reset command.
+*/
 
 serve(In, Options, Ordinal, SpiOffsets, DefaultWeighter) :-
 	Globals = [{0, _, -1, ""}, {[], _, -1, ""}],
@@ -110,12 +143,9 @@ server(In, Options, Scheduler, Globals) :-
 	unify_without_failure(Options, Old),
 	self;
 
-    In ? spifunctions(List) :
-      write_channel(spifunctions(List), Scheduler) |
-	self;
-
-    In ? record(Record^) :
-      write_channel(record(Record), Scheduler) |
+    In ? record(Record) :
+      Record = Record'?,
+      write_channel(record(Record'), Scheduler) |
 	self;
 
     In ? reset :
@@ -129,6 +159,10 @@ server(In, Options, Scheduler, Globals) :-
 	serve;
 
     In ? scheduler(Scheduler^) |
+	self;
+
+    In ? spifunctions(List) :
+      write_channel(spifunctions(List), Scheduler) |
 	self;
 
     In ? status(Status) :
@@ -146,6 +180,26 @@ server(In, Options, Scheduler, Globals) :-
       Globals = _,
       close_channel(Scheduler).
 
+/***************************** Utilities ************************************/
+
+/* merge_global_channels
+**
+** Input:
+**
+**   List - sorted list in {Name, Channel^, BaseRate}.
+**   Globals - (bounded) sorted list of {Name, BaseRate}.
+**   Last - Name of previous element of Globals - initially "".
+**   Scheduler - FCP channel to scheduling monitor.
+**
+** Output:
+**
+**   NewGlobals - updated global list.
+**
+** Processing:
+**
+**   Merge new Name Channels to NewGlobals.
+**   Call scheduling to create each new Channel.
+*/
 
 merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
 
@@ -260,6 +314,17 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
       NewGlobals = Globals |
 	fail(merge_global_channels(List)).
 
+/* copy_globals
+**
+** Input:
+**
+**   Globals - (bounded) list of {Name, Channel, BaseRate}
+**
+** Output:
+**
+**   List - Globals exluding bounding entries
+**   Ends - bounding entries of Globals
+*/
 
 copy_global(Globals, List, Ends) :-
     Globals ? Head :
@@ -276,33 +341,6 @@ copy_global(Globals, List, Ends) :-
     Globals = [_] :
       List = [],
       Ends = Globals.
-
-/***************************** Utilities ************************************/
-
-copy_requests(Requests, Head, Tail) :-
-
-    Requests ? Request :
-      Head ! Request |
-	self;
-
-    unknown(Requests) :
-      Head = Tail.
-
-
-get_active_request(Requests, NextRequests, Request) :-
-
-    Requests ? R, A := arity(R),
-    arg(A, R, Reply), unknown(Reply) :
-      NextRequests = Requests',
-      Request = R;
-
-    Requests ? R, A := arity(R),
-    arg(A, R, Reply), known(Reply) |
-	self;
-
-    unknown(Requests) :
-      NextRequests = Requests,
-      Request = [].
 
 /***************************** Scheduling ***********************************/ 
 
@@ -335,8 +373,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 				Zero, false, _Wakeup,
 				DefaultWeighter, MaxTime, Start_real_time).
 
-
-make_channel_anchor(Name, Anchor) :-
+  make_channel_anchor(Name, Anchor) :-
 
     convert_to_real(0, Zero) :
       make_vector(CHANNEL_SIZE, Anchor, _),
@@ -369,17 +406,17 @@ make_channel_anchor(Name, Anchor) :-
 **
 ** It recognises:
 **
-**    close(Tuple)
-**    close(Tuple, Reply)
-**    cutoff(Time)
+**    close(ChannelTuple)
+**    close(ChannelTuple, Reply)
+**    cutoff(Now')
 **    input(Schedule?^, Schedule')
-**    new_channel(ChannelName, Channel, BaseRate)
-**    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
+**    new_channel(ChannelName, Channel^, BaseRate)
+**    new_channel(ChannelName, Channel^, ComputeWeight, BaseRate)
 **    ordinal(Old?^, New)
 **    pause(Continue)
 **    record(Record?^)
 **    record_item(Item)
-**    end_record(Record?^)
+**    end_record(Record'?^)
 **    start(Signature, OpList, Value, Chosen)
 **    start(Signature, OpList, Value, Chosen, Prefix)
 **    status(List^)
@@ -390,17 +427,43 @@ make_channel_anchor(Name, Anchor) :-
 **    debug(Debug?^)
 **    end_debug
 **
+** State:
+**
+**   BasedAnchor - anchor for (circular) chain of based-rate Channels
+**   Cutoff - least upper bound of internal timer (:Now) - initially large
+**   DefaultWeighter - assigned to new Channel, unless Weighter provide
+**   InstantaneousAnchor - anchor for (circular) list of infinite rate Channels
+**   NegativeExponential - computed random variable (see total_weight1)
+**   Now - 0-based internal clock
+**   Ordinal - Unique index assigned to a non - "public."/".global" file
+**   SpiOffsets - magic number (or "unknown") for C-coded functions
+**   Start_real_time - real time when Cutoff set (Now = 0)
+**   Uniform - computed random variable (see total_weight)
+**
+** Signal:
+**
+**   Wakeup - (usually) idle indicator; also communication completion
+**
+** Output (Streams):
+**
+**   Debug  - scheduling debugging info
+**   Record - record start communication, complete transmission
+**            and internal clock
+**   Waiter - Logix system requests to wait for idle
+**
 ** Processing:
 **
-** Maintain time  Now
+**   Maintain time  Now
 **
 ** Whenever the system becomes idle, execute(SpiOffset, {SPI_STEP, ...})
-** to select and  complete a transmission.
+** to select and  complete a transmission (internal execute is used when
+** the SPI function is unknown).
 **
 ** Record:
 **
 **   Changes to  Now .
-**   Selected processes .
+**   Start Communication .
+**   Complete Transmission .
 */
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
@@ -419,8 +482,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Now = _,
       MathOffset = _,
       Ordinal = _,
-      SpiOffsets = _,
       Scheduler = _,
+      SpiOffsets = _,
       Start_real_time = _,
       Uniform = _,
       Waiting = _,
@@ -428,13 +491,6 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Waiter = [],
       Record = [],
       Debug = [];
-
-    /* Set the time limit - maximum value for Now */
-    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
-    info(REALTIME, Start_real_time') :
-      Cutoff = _,
-      Start_real_time = _ |
-	continue_waiting + (Reply = true);
 
     /* Close channels - i.e. decrement counts and release when unreferenced. */
     Schedule ? close(Channels),
@@ -468,6 +524,13 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       execute(SpiOffset, {SPI_CLOSE, Channels, Reply}),
       STOPPED |
 	self;
+
+    /* Set the time limit - maximum value for Now */
+    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
+    info(REALTIME, Start_real_time') :
+      Cutoff = _,
+      Start_real_time = _ |
+	continue_waiting + (Reply = true);
 
     Schedule ? default_weighter(Weighter),
     arg(SPI_INDEX, SpiOffsets, SpiOffset),
@@ -737,7 +800,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Waiting' = true,
       Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
 		     end(PName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
-      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+      Debug ! done(Now, PId1(RCId1, CH1), PId2(RCId2, CH2)) |
 	self;
 
     Wakeup =?= true(PId1, RCId1, CH1, PId2, RCId2, CH2),
@@ -757,7 +820,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Waiting' = true,
       Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
 		     end(PrefixedName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
-      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+      Debug ! done(Now, PId1(RCId1, CH1), PId2(RCId2, CH2)) |
 	self;
 
     Wakeup =?= true :
@@ -837,7 +900,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
 		     end(PName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
-      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+      Debug ! done(Now, PId1(RCId1, CH1), PId2(RCId2, CH2)) |
 	scheduling;
 
     /* Reply for biospi transmission */
@@ -855,7 +918,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
 		     end(PrefixedName2(RCId2, RECEIVED_ARROW, CNId2))
 	       | Record'?],
-      Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
+      Debug ! done(Now, PId1(RCId1, CH1), PId2(RCId2, CH2)) |
 	scheduling;
 
     otherwise,
@@ -1078,11 +1141,11 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
     otherwise :
       BasedAnchor = _,
       InstantaneousAnchor = _,
-      SpiOffsets = _,
       Scheduler = _,
+      SpiOffsets = _,
       Reply = error(new_channel(ChannelName, Channel, BaseRate, ComputeWeight)).
   
-  based_or_instantaneous(ChannelName, BaseRate, Scheduler, Result, Reply,
+  based_or_instantaneous(ChannelName, BaseRate, Result, Scheduler, Reply,
 			 Channel, BasedAnchor, InstantaneousAnchor) :-
 
     Result =?= true,
