@@ -5,9 +5,9 @@ Computation Server of Logix System
 Michael Hirsch and Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:02:51 $
+		       	$Date: 2002/06/07 13:30:47 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/computation_server.cp,v $
 
 Copyright (C) 1989, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -71,7 +71,7 @@ procedure computation(Requests, SCC, Domain, Events).
 procedure computation(Requests, SCC, Domain, Events, Identifier, Scope).
 
 computation(Requests, CCC, Domain, Events) :-
-	info(5, Identifier),
+    info(5, Identifier) |
 	Scope = [],
 	computation1.
 
@@ -223,7 +223,7 @@ procedure closeSuperCCC(SuperCCC).
 
 closeSuperCCC(CCC) :-
    CCC = {Left, Right, _, _} |
-	Right = Left.
+	unify_without_failure(Left, Right).
 
 /*
  * resume logic - a subcomputation may be resumed iff both user and
@@ -287,7 +287,7 @@ procedure call_monitor_abort(SubOut, SuperCCC, SubCCM, Events, CompState).
 
 call_monitor_abort(SubOut, SuperCCC, SubCCM, Events, CompState) :-
     SuperCCC = {Left, Right, _, Domain} |
-	Right = Left,
+	unify_without_failure(Left, Right),
 	call_monitor_aborted.
 
 procedure call_monitor_aborted(SubOut, SubCCM, Domain, Events, CompState).
@@ -351,6 +351,13 @@ call_monitor_goal(Goal, Requests, SuperControl, SubOut, SuperCCC,
 			   Reply, Requests, Requests', SubOut, SubOut',
 				CompState, CompState'
 	),
+	call_monitor;
+
+    Goal = identifier(Identifier?),
+    listener(CompState),
+    listener(SubCCM) |
+	_ = Status?,
+	call_monitor_state,
 	call_monitor;
 
     Goal = '_controls'(CCC?),
@@ -506,7 +513,13 @@ call_monitor_request_interrupt(Request, Requests, SuperControl,
 	SubCCM' = {WriteSignals, ReadSignals, WriteLeft',
 			ReadLeft, SubRight'?, SubChannel};
 
+    Request = state(Resolvent),
+    SubCCM = {_WriteSignals, _ReadSignals, _SubChannel} |
+	Resolvent = [],
+	call_monitor;
+
     Request = extract(N, Goal?),
+    integer(N), N > 0,
     SubCCM = {WriteSignals, ReadSignals, WriteLeft,
 		ReadLeft, SubRight, SubChannel} |
 	WriteLeft ! extract(N),
@@ -514,6 +527,15 @@ call_monitor_request_interrupt(Request, Requests, SuperControl,
 	call_monitor_reply(SubRight, SubRight', Goal),
 	SubCCM' = {WriteSignals, ReadSignals, WriteLeft',
 			ReadLeft, SubRight'?, SubChannel};
+
+    Request = extract(all, Goals?),
+    SubCCM = {WriteSignals, ReadSignals, WriteLeft,
+		ReadLeft, SubRight, SubChannel} |
+	WriteLeft ! extract(1),
+	SubCCM' = {WriteSignals, ReadSignals, WriteLeft',
+			ReadLeft, SubRight, SubChannel},
+	N = 1,
+	call_monitor_extract_all;
 
     Request = identifier(Identifier) |
 	Request' = identifier(Identifier, _),
@@ -556,6 +578,36 @@ call_monitor_reply(Left, Right, Goal) :-
 	Right = Left'.
 
 /*
+ * extract all suspended goals - replace each by true.
+ *
+ * call_monitor_extract_all(N?, Goals, Requests, SuperControl?,
+ *		SubOut, SuperCCC, SubCCM, Events, CompState)
+ */
+% procedure call_monitor_extract_all
+
+call_monitor_extract_all(N, Goals, Requests, SuperControl,
+		SubOut, SuperCCC, SubCCM, Events, CompState) :-
+
+    SubCCM = {WriteSignals, ReadSignals, WriteLeft,
+		ReadLeft, SubRight, SubChannel},
+    SubRight ? found(Predicate),
+    N++ |
+	SubCCM' = {WriteSignals, ReadSignals, WriteLeft',
+			ReadLeft, SubRight'?, SubChannel},
+	Goals ! Predicate,
+	WriteLeft ! extract(N'),
+	call_monitor_extract_all;
+
+    SubCCM = {WriteSignals, ReadSignals, WriteLeft,
+		ReadLeft, SubRight, SubChannel},
+    SubRight ? extract(_) |
+	N = _,
+	Goals = [],
+	SubCCM' = {WriteSignals, ReadSignals, WriteLeft,
+			ReadLeft, SubRight'?, SubChannel},
+	call_monitor.
+
+/*
  * interpret supercomputation signal stream
  *
  * call_monitor_super_signal(Requests, Signal?, SuperControl?, SubOut,
@@ -584,6 +636,9 @@ call_monitor_super_signal(Requests, Signal, SuperControl, SubOut,
     CompState = {UserStatus, Identifier, Scope, _SuperStatus} |
 	CompState' = {UserStatus, Identifier, Scope, running},
 	call_monitor_resume;
+
+    Signal = request(Request) |
+	call_monitor_request_interrupt;
 
     otherwise,
     listener(CompState) |
@@ -692,11 +747,11 @@ call_monitor_sub_channel(Requests, SuperControl, From, Event, SubOut,
     SuperCCC = {_, _, _, Domain},
     CompState = {_UserStatus, Identifier, Scope, _SuperStatus},
     listener(CompState),
-    listener(SubCCM) |
-	info(5, Now),
+    listener(SubCCM),
+    info(5, Now) |
 	CallEvents = CallEvents'?,
 	From = _,
-	Identifier' = (Now?, Identifier),
+	Identifier' = (Now, Identifier),
 	sub_goalCC(CompState, SubCCM, CCC, SubCCM'),
 	computation1(CallRequests, CCC?, Domain, CallEvents', Identifier'?, Scope),
 	call_monitor;
@@ -714,9 +769,9 @@ call_monitor_sub_channel(Requests, SuperControl, From, Event, SubOut,
 	True = true,
 	clause_controls(Controls);
 
-    Event = clause(Goal, true^, 0^, Time?),
-    listener(CompState) |
-	info(5, Time),
+    Event = clause(Goal, true^, 0^, Time^),
+    listener(CompState),
+    info(5, Time) |
 	call_monitor_recall(Goal, From, CompState, SubCCM, SubCCM'),
 	call_monitor;
 
@@ -748,11 +803,11 @@ procedure clause_controls(ClauseControls).
 
 clause_controls(Controls) :-
 
-    Controls = Suspense(Id, Result) |
-	info(5, Time),
+    Controls = Suspense(Id, Result),
+    info(5, Time) |
 	Id = 0,
 	unify_without_failure(Suspense, reduce),
-	unify_without_failure(Result, Time?);
+	unify_without_failure(Result, Time);
 
     otherwise |
 	Controls = _ .
