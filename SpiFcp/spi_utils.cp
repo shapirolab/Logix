@@ -331,7 +331,8 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 			Sender(no_sender), Which(active), Format(short)),
-	inspect_channel(SpiChannel, Format, Result),
+%	inspect_channel(SpiChannel, Format, Result),
+	inspect_channel(SpiChannel, Result),
 	format_channel_name,
 	channel_argument + (Display = Content, Status = [Result],
 		Left = Display, Right = (FormattedName? : Content));
@@ -343,7 +344,7 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
       Display = [Name].
 
 
-inspect_channel(SpiChannel, Format, Status) :-
+inspect_channel(SpiChannel/*, Format*/, Status) :-
 
     read_vector(SPI_CHANNEL_TYPE, SpiChannel, Type),
     read_vector(SPI_CHANNEL_RATE, SpiChannel, Rate),
@@ -351,79 +352,45 @@ inspect_channel(SpiChannel, Format, Status) :-
     read_vector(SPI_RECEIVE_ANCHOR, SpiChannel, ReceiveAnchor),
     read_vector(SPI_CHANNEL_NAME, SpiChannel, Name) :
       Status = {Kind?, NameRate?, Sends?} |
-	format_channel_name(Name, Format, Name'),
-	format_name_rate_to_namerate,
+%	format_channel_name(Name, Format, Name'),
+	name_rate_to_namerate,
 	list_messages(SendAnchor, Sends, Receives?),
 	list_messages(ReceiveAnchor, Receives, []).
-
-  format_name_rate_to_namerate(Format, Type, Name, Rate, Kind, NameRate) :-
-
-    Format =\= short, format =\= creator |
-	name_rate_to_namerate;
-
-    Format =\= base, format =\= full :
-      Rate = _,
-      NameRate = Name |
-	channel_type_to_kind.
 
   name_rate_to_namerate(Type, Name, Rate, Kind, NameRate) :-
 
     Type =?= SPI_CHANNEL_ANCHOR :
       Rate = _,
       Kind = anchor,
-      NameRate = Name(anchor);
+      NameRate = namerate(Name, anchor);
 
     Type =?= SPI_UNKNOWN :
       Rate = _,
       Kind = unknown,
-      NameRate = Name(unknown);
+      NameRate = namerate(Name, unknown);
 
     Type =?= SPI_BIMOLECULAR :
       Kind = bimolecular,
-      NameRate = Name(Rate);
+      NameRate = namerate(Name, Rate);
 
     Type =?= SPI_HOMODIMERIZED :
       Kind = homodimerized,
-      NameRate = Name(Rate);
+      NameRate = namerate(Name, Rate);
 
     Type =?= SPI_INSTANTANEOUS :
       Rate = _,
       Kind = instantaneous,
-      NameRate = Name(infinite);
+      NameRate = namerate(Name, infinite);
 
     Type =?= SPI_SINK :
       Rate = _,
       Kind = sink,
-      NameRate = Name(sink);
+      NameRate = namerate(Name, sink);
 
     otherwise :
       Type = _,
       Kind = other(Type),
-      NameRate = other(Name(Rate)).
-
-  channel_type_to_kind(Type, Kind) :-
-
-    Type =?= SPI_CHANNEL_ANCHOR :
-      Kind = anchor;
-
-    Type =?= SPI_UNKNOWN :
-      Kind = unknown;
-
-    Type =?= SPI_BIMOLECULAR :
-      Kind = bimolecular;
-
-    Type =?= SPI_HOMODIMERIZED :
-      Kind = homodimerized;
-
-    Type =?= SPI_INSTANTANEOUS :
-      Kind = instantaneous;
-
-    Type =?= SPI_SINK :
-      Kind = sink;
-
-    otherwise :
-      Type = _,
-      Kind = other(Type).
+      NameRate = namerate(other(Name), Rate).
 
   list_messages(Anchor, List, Tail) + (Message = Anchor) :-
 
@@ -621,7 +588,7 @@ show_argument(Argument, Which, Depth, Sender, Format, Display, Left, Right) :-
 
     vector(Argument), arity(Argument, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_NAME, Argument, Name) |
-	format_channel_name(Name, Format, Name'),
+%	format_channel_name(Name, Format, Name'),
 	show_channel_argument + (SpiChannel = Argument);
 
     constant(Argument) :
@@ -678,7 +645,8 @@ show_channel_argument(Name, SpiChannel, Which, Depth, Sender, Format, Display,
     read_vector(SPI_CHANNEL_REFS, SpiChannel, Refs),
     Refs > 0 :
       Name = _ |
-	inspect_channel(SpiChannel, Format, Result),
+	inspect_channel(SpiChannel, Result),
+%	inspect_channel(SpiChannel, Format, Result),
 	channel_argument + (Status = [Result]);
 
     otherwise :
@@ -730,33 +698,137 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 
   channel_creator(CreatorBase, Format, Creator) :-
 
-    CreatorBase = ProcessName(infinite) :
-      Format = _,
-      Creator = ProcessName;
+    CreatorBase =?= namerate(ProcessName, Base),
+    Format =?= short |
+	short_creator + (Suffix = []);
 
-    Format =\= short, Format =\= creator,
-    CreatorBase = ProcessName(unknown),
-    string_to_dlist(ProcessName, SN, [CHAR_ASTERISK]) |
-	list_to_string(SN, Creator);
+    CreatorBase =?= namerate(ProcessName, Base),
+    Format =?= base |
+	base_suffix,
+	short_creator;
 
-    Format =\= base, Format =\= full,
-    CreatorBase = ProcessName(_Any) :
-      Creator = ProcessName;
+    CreatorBase =?= namerate(ProcessName, _),
+    Format = creator |
+	full_channel_creator + (Suffix = []);
 
-    Format =\= short, Format =\= creator,
-    CreatorBase = ProcessName(RealInteger),
-    convert_to_integer(RealInteger, I),
-    convert_to_real(I, R),
-    R =:= RealInteger,
-    string_to_dlist(ProcessName, SN, TN),
-    convert_to_string(I, IS),
-    string_to_dlist(IS, SI, []) :
-      TN = [CHAR_ASTERISK | SI] |
-	list_to_string(SN, Creator);
+    CreatorBase =?= namerate(ProcessName, Base),
+    Format =?= full |
+	base_suffix,
+	full_channel_creator.
+
+  short_creator(ProcessName, Base, Suffix, Creator) :-
+
+    ProcessName =\= other(_),
+    Base =?= infinite |
+	short_channel_creator;
+
+    ProcessName =\= other(_),
+    Base =?= unknown |
+	short_channel_creator;
+
+    ProcessName =\= other(_),
+    Base =?= sink |
+	short_channel_creator;
+
+    ProcessName =\= other(_),
+    Base =\= infinite, Base =\= unknown, Base =\= sink, Base =\= anchor |
+	short_channel_creator;
 
     otherwise :
-      Format = _,
-      Creator = CreatorBase.
+      Suffix = _,
+      Creator = (ProcessName ? Base).
+
+  base_suffix(Base, Suffix) :-
+
+    Base =?= infinite :
+      Suffix = [];
+
+    Base = unknown :
+	Suffix = [CHAR_ASTERISK];
+
+    Base = sink :
+	Suffix = [CHAR_GREATER];
+
+    real(Base),
+    convert_to_integer(Base, I),
+    convert_to_real(I, R),
+    Base =?= R,
+    convert_to_string(I, RS),
+    string_to_dlist(RS, RL, []) |
+	Suffix = [CHAR_ASTERISK | RL];
+
+    real(Base),
+    convert_to_integer(Base, I),
+    convert_to_real(I, R),
+    Base =\= R,
+    convert_to_string(Base, RS),
+    string_to_dlist(RS, RL, []) |
+	Suffix = [CHAR_ASTERISK | RL];
+
+    otherwise :
+      Base = _,
+      Suffix = [CHAR_SPACE, CHAR_QUERY].
+
+  short_channel_creator(ProcessName, Creator, Suffix) :-
+
+    string(ProcessName),
+    string_to_dlist(ProcessName, PNL, Suffix) |
+	list_to_string(PNL, Creator);
+
+    ProcessName =?= LocalName(N),
+    string(LocalName),
+    number(N),
+    string_to_dlist(LocalName, LNL, Suffix) |
+	list_to_string(LNL, Creator);
+
+    ProcessName =?= Functor(GlobalName),
+    string(Functor),
+    string(GlobalName),
+    string_to_dlist(GlobalName, GNL, [CHAR_RIGHT_BRACKET | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | GNL]) |
+	list_to_string(FL, Creator);
+
+    ProcessName =?= Functor(LocalName(N)),
+    string(Functor),
+    string(LocalName),
+    number(N),
+    string_to_dlist(LocalName, LNL, [CHAR_RIGHT_BRACKET | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | LNL]) |
+	list_to_string(FL, Creator);
+
+    otherwise :
+      Creator = (ProcessName ? CS?) |
+	list_to_string(Suffix, CS).
+
+  full_channel_creator(ProcessName, Creator, Suffix) :-
+
+    string(ProcessName),
+    string_to_dlist(ProcessName, PNL, Suffix) |
+	list_to_string(PNL, Creator);
+
+    ProcessName =?= Functor(Argument),
+    string(Functor),
+    constant(Argument),
+    Argument @< [],
+    convert_to_string(Argument, As),
+    string_to_dlist(As, AL, [CHAR_RIGHT_BRACKET | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | AL] ) |
+	list_to_string(FL, Creator);
+
+    ProcessName =?= Functor(LocalName(Argument)),
+    string(Functor),
+    string(LocalName),
+    constant(Argument),
+    Argument @< [],
+    convert_to_string(Argument, As),
+    string_to_dlist(As, AL, [CHAR_RIGHT_BRACKET, CHAR_RIGHT_BRACKET | Suffix]),
+    string_to_dlist(LocalName,LNL, [CHAR_LEFT_BRACKET | AL]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | LNL]) |
+	list_to_string(FL, Creator);
+
+    otherwise :
+      Creator = (ProcessName ? CS?) |
+	list_to_string(Suffix, CS).
 
 
 show_compound(Argument, Which, Depth, Sender, Format, Display, Left, Right) :-
