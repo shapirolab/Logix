@@ -2,7 +2,7 @@
 
 export(RunTT, RunTF, RunFT, RunFF ).
 
-global(b1, b2, c ).
+public(b1, b2, c ).
 
 TT(b) ::= b ? {t,f} , t ! [] , 0 .
 
