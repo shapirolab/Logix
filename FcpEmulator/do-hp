@@ -1,2 +1,2 @@
 ./mkmk hppa1d1_hpux_9d05 concatenate ctl dbg dbx doors file freeze_term \
-interface math psi timer tty
+interface math spi timer tty

@@ -1,2 +1,2 @@
 ./mkmk linux_2d2d12_redhat_6d1 concatenate ctl dbg dbx dec file freeze_term \
-interface math psi timer tty
+interface math spi timer tty

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.5 2000/11/06 11:09:03 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.6 2002/10/09 07:09:07 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -41,8 +41,8 @@
    os4.1:
      links with -Bstatic as required by certain computers to enable dynamic
        linkning
-   psi:
-     foreign function - PsiFcp requests
+   spi:
+     foreign function - SpiFcp requests
    sgi_irix_5d2:
      builds makefile for Silicon Graphics Irix 5.2
    sun4_solaris_2d3:
@@ -94,8 +94,8 @@ static char *o1S = "-O1";
 static char *o2S = "-O2";
 static char *o4S = "-O4";
 static char *os41S = "-Bstatic";
-static char *psiS = "psicomm";
-static char *psiwS = "psiweight";
+static char *spiS = "spicomm";
+static char *spiwS = "spiweight";
 static char *sgi_5d2S = "sgi_irix_5d2";
 static char *solaris_2d3S = "sun4_solaris_2d3";
 static char *sunos_4d1d3S = "sun4_sunos_4d1d3";
@@ -121,8 +121,8 @@ static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
 static char *os41V = "";
-static char *psiV = "";
-static char *psiwV = "";
+static char *spiV = "";
+static char *spiwV = "";
 static char *sgi_5d2V = "";
 static char *solaris_2d3V = "";
 static char *sunos_4d1d3V = "";
@@ -334,24 +334,25 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit();
       }
-    case 'p':
-      /* psi */
-      psiV = LinkFunc[LinkFuncNum] = psiS;
-      psiwV = psiwS;
-      LinkFuncNum++;
-      if (LinkFuncNum == MaxLinkFunc) {
-	printf("mkmk: Too many foreign functions\n");
-	exit();
-      }
-      continue;
     case 's':
       /* sgi_irix_5d2 */
       /* sun4_solaris_2d3 */
       /* sun4_sunos_4d1d3 */
+      /* spi */
       switch (*S++) {
       case 'g':
 	/* sgi_irix_5d2 */
 	sgi_5d2V = sgi_5d2S;
+	continue;
+      case 'p':
+	/* spi */
+	spiV = LinkFunc[LinkFuncNum] = spiS;
+	spiwV = spiwS;
+	LinkFuncNum++;
+	if (LinkFuncNum == MaxLinkFunc) {
+	  printf("mkmk: Too many foreign functions\n");
+	  exit();
+	}
 	continue;
       case 'u':
 	/* sun4_solaris_2d3 */
@@ -503,8 +504,8 @@ main(argc, argv)
   Pos = cond_print(MakeFd, "logix", "", ".o", Pos);
   Pos = cond_print(MakeFd, mathV, "", ".o", Pos);
   Pos = cond_print(MakeFd, "notify", "", ".o", Pos);
-  Pos = cond_print(MakeFd, psiV, "", ".o", Pos);
-  Pos = cond_print(MakeFd, psiwV, "", ".o", Pos);
+  Pos = cond_print(MakeFd, spiV, "", ".o", Pos);
+  Pos = cond_print(MakeFd, spiwV, "", ".o", Pos);
   Pos = cond_print(MakeFd, "streams", "", ".o", Pos);
   Pos = cond_print(MakeFd, timerV, "", ".o", Pos);
   Pos = cond_print(MakeFd, ttyV, "", ".o", Pos);
@@ -668,16 +669,16 @@ main(argc, argv)
   fprintf(MakeFd, "	$(BASICH)\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) notify.c\n");
 
-  if (strcmp(psiV, NullS) != 0) {
-    fprintf(MakeFd, "psicomm.o: \\\n");
+  if (strcmp(spiV, NullS) != 0) {
+    fprintf(MakeFd, "spicomm.o: \\\n");
     fprintf(MakeFd, "	$(BASICH)\n");
-    fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) psicomm.c\n");
+    fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) spicomm.c\n");
   }
 
-  if (strcmp(psiwV, NullS) != 0) {
-    fprintf(MakeFd, "psiweight.o: \\\n");
+  if (strcmp(spiwV, NullS) != 0) {
+    fprintf(MakeFd, "spiweight.o: \\\n");
     fprintf(MakeFd, "	$(BASICH)\n");
-    fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) psiweight.c\n");
+    fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) spiweight.c\n");
   }
 
   fprintf(MakeFd, "streams.o : \\\n");
