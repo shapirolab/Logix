@@ -22,11 +22,12 @@ PSI_SEND_WEIGHT =>     6.		% Sum of Send Multipliers.
 PSI_DIMER_WEIGHT =>    6.		% Sum of Dimer Multipliers.
 PSI_RECEIVE_ANCHOR =>  7.		% Head of ReceiveQueue.
 PSI_RECEIVE_WEIGHT =>  8.		% Sum of Receive Multipliers.
-PSI_NEXT_CHANNEL =>    9.		% (circular) channel list.
-PSI_PREVIOUS_CHANNEL => 10.		% (circular) channel list.
-PSI_CHANNEL_NAME =>   11.		% (constant) Created Channel name.
+PSI_AVAILABLE      =>  9.               % Unused sub-channel
+PSI_NEXT_CHANNEL =>   10.		% (circular) channel list.
+PSI_PREVIOUS_CHANNEL => 11.		% (circular) channel list.
+PSI_CHANNEL_NAME =>   12.		% (constant) Created Channel name.
 
-CHANNEL_SIZE =>       11.
+CHANNEL_SIZE =>       12.
 
 /* Channel Types */
 

@@ -58,7 +58,7 @@ send(Message, Channel, Multiplier, Chosen) :-
 	send(Message, Channel, Multiplier, Chosen, sender).
 send(Message, Channel, Multiplier, Chosen, Name) :-
     vector(Channel),
-    arity(Channel, 11),
+    arity(Channel, CHANNEL_SIZE),
     we(Chosen) :
       Send = PSI_SEND(Name, Channel, Multiplier, 1) |
 	psi_monitor#scheduler(S),
@@ -111,7 +111,7 @@ receive(Channel, Message, Multiplier, Chosen, Name) :-
 	computation#dictionary(find, Channel, Ch, Reply),
 	receive_message(Channel, Message, Multiplier, Chosen, Ch, Reply);
     vector(Channel),
-    arity(Channel, 11),
+    arity(Channel, CHANNEL_SIZE),
     we(Chosen) :
       Receive = PSI_RECEIVE(Name, Channel, Multiplier, 2) |
 	psi_monitor#scheduler(S),
@@ -146,7 +146,7 @@ dimer(SendMessage, ReceiveMessage, Multiplier, Channel, Chosen) :-
 	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, dimer).
 dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name) :-
     vector(Channel),
-    arity(Channel, 11) :
+    arity(Channel, CHANNEL_SIZE) :
       Chosen = Chosen'?,
       Dimer = PSI_DIMER(Name, Channel, {1, 2}, Multiplier) |
 	psi_monitor#scheduler(S),
