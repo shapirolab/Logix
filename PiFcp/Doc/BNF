@@ -1,79 +1,83 @@
 BNF for PiFcp
 
-<program>             ::= <process_definitions> .
+<program>              ::= <process_definitions> .
 
-<process_definitions> ::= <process>
-                          <process> . <process_definitions>
+<process_definitions>  ::= <process>
+                           <process> . <process_definitions>
 
-<process>             ::= <left_hand_side> :- <right_hand_side>
+<process>              ::= <left_hand_side> :- <right_hand_side>
 
-<left_hand_side>      ::= <atom>
-                          <atom>+<channel>
-                          <atom>+(<channel_list>)
+<left_hand_side>       ::= <atom>
+                           <atom>+<channel>
+                           <atom>+(<channel_list>)
 
-<atom>                ::= <name>
-                          <name>(<channel_list>)
+<atom>                 ::= <name>
+                           <name>(<channel_list>)
 
-<channel_list>        ::= <channel>
-                          <channel>, <channel_list>
+<channel_list>         ::= <channel>
+                           <channel>, <channel_list>
 
-<right_hand_side>     ::= <guarded_clauses>
-                          <body>
+<right_hand_side>      ::= <synchronized_clauses>
+                           <comparison_clauses>
+                           <body>
 
-<guarded_clauses>     ::= <guarded_clause> 
-                          <guarded_clause> ; <guarded_clauses>
+<synchronized_clauses> ::= <synchronized_clause> 
+                           <synchronized_clause> ; <synchronized_clauses>
 
-<guarded_clause>      ::= <compound_guard> | <body>
+<synchronized_clause>  ::= <synchronized_guard> | <body>
 
-<compound_guard>      ::= <guard>
-                          <guard> | <compound_guard>
+<synchronized_guard>   ::= <communication>
+                           <communication> | <synchronized_guard>
 
-<guard>               ::= <communication>
-                          <compare>
-                          <compare> & <guard>
+<communication>        ::= <receive>
+                           <send>
 
-<communication>       ::= <receive>
-                          <send>
+<receive>              ::= <channel> ? <message>
 
-<receive>             ::= <channel> ? <message>
+<send>                 ::= <channel> ! <message>
 
-<send>                ::= <channel> ! <message>
+<comparison_clauses>   ::= <comparison_clause> ; otherwise | <body>
+                           <comparison_clause> ; <comparison_clauses>
 
-<compare>             ::= <channel> =?= <channel>
-                          <channel> =\= <channel>
-                          <channel_list> =?= <channel_list>
-                          <channel_list> =\= <channel_list>
+<comparison_clause>    ::= <comparison> | <body>
+                           <comparison> | <synchronized_clause>
 
-<message>             ::= []
-                          {<channel_list>}
+<comparison>           ::= <compare>
+                           <compare> & <comparison>
 
-<body>                ::= <call>
-                          <call> , <body>
+<compare>              ::= <channel> =?= <channel>
+                           <channel> =\= <channel>
 
-<call>                ::= <atom>
-                          <name>( <substitution_list> )
-                          <communication>
-                          << <new_scope> >>
-                          true
-                          <external_call>
-                          <logix call>
+<message>              ::= []
+                           {<channel_list>}
 
-<substitution_list>   ::= <substitution>
-                          <substitution> , <substitution_list>
+<body>                 ::= <call>
+                           <call> , <body>
 
-<substitution>        ::= <channel> = <channel>
+<call>                 ::= <atom>
+                           <name>( <substitution_list> )
+                           <communication>
+                           << <new_scope> >>
+                           true
+                           <external_call>
+                           <logix call>
 
-<new_scope>           ::= <channel_list> . <scope_content>
-                          <scope_content>
+<substitution_list>    ::= <substitution>
+                           <substitution> , <substitution_list>
 
-<scope_content>       ::= <right_hand_side>
-                          <right_hand_side> . <process_definitions>
+<substitution>         ::= <channel> = <channel>
 
-<external_call>       ::= <logix_module_name>#<atom>
-                          <logix_module_name>#<external_call>
+<new_scope>            ::= <channel_list> . <scope_content>
+                           <scope_content>
 
-<logix_call>          ::= <logix_module_name>#<logix_atom>
-                          <logix_module_name>#<logix_call>
+<scope_content>        ::= <right_hand_side>
+                           <right_hand_side> . <process_definitions>
+
+<external_call>        ::= <logix_node_name>#<atom>
+                           <logix_node_name>#<external_call>
+
+<logix_call>           ::= <logix_node_name>#<logix_atom>
+                           <logix_node_name>#<logix_call>
 
 Primitives:
 
@@ -89,7 +93,7 @@ A <name> is an alpha-numeric string, beginning with a upper case letter, which
 may contain an underscore (_) character.
 
 
-A <logix_module_name> is a non-empty string.
+A <logix_node_name> is a non-empty string.
 
 
 Notes:
@@ -111,26 +115,26 @@ Nested "new" processes are scoped with angle brackets (see definition of
 <new_scope>).
 
 
-Channel typing is not (yet) explicit.  It may not be necessary.
+Channel typing has been omitted.
 
 
 A <logix_atom> is any Logix procedure call.
 
 
-Reserved atoms are not (yet) specified, except for "true", which may only
-appear as the last <call> in a <body>.
+Reserved atoms are not (yet) specified, except for "true", which should only
+be needed as the only <call> in the <body> of a <synchronized_clause>.
 
 
-The recursive definition of <compound_guard> is syntactic sugar - e.g.
+The recursive definition of <synchronized_guard> is syntactic sugar - e.g.
 
-    p :- <guard1> | <compound_guard1> | q;
-         <guard2> | <compound_guard2> | r.
+    p :- <communication1> | <synchronized_guard1> | q;
+         <communication2> | <synchronized_guard2> | r.
 
 is equivalent to:
 
-    p :- <guard1> | p1;
-         <guard2> | p2.
+    p :- <communication1> | p1;
+         <communication2> | p2.
 
-    p1 :- <compound_guard1> | q.
+    p1 :- <synchronized_guard1> | q.
 
-    p2 :- <compound_guard2> | r.
+    p2 :- <synchronized_guard2> | r.
