@@ -4,9 +4,9 @@ User interface of algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/05/25 07:35:57 $
+			$Date: 2000/05/28 06:41:14 $
 Currently locked by     $Locker:  $
-			$Revision: 2.1 $
+			$Revision: 2.2 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -179,7 +179,7 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    Signals = _,
 	    NewDebug_Info = Debug_Info |
 		write(" goal "(Goal, Goal'), Pi),
-		exclude_stochastic_aids(Body'?, Body''),
+		exclude_stochastic_aids(Goal'?, Goal''),
 		write_user_goal(Goal''?, '.', Done, IO);
 
 	Answer     = print,
@@ -267,7 +267,7 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 	otherwise :
 	    BodyOut = 0.
 
-  write_user_goal(Goal, Notation, Done, IO);
+  write_user_goal(Goal, Notation, Done, IO) :-
 
 	Goal =?= 0 :
 	      Notation = _,
@@ -275,7 +275,7 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 	      Done = done;
 
 	Goal =\= 0 |
-		write(display([Goal'?, Notation | Q] \ Q,
+		write(display([Goal, Notation | Q] \ Q,
 			[list,close(done,Done)]), IO).
 
 /***********************************************************************/
