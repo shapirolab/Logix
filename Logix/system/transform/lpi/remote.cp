@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/remote.cp,v 1.1 1999/07/09 07:03:17 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/remote.cp,v 1.2 2004/06/22 12:18:48 bill Exp $ */
 /*
 
 Remote inheritance for lpi
@@ -285,7 +285,7 @@ edit_goals(Status, M, F, Body1, Body2, IdC1, IdC2) :-
 	edit_goals;
 
     Body1 =\= (_, _) |
-	edit_goal(local, Status, M, F, Body1, Body2, IdC1, IdC2).
+	edit_goal("local", Status, M, F, Body1, Body2, IdC1, IdC2).
 
 
 edit_goal(Locus, Status, M, F, Body1, Body2, IdC1, IdC2) :-
@@ -304,7 +304,7 @@ edit_goal(Locus, Status, M, F, Body1, Body2, IdC1, IdC2) :-
 	self;
 
     Body1 = (-M' # Body1'),
-    string(M'), Locus = local : M = _,
+    string(M'), Locus = "local" : M = _,
       Locus' = inherited |
 	self;
 
@@ -316,7 +316,7 @@ edit_goal(Locus, Status, M, F, Body1, Body2, IdC1, IdC2) :-
 	explicit_goal(N, Reply, Reply'),
 	local_goal;
 
-    otherwise, Locus = local : Status = _, M = _, F = _,
+    otherwise, Locus = "local" : Status = _, M = _, F = _,
       Body2 = Body1,
       IdC2 = IdC1 ;
 

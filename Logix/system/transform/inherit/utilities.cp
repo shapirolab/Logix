@@ -156,14 +156,14 @@ overrides1(Pairs, OverRides, Functor, Result, Head, Tail) :-
 
    OverRides = [] :
       Functor = _,
-      Result = local,
+      Result = "local",
       Tail = [],
       OverRides' = Head |
 	overrides.
 
 set_local(Pairs) :-
 
-   Pairs ? _Functor(local^) |
+   Pairs ? _Functor("local"^) |
 	self;
 
    Pairs = [] | true.
