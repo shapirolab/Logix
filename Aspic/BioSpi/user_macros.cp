@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/07 07:10:30 $
+		       	$Date: 2002/08/14 08:34:02 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -916,7 +916,7 @@ format_channels(Kind, Channels, Out, Out1) :-
       FormattedChannel = "";
 
     SendWeight =\= 0, ReceiveWeight =\= 0,
-    Kind =?= CHAR_b,
+    CHAR_b =< Kind, Kind =< CHAR_c,
     read_vector(SPI_CHANNEL_RATE, Channel, Rate),
     Weight := Rate * SendWeight * ReceiveWeight :
       Refs = _,
