@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/29 06:20:04 $
+		       	$Date: 2002/09/16 16:28:54 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -50,11 +50,11 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
-**   Controls = {Exported, GlobalDescriptors, GlobalNames, WeightRate}
+**   Controls = {Exported, PublicDescriptors, PublicNames, WeightRate}
 **
 **          Exported is "all" or a list of exported  Name  or  Name/Arity.
 **
-**          GlobalDescriptors is a list of global channels, Name(BaseRate)
+**          PublicDescriptors is a list of public channels, Name(BaseRate)
 **                            or Name(BaseRate, Weighter).
 **
 **          WeightRate = Weighter(BaseRate) rate for new channels,
@@ -100,14 +100,14 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
 	self;
 
     In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
-    Controls = {Exported, GlobalDescriptors, GlobalNames, WeightRate} |
+    Controls = {Exported, PublicDescriptors, PublicNames, WeightRate} |
 	make_process_scope(PiLHS, WeightRate, ProcessScope, [],
 				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
 	make_prefix_call(Export, Prefix),
-	create_entry(GlobalDescriptors, GlobalNames, Prefix?,
+	create_entry(PublicDescriptors, PublicNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
 			Generated, Generated'?, Optimize, Optimize'?),
 	add_process_definition(NewDefinition?, LHSS, Progeny, Progeny'),
@@ -134,14 +134,14 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
   make_prefix_call(Export, Prefix) :-
 
     Export =?= true |
-      Prefix = global_channels(_GlobalPairList, BIO_SCHEDULER);
+      Prefix = public_channels(_PublicPairList, BIO_SCHEDULER);
 
     otherwise :
       Export = _,
       Prefix = [].
 
 
-create_entry(GlobalDescriptors, GlobalNames, Prefix,
+create_entry(PublicDescriptors, PublicNames, Prefix,
 		ProcessDefinition, NewDefinition,
 		Generated, NextGenerated, Optimize, NextOptimize) :-
 
@@ -161,16 +161,16 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
       NewLHS = {OuterLHS'?, InnerLHS'?} |
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
-	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
+	initialize_public_channels(Index', OuterLHS'?, PublicDescriptors,
 					Initializer, Prefix);
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
     LHSS = {OuterLHS, _InnerLHS},
     Name =\= NULL,
     Prefix = [],
-    GlobalNames =\= [],
+    PublicNames =\= [],
     Index := arity(OuterLHS) :
-      GlobalDescriptors = _,
+      PublicDescriptors = _,
       NextGenerated = Generated,
       NextOptimize = Optimize,
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
@@ -179,8 +179,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 	make_lhs_tuples;
 	
     otherwise :
-      GlobalDescriptors = _,
-      GlobalNames = _,
+      PublicDescriptors = _,
+      PublicNames = _,
       Prefix = _,
       NewDefinition = ProcessDefinition,
       Generated = NextGenerated,
@@ -207,43 +207,43 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
       ChannelNameList = [].
 
 
-  initialize_global_channels(Index, Tuple, GlobalDescriptors,
+  initialize_public_channels(Index, Tuple, PublicDescriptors,
 				Initializer, Prefix) + (List = Tail?, Tail) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? DuplicateName(_BaseRate),
+    PublicDescriptors ? DuplicateName(_BaseRate),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? DuplicateName(_BaseRate, _Weighter),
+    PublicDescriptors ? DuplicateName(_BaseRate, _Weighter),
     DuplicateName =\= ChannelName |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? ChannelName(BaseRate),
+    PublicDescriptors ? ChannelName(BaseRate),
     Index++ :
       Tail ! ChannelName(`ChannelName, BaseRate) |
 	self;
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
-    GlobalDescriptors ? ChannelName(BaseRate, Weighter),
+    PublicDescriptors ? ChannelName(BaseRate, Weighter),
     Index++ :
       Tail ! ChannelName(`ChannelName, Weighter, BaseRate) |
 	self;
 
     otherwise,
     arg(1, Tuple, ProcedureName),
-    arg(2, Prefix, GlobalPairList) :
+    arg(2, Prefix, PublicPairList) :
       Index = _,
-      GlobalDescriptors = _,
+      PublicDescriptors = _,
       Tail = [],
       Initializer = (computation # Prefix, ProcedureName) |
-	unify_without_failure(GlobalPairList, List).
+	unify_without_failure(PublicPairList, List).
 
 
 /*
@@ -312,7 +312,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 
 serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 			Out, NextOut, Errors, NextErrors) +
-		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
+		(IdIndex = 1, Primes = [], Privates = [], Progeny = [],
 		 Refs = AddRef?, AddRef) :-
 
     In ? lhss(Outer, Inner),
@@ -323,7 +323,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	self;
 
     In ? call(Body1, Body2) |
-	call#make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
+	call#make_local_call(ProcessDefinition, Privates, Primes, Body1, Body2,
 				In'', In'?, Errors, Errors'?, CallDefinition),
 	add_call(CallDefinition, Body2, Notes, Notes'),
 	self;
@@ -334,15 +334,15 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	self;
 
     In ? end_clause :
-      Locals = _,
+      Privates = _,
       Primes = _ |
-	self + (Locals = [], Primes = []);
+	self + (Privates = [], Primes = []);
 
     In ? guard_compare(Guard, ChannelList, NextChannelList, Comparer),
     Guard =?= {Operator, C1, C2},
     ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
       Notes ! variables(List?) |
-	message_to_channels({C1, C2}, Name, ChannelNames, Locals, false, List,
+	message_to_channels({C1, C2}, Name, ChannelNames, Privates, false, List,
 				Errors, Errors'?),
 	compare_channels_ok,
 	self;
@@ -356,11 +356,11 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
 				Errors', Errors''?),
 	utilities#verify_communication_channel(Name, Channel,
-						ChannelNames, Locals,
+						ChannelNames, Privates,
 						Locus, ChannelName,
 						Errors'', Errors'''?),
 	parse_message(Name, ChannelNames, Message'?, MsChannelNames,
-			Locals', Primes', Errors''', Errors''''?),
+			Privates', Primes', Errors''', Errors''''?),
 	call#prime_local_channels(Primes'?, MsChannelNames?, MsChannelNames'),
 	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
 	make_communication_guard + (Type = receive),
@@ -374,10 +374,10 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
 				Errors', Errors''?),
 	utilities#verify_communication_channel(Name, Channel,
-						ChannelNames, Locals,
+						ChannelNames, Privates,
 						Locus, ChannelName,
 						Errors'', Errors'''?),
-	message_to_channels(Message'?, Name, ChannelNames, Locals, false,
+	message_to_channels(Message'?, Name, ChannelNames, Privates, false,
 				MsChannelNames, Errors''', Errors''''?),
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
@@ -420,8 +420,8 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 
     In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
-	utilities#concatenate_lists([Locals, ChannelNames], GlobalNames),
-	make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
+	utilities#concatenate_lists([Privates, ChannelNames], PublicNames),
+	make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
 				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
@@ -430,7 +430,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
     In ? remote_call(Call1, Call2),
     ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
       Notes ! variables(LogixVars?) |
-	call#make_remote_call(Name, ChannelNames, Locals, Primes, Call1, Call2,
+	call#make_remote_call(Name, ChannelNames, Privates, Primes, Call1, Call2,
 				Errors, Errors'?),
 	utilities#find_logix_variables(Call2?, LogixVars, []),
 	self;
@@ -460,7 +460,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
     ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _LHSS, CodeTuple} :
       WeightRate = _,
       IdIndex = _,
-      Locals = _,
+      Privates = _,
       Primes = _,
       Notes = [],
       AddRef = [],
@@ -642,8 +642,8 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   WeightRate is the module type and the default base rate.
 **
-**   GlobalNames is a list of channel descriptors (<stochactic_channel_list>)
-**   which are global to the module, and which may be shared by other modules.
+**   PublicNames is a list of channel descriptors (<stochactic_channel_list>)
+**   which are public to the module, and which may be shared by other modules.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
 **
@@ -660,7 +660,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
+make_process_scope(PiLHS, WeightRate, ProcessScope, PublicNames,
 		NewChannelList1, Out, NextOut,
 		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
@@ -678,14 +678,14 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 	diagnose_replies(DChs?, Name?, duplicate_channel,
 				Errors'', Errors'''?),
 	utilities#sort_out_duplicates([NewChannelList?], NewChannelList1, _),
-	utilities#concatenate_lists([ParamList1?, ChannelList1?], LocalList),
-	diagnose_duplicates(LocalList?, LocalList1,
+	utilities#concatenate_lists([ParamList1?, ChannelList1?], PrivateList),
+	diagnose_duplicates(PrivateList?, PrivateList1,
 			Name?, channel_duplicates_parameter,
 				Errors''', Errors''''?),
-	correct_for_duplication(LocalList?, LocalList1?, ParamList,
+	correct_for_duplication(PrivateList?, PrivateList1?, ParamList,
 				ChannelList1?, ChannelList2),
-	remove_ambient_channel(GlobalNames, GlobalNames1),
-	make_lhs_tuples(Name?, ParamList1?, GlobalNames1, ChannelList2?,
+	remove_ambient_channel(PublicNames, PublicNames1),
+	make_lhs_tuples(Name?, ParamList1?, PublicNames1, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
 	extract_parameters(NewChannelList1?, Parameters, ParameterNames),
 	atom_to_arguments(OuterLHS, Arguments),
@@ -717,16 +717,16 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
     Index > arity(Atom) :
       Arguments = [].
 
-  remove_ambient_channel(GlobalNames, GlobalNames1) :-
+  remove_ambient_channel(PublicNames, PublicNames1) :-
 
-    GlobalNames ? AmbientName,
+    PublicNames ? AmbientName,
     string_to_dlist(AmbientName, AL, []),
     string_to_dlist("Ambient-", ADL, _) :
       AL = ADL,
-      GlobalNames1 = GlobalNames';
+      PublicNames1 = PublicNames';
 
     otherwise :
-      GlobalNames1 = GlobalNames.
+      PublicNames1 = PublicNames.
 
 optimize_procedures(ProcessDefinition, Notes, Out, NextOut) :-
 
@@ -1099,12 +1099,12 @@ extract_arglist(PiLHS, ParamList, Errors, NextErrors) +
 	self.
 
 
-make_lhs_tuples(Name, ParamList, GlobalNames, ChannelList,
+make_lhs_tuples(Name, ParamList, PublicNames, ChannelList,
 			ChannelNames, OuterLHS, InnerLHS) :-
 
     Name =?= NULL :
       ParamList = _,
-      GlobalNames = _,
+      PublicNames = _,
       ChannelList = _,
       OuterLHS = [],
       InnerLHS = [],
@@ -1113,23 +1113,23 @@ make_lhs_tuples(Name, ParamList, GlobalNames, ChannelList,
     Name =\= NULL,
     ChannelList =?= [] :
       InnerLHS = OuterLHS?|
-	utilities#subtract_list(GlobalNames, ParamList, GlobalNames1),
-	utilities#concatenate_lists([ParamList, GlobalNames1?],	ChannelNames),
+	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
+	utilities#concatenate_lists([ParamList, PublicNames1?],	ChannelNames),
 	construct_lhs_tuple(Name, EMPTY, ChannelNames?, OuterLHS);
 
     Name =\= NULL,
     ChannelList =\= [],
-    GlobalNames =?= [] |
+    PublicNames =?= [] |
 	construct_lhs_tuple(Name, EMPTY, ParamList, OuterLHS),
 	utilities#concatenate_lists([ParamList, ChannelList?], ChannelNames),
 	construct_lhs_tuple(Name, DOT, ChannelNames?, InnerLHS);
 
     Name =\= NULL,
     ChannelList =\= [],
-    GlobalNames =\= [] |
-	utilities#subtract_list(GlobalNames, ParamList, GlobalNames1),
-	utilities#subtract_list(GlobalNames1, ChannelList, GlobalNames2),
-	utilities#concatenate_lists([ParamList, GlobalNames2?], OuterList),
+    PublicNames =\= [] |
+	utilities#subtract_list(PublicNames, ParamList, PublicNames1),
+	utilities#subtract_list(PublicNames1, ChannelList, PublicNames2),
+	utilities#concatenate_lists([ParamList, PublicNames2?], OuterList),
 	construct_lhs_tuple(Name, EMPTY, OuterList?, OuterLHS),
 	utilities#concatenate_lists([OuterList?, ChannelList], ChannelNames),
 	construct_lhs_tuple(Name, DOT, ChannelNames?, InnerLHS).
@@ -1152,13 +1152,13 @@ make_communication_guard(Type, Locus, ChannelName, Multiplier, Index, Guard) :-
 		request(Type, ChannelName, Multiplier, Index, Locus)}.
 
 
-message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
+message_to_channels(Message, Name, ChannelNames, Privates, Underscore,
 			MsChannelNames, Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
       Name = _,
       ChannelNames = _,
-      Locals = _,
+      Privates = _,
       Underscore = _,
       Index = _,
       MsChannelNames = [],
@@ -1168,14 +1168,14 @@ message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
     string(Channel),
     Underscore =\= true, Index++ :
       MsChannelNames ! OkChannelName? |
-	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
+	utilities#verify_channel(Name, Channel, ChannelNames, Privates,
 				OkChannelName, Errors, Errors'),
 	self;
 
     arg(Index, Message, Var), Var =?= `Channel,
     Underscore =\= true, Var =\= BIO_SCHEDULER, Index++ :
       MsChannelNames ! OkChannelName? |
-	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
+	utilities#verify_channel(Name, Channel, ChannelNames, Privates,
 					OkChannelName, Errors, Errors'),
 	self;
 
@@ -1193,7 +1193,7 @@ message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
       Message = _,
       Name = _,
       ChannelNames = _,
-      Locals = _,
+      Privates = _,
       Underscore = _,
       MsChannelNames = [],
       Errors = NextErrors;
@@ -1207,21 +1207,21 @@ message_to_channels(Message, Name, ChannelNames, Locals, Underscore,
 
     otherwise :
       ChannelNames = _,
-      Locals = _,
+      Privates = _,
       Underscore = _,
       Index = _,
       MsChannelNames = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
 
 
-parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
+parse_message(Name, ChannelNames, Message, MsChannelNames, Privates, Primes,
 			Errors, NextErrors) :-
 
     Message = [] :
       Name = _,
       ChannelNames = _,
       MsChannelNames = [],
-      Locals = [],
+      Privates = [],
       Primes = [],
       Errors = NextErrors;
 
@@ -1237,7 +1237,7 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
     otherwise :
       ChannelNames = _,
       MsChannelNames = [],
-      Locals = [],
+      Privates = [],
       Primes = [],
       Errors = [(Name - invalid_message(Message)) | NextErrors].
 
@@ -1276,30 +1276,30 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
       Errors ! (Name - invalid_receive_channel(ChannelName)) |
 	self.
 
-  instantiate_channels(UniqueNames, ChannelNames, Locals, Primes) :-
+  instantiate_channels(UniqueNames, ChannelNames, Privates, Primes) :-
 
     UniqueNames ? ChannelName |
-	local_or_prime(ChannelName, ChannelNames,
-		Locals, Locals'?, Primes, Primes'?),
+	private_or_prime(ChannelName, ChannelNames,
+		Privates, Privates'?, Primes, Primes'?),
 	self;
 
     UniqueNames = [] :
       ChannelNames = _,
-      Locals = [],
+      Privates = [],
       Primes = [];
 
     ChannelNames = [] :
       UniqueNames = _,
-      Locals = [],
+      Privates = [],
       Primes = [].
 
-  local_or_prime(ChannelName, ChannelNames, 
-	Locals, NextLocals, Primes, NextPrimes) :-
+  private_or_prime(ChannelName, ChannelNames, 
+	Privates, NextPrivates, Primes, NextPrimes) :-
 
     ChannelNames = [ChannelName |Å†_],
     string_to_dlist(ChannelName, CL, Prime) :
       Prime = [39],
-      Locals = NextLocals,
+      Privates = NextPrivates,
       Primes = [{ChannelName, ChannelNamePrime?} | NextPrimes] |
 	list_to_string(CL, ChannelNamePrime);
 
@@ -1307,7 +1307,7 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
 	self;
 
     ChannelNames = [] :
-      Locals = [ChannelName | NextLocals],
+      Privates = [ChannelName | NextPrivates],
       Primes = NextPrimes.
 
 
