@@ -1,0 +1,10 @@
+#!/bin/csh
+if !($?DOC_DIR) then
+    setenv DOC_DIR ncstrl.weizmann_il
+endif
+if !($?BIB_DIR) then
+    setenv BIB_DIR ncstrl
+endif
+test -d $DOC_DIR || mkdir $DOC_DIR
+./updatebibs $BIB_DIR $DOC_DIR
+rm -rf $BIB_DIR

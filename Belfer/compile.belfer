@@ -1,0 +1,13 @@
+#!/bin/csh
+
+# parameter --- year
+
+if !($?BIB_DIR) then
+    setenv BIB_DIR ncstrl
+endif
+
+cat /Ftp/pub/CSreports/reps$1/abs$1.tex | sed -e '/lethead/D' >! abstracts.tex
+test -d $BIB_DIR || mkdir $BIB_DIR
+./textobib abstracts.tex $BIB_DIR
+./updatebelfer
+\rm -f abstracts.tex
