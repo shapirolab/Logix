@@ -340,7 +340,7 @@ The remaining words are prefix operators in capabilities and directions.
 
 
 An argument which is declared as a <logix_variable> in the added
-<parameter> of a <left_hand_side> is initially uninstantiated.
+<parameter_list> of a <left_hand_side> is initially uninstantiated.
 
 
 Within a <logix_term>, normal logix recognition of variables applies - i.e.
@@ -350,7 +350,7 @@ variable names all begin with a capital letter or underscore; to reference a
 
 
 A <logix_variable> may have a value which is an arbitrary logix term.  Such
-values may be tested by a <logix_ask_guard>, instantiated or used as an
+a value may be tested by a <logix_ask_guard>, instantiated or used as an
 argument in a <logix_goal> or in a <logix_tell_guard>.  An arbitrary
 <logix_term> may be sent in a <message> by the library <logix_goal>
 spi_send/2, or received by the library logix goal spi_receive/2:
