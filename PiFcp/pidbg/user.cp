@@ -4,9 +4,9 @@ User interface of algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/04/16 08:44:37 $
+			$Date: 2000/05/25 07:35:57 $
 Currently locked by     $Locker:  $
-			$Revision: 2.0 $
+			$Revision: 2.1 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -168,8 +168,8 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    Signals = _, Execute_Info = _,
 	    NewDebug_Info = Debug_Info |
 		write(" goal "(Goal, Goal'), Pi),
-		write(display([Goal'?, ' :- ?.' | Q] \ Q,
-			[list,close(done,Done)]), IO);
+		exclude_stochastic_aids(Goal'?, Goal''),
+		write_user_goal(Goal''?, " :- ?.", Done, IO);
 
 	Answer     = print,
 	Location   = post,
@@ -179,8 +179,8 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    Signals = _,
 	    NewDebug_Info = Debug_Info |
 		write(" goal "(Goal, Goal'), Pi),
-		write(display([Goal'?, '.' | Q] \ Q,
-			[list,close(done,Done)]), IO);
+		exclude_stochastic_aids(Body'?, Body''),
+		write_user_goal(Goal''?, '.', Done, IO);
 
 	Answer     = print,
 	Location   = post,
@@ -192,8 +192,9 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    NewDebug_Info = Debug_Info |
 		write(" goal "(Goal, Goal'), Pi),
 		write(" goal "(Body, Body'), Pi),
-		write(display([Goal'?, ' :- 
-	',	Body'?, '.' | Q] \ Q, [list,close(done,Done)]), IO);
+		exclude_stochastic_aids(Body'?, Body''),
+		write(display([Goal'?, " :- 
+	",	Body''?, '.' | Q] \ Q, [list,close(done,Done)]), IO);
 
 	Answer     = query,
 	Location   = pre,
@@ -224,11 +225,58 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 	Body       =\= true |
 		write(" goal "(Goal, Goal'), Pi),
 		write(" goal "(Body, Body'), Pi),
-		write(ask([Goal'?,' :- 
-	', Body'?, '.
+		exclude_stochastic_aids(Body'?, Body''),
+		write(ask([Goal'?, " :- 
+	", Body''?, '.
 query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 		read(Signals, Ans, Print_Requests,{Goal,Location,Execute_Info},
 			{Debug_Info, NewDebug_Info, Done}).
+
+  exclude_stochastic_aids(BodyIn, BodyOut) :-
+
+    BodyIn =?= (Goal, BodyIn'),
+    Goal =\= (pi_monitor#_),
+    Goal =\= (_ = _),
+    Goal =\= {pi_wait_to_send},
+    Goal =\= pi_wait_to_send(_),
+    Goal =\= pi_wait_to_send(_, _),
+    Goal =\= {pi_wait_to_receive},
+    Goal =\= pi_wait_to_receive(_),
+    Goal =\= pi_wait_to_receive(_, _),
+    Goal =\= pi_wait_to_receive(_, _, _) :
+	BodyOut = (Goal, BodyOut') |
+		self;
+
+    BodyIn =?= (_Exclude, BodyIn'),
+    otherwise |
+		self;
+
+	BodyIn =\= (_, _),
+	BodyIn =\= (pi_monitor#_),
+	BodyIn =\= (_ = _),
+	BodyIn =\= {pi_wait_to_send},
+	BodyIn =\= pi_wait_to_send(_),
+	BodyIn =\= pi_wait_to_send(_, _),
+	BodyIn =\= {pi_wait_to_receive},
+	BodyIn =\= pi_wait_to_receive(_),
+	BodyIn =\= pi_wait_to_receive(_, _),
+	BodyIn =\= pi_wait_to_receive(_, _, _) :
+	    BodyOut = BodyIn;
+
+	BodyIn =\= (_, _),
+	otherwise :
+	    BodyOut = 0.
+
+  write_user_goal(Goal, Notation, Done, IO);
+
+	Goal =?= 0 :
+	      Notation = _,
+	      IO = _,
+	      Done = done;
+
+	Goal =\= 0 |
+		write(display([Goal'?, Notation | Q] \ Q,
+			[list,close(done,Done)]), IO).
 
 /***********************************************************************/
 procedure read(Signals,Directive,Print_Requests,Goal_Info,Termination_Info).
@@ -532,7 +580,7 @@ break1(Location,Goal,PredicateArity,Breaks,Answer,Index,Current) :-
 	    Answer = Mode,
 	    Index  = Current | true;
 
-	Breaks?{Location,pattern(FG),_Mode},
+	Breaks?{Location,pattern(_FG),_Mode},
 	otherwise,
 	Current' := Current + 1 |
 %	    melt(FG,Melted_Goal,_) |
