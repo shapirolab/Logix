@@ -4,9 +4,9 @@ FCP parser
 Michael Hirsch, Marc Rosen, Muli Safra, Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 2000/05/03 10:41:37 $
+		       	$Date: 2004/06/22 12:09:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Logix/system/parse/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -203,6 +203,9 @@ prefix_term(String, Tokens, Priority1, Term, Priority2, Rest,
 
     otherwise,			% kluge to reduce look-ups
     string_length(String) > 2, String =\= 'procedure',
+    String =\= 'p2c', String =\= 'c2p', String =\= 's2s', String =\= 'local',
+    String =\= 'enter', String =\= 'accept',
+    String =\= 'exit', String =\= 'expel',
     Os1 = [] : Priority1 = _,
       String = Term,
       Tokens = Rest,
@@ -751,6 +754,14 @@ lookup(prefix_operator(A, B, C, D)) :-
     string_length(A) < 3 |			% kluge for speed
 	prefix_operator(A, B, C, D).
 lookup(prefix_operator('procedure', 100^, 99^, true^)).	% counter-kluge
+lookup(prefix_operator( 'p2c', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'c2p', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 's2s', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'local', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'enter', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'accept', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'exit', 98^, 97^, true^)).	% counter-kluge
+lookup(prefix_operator( 'expel', 98^, 97^, true^)).	% counter-kluge
 lookup(prefix_operator(_, _, _, false^)) :-
     otherwise |
 	true.
@@ -788,8 +799,8 @@ procedure infix_operator_1(Op, PLeft, Pop, PRight, Reply).
 infix_operator_1( ';' ,1069^, 1070^, 1070^, true^).
 infix_operator_1( '|' ,1059^, 1060^, 1060^, true^).
 infix_operator_1( ':' ,1049^, 1050^, 1049^, true^).
-infix_operator_1( '&' , 989^,  990^,  990^, true^).	 
 infix_operator_1( ',' , 999^, 1000^, 1000^, true^).	 
+infix_operator_1( '&' , 989^,  990^,  990^, true^).	 
 infix_operator_1( '!' , 899^,  900^,  900^, true^).	 
 infix_operator_1( '?' , 900^,  900^,  899^, true^).	 
 infix_operator_1( '=' , 799^,  800^,  799^, true^).	 
@@ -808,6 +819,7 @@ infix_operator_1(  _  ,  _ ,   _ ,   _ , false^) :-
 
 infix_operator_2( ':-' ,1199^, 1200^, 1199^, true^).
 infix_operator_2( '<-' ,1189^, 1190^, 1189^, true^).
+infix_operator_2( '->' ,1189^, 1190^, 1189^, true^).
 infix_operator_2( '=>' ,1009^, 1010^, 1009^, true^).
 infix_operator_2( '@<' , 799^,  800^,  799^, true^).	 
 infix_operator_2( ':=' , 699^,  700^,  699^, true^).	 
@@ -843,6 +855,16 @@ prefix_operator( '~' ,220^, 219^, true^).
 prefix_operator( '`' ,210^, 210^, true^).
 prefix_operator( '?' ,210^, 209^, true^).
 prefix_operator( 'procedure', 100^, 99^, true^).
+/* Added for ambients */
+prefix_operator( 'p2c', 98^, 97^, true^).
+prefix_operator( 'c2p', 98^, 97^, true^).
+prefix_operator( 's2s', 98^, 97^, true^).
+prefix_operator( 'local', 98^, 97^, true^).
+prefix_operator( 'enter', 98^, 97^, true^).
+prefix_operator( 'accept', 98^, 97^, true^).
+prefix_operator( 'exit', 98^, 97^, true^).
+prefix_operator( 'expel', 98^, 97^, true^).
+/* errors */
 prefix_operator( ')' ,_ , _, excess_right_parenthesis^).
 prefix_operator( '}' ,_ , _, excess_right_brace^).
 prefix_operator( ']' ,_ , _, excess_right_bracket^).
