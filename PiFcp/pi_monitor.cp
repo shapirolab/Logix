@@ -3,16 +3,6 @@
 -export([get_global_channels/1, global_channels/1, global_channels/2,
 	 options/2, reset/0, scheduler/1]).
 
-/*
-SORT(Merger, List, Sorted) => 
-	ordered_merger(Merger1),
-	binary_sort_merge(List, Sorted, Merger).
-
-MERGE(Merger, Sorted, List1, List2, Pair) =>
-	ordered_merger(Merger),
-	binary_merge([Sorted, List1], [Pair | List2], Merger).
-*/
-
 SORT(Merger, List, Sorted) =>
 	quick_sort_pairs(List, Sorted).
 
@@ -22,7 +12,11 @@ MERGE(Merger, Sorted, List1, List2, Pair) =>
 RAN =>  4.					/* random real number */
 LN  =>  9.					/* natural logarithm */
 
+REALTIME => 12.
+
 DASH => 45.
+
+MAXINT => 3354431.
 
 serve(In) :-
 
@@ -167,12 +161,14 @@ cdr_past_msgs(In, Out) :-
 start_scheduling(Scheduler, Offset, Ok) :-
 
     Ok =?= true,
+    info(REALTIME, Start_real_time),
     convert_to_real(0, Zero) :
       make_channel(Scheduler, Schedule),
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential}) |
 	scheduling(Schedule, Offset, NegativeExponential,
-			Zero, [], [], false, _Wakeup, _Recording, _Debug);
+		Zero, [], [], false, _Wakeup, _Recording, _Debug,
+				MAXINT, Start_real_time);
 
     Ok =\= true :
       Scheduler = _,
@@ -231,7 +227,8 @@ start_scheduling(Scheduler, Offset, Ok) :-
 */
 
 scheduling(Schedule, Offset, NegativeExponential,
-	Now, PairList, NewList,	Waiting, Wakeup, Record, Debug) :-
+	Now, PairList, NewList,	Waiting, Wakeup, Record, Debug,
+			Cutoff, Start_real_time) :-
 
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
@@ -304,15 +301,23 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
     Schedule =?= [] :
-      Offset = _,
+      Cutoff = _,
       NegativeExponential = _,
-      Now = _,
-      PairList = _,
       NewList = _,
+      Now = _,
+      Offset = _,
+      PairList = _,
+      Start_real_time = _,
       Waiting = _,
       Wakeup = _,
       Record = [],
       Debug = [];
+
+    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
+    info(REALTIME, Start_real_time') :
+      Cutoff = _,
+      Start_real_time = _ |
+	self;
 
     Schedule ? record(Stream) :
       Stream = Record? |
@@ -345,6 +350,23 @@ scheduling(Schedule, Offset, NegativeExponential,
 	self;
 
 /***************************************************************************/
+
+    Now >= Cutoff,
+    info(REALTIME, End_real_time),
+    Real_time := End_real_time - Start_real_time  :
+      Offset = _,
+      NegativeExponential = _,
+      NewList = _,
+      PairList = _,
+      Schedule = _,
+      Waiting = _,
+      Wakeup = _,
+      Record = [],
+      Debug = [] |
+	computation#display((done @ Now:
+		seconds = Real_time)),
+	processor#machine(idle_wait(Done)),
+	wait_done;
 
     Wakeup =?= done,
     PairList =?= [],
@@ -388,6 +410,12 @@ scheduling(Schedule, Offset, NegativeExponential,
 	MERGE(Merger2, Sorted, PairList, PairList', Pair),
 	processor#machine(idle_wait(Wakeup'), _Ok),
 	self.
+
+  wait_done(Done) :-
+
+    known(Done) |
+	pi_monitor#reset.
+
 
 quick_sort_pairs(List, Sorted) + (Tail = []) :-
 
