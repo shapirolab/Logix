@@ -4,9 +4,9 @@ Main control of Stochastic Pi Calulus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill SIlverman
 
 Last update by          $Author: bill $
-			$Date: 2004/05/31 06:58:13 $
+			$Date: 2004/10/21 19:41:48 $
 Currently locked by     $Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -237,9 +237,9 @@ help(Command, Non_Help) :-
 	Command = help |
 		computation # display(term, "
 This is the command mode of the debugging system.  It is entered whenever
-the system is idle, or whenever the user hits a character.  Any command
-which is not understood by the debugger is sent to the logix command
-interpreter.  
+the system is idle, or whenever the user enters 'debug' in response to the
+query prompt.  Any command which is not understood by the debugger is sent 
+to the logix command interpreter.  
 The following is a list of the valid commands understood by the ADB
 system:
 
@@ -248,9 +248,10 @@ suspend		suspend the current computation.
 resume		resume the current computation.
 depth(N)	increase the computation depth bound by N.
 resolvent	Obtain the current set of processes in the computation.
-enabled		Obtain the set of the current processes which are being executed. 
-disabled	Obtain the set of the current processes which are impeded on the
-		depth bound.
+enabled		Obtain the set of the current processes which are being
+                executed. 
+disabled	Obtain the set of the current processes which are impeded
+                on the depth bound.
 break		Send the break  command to all active processes.
 remove		Send the remove command to all active processes.
 clear		Send the clear  command to all active processes.
@@ -338,9 +339,7 @@ remove(Predicate)	remove the first breakpoint for this predicate in all
 			processes.
 remove(Predicate,Pre_or_Post)
 
-Predicate may either be of the form Predicate, Predicate/Arity, or Pattern.
-If Predicate is specified, a breakpoint of the form Predicate/_ is searched
-for.
+Predicate is a procedure name.
 ",				[close([], Non_Help)]);
 
 	Command = help(clear) |
