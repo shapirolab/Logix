@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/23 11:46:36 $
+		       	$Date: 2000/01/31 13:51:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,39 +43,51 @@ expand(Command, Cs) :-
 
 % Pi Calculus macros
 
+    Command = options(New) :
+      Command' = options(New, _) |
+	self;
+
+    Command = options(New, Old) :
+      Cs = [to_context(pi_monitor # options(New, Old)) | Commands]\Commands;
+
     Command = pc(N) :
-      Cs = [to_context(pi_utils # make_channel(N))| Commands]\Commands;
+      Cs = [to_context(pi_utils # make_channel(N)) | Commands]\Commands;
 
     Command = pdb(Service) :
-      Command' = pdb(Service, []) |
-	expand;
+      Cs = [to_context(pi_monitor # options(O, O)),
+	    pidbg # interpret(Name?, Service, O)
+	   | Commands]\Commands |
+	parse_rpc(Service, Name);
 
     Command = pdb(Service, Options) :
-      Cs = [pidbg#interpret(Name?, Service , Options)|Commands]\Commands |
+      Cs = [pidbg # interpret(Name?, Service, Options) | Commands]\Commands |
 	parse_rpc(Service, Name);
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" i(File)            - input file",
+		" options(New, Old)  - default Pi Options",
 		" pc(C)              - make pifcp channel C",
 		" pdb(RPC)           - debug(RPC)",
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from pifcp channel C",
+		" prgcs              - reset Pi global channels",
 		" ps(M,C)            - send M on pifcp channel C",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
-		" spc(C)             - show Pi channel",
-		" spr / spr(No)      - resolvent of computation No",
-		" spg / spg(No)      - show Pi goal No",
+		" spc(C)             - Pi channel",
+		" spg / spg(No)      - Pi goal of computation No",
+		" spgcs / spgcs(No)  - Pi global channels",
+		" spr / spr(No)      - Pi resolvent of computation No",
                 " ctree(Tree)        - Close a vanilla tree",
-                " ptree(Tree)        - Show Pi execution tree",
+                " ptree(Tree)        - Pi execution tree",
                 " vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" Service - Goal     - call Service#Goal",
 		" - Goal             - call Current#Goal",
 		" {String}           - invoke UNIX shell sh with String",
                 "",
-                "           options for sp*, pdb and ptree:",
+                "        options for sp*, pdb and ptree:",
 		" Integer            - depth of channel display",
 		" none/active/all    - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
@@ -86,16 +98,25 @@ expand(Command, Cs) :-
     Command = pr(M, C) :
       Cs = [to_context(pi_utils # receive(M, C)) | Commands]\Commands;
 
+    Command = prgcs :
+      Command' = prgcs(_) |
+	expand;
+
+    Command = prgcs(Channels) :
+      Cs = [to_context(pi_monitor # reset(Channels)) | Commands]\Commands;
+
     Command = ps(M, C) :
       Cs = [to_context(pi_utils # send(M, C)) | Commands]\Commands;
 
     Command = spc(C) :
-      Command' = spc(C, []) |
-	expand;
+      Cs = [to_context([pi_monitor # options(O, O),
+			pi_utils # show_channel(C, O?, Channel),
+			computation # display(term, Channel, known(Channel))]) 
+	   | Commands]\Commands;
 
     Command = spc(C, Options) :
-      Cs = [to_context([computation # display(term, Channel, known(Channel)),
-			pi_utils # show_channel(C, Options, Channel)]) 
+      Cs = [to_context([pi_utils # show_channel(C, Options, Channel)]),
+			computation # display(term, Channel, known(Channel))
 	   | Commands]\Commands;
 
     Command = spg :
@@ -103,35 +124,55 @@ expand(Command, Cs) :-
 	expand;
 
     Command = spg(No) :
-      Command' = spg(No, []) |
-	expand;
+      Cs = [state(No, Goal, _, _),
+	    to_context([pi_monitor # options(O, O),
+			pi_utils # show_goal(Goal, O?, Term),
+			computation # display(term, Term, known(Term))]) 
+	   | Commands]\Commands;
 
     Command = spg(No, Options) :
       Cs = [state(No, Goal, _, _),
-	    to_context([computation # display(term, Term, known(Term)),
-			pi_utils # show_goal(Goal, Options, Term)]) 
+	    to_context([pi_utils # show_goal(Goal, Options, Term),
+			computation # display(term, Term, known(Term))]) 
+	   | Commands]\Commands;
+
+    Command = spgcs :
+      Cs = [to_context([pi_monitor # [options(O, O), get_global_channels(Gs)], 
+			pi_utils # show_value(Gs, O?, Gs'),
+			computation # display(stream, Gs', [])]) 
+	   | Commands]\Commands;
+
+    Command = spgcs(Options) :
+      Cs = [to_context([computation # display(stream, Gs', []),
+			pi_monitor # get_global_channels(Gs),
+			pi_utils # show_value(Gs, Options, Gs')]) 
 	   | Commands]\Commands;
 
     Command = spr :
-      Command' = spr(_, []) |
+      Command' = spr(_) |
 	expand;
 
     Command = spr(No) :
-      Command' = spr(No, []) |
-	expand;
+      Cs = [resolvent(No, Resolvent),
+	    to_context([pi_monitor # options(O, O),
+			pi_utils # show_resolvent(Resolvent, O?, Stream),
+			computation # display(stream, Stream, [])])
+	   | Commands]\Commands;
 
     Command = spr(No, Options) :
       Cs = [resolvent(No, Resolvent),
-	    to_context([computation # display(stream, Stream, []),
-			pi_utils # show_resolvent(Resolvent, Options, Stream)])
+	    to_context([pi_utils # show_resolvent(Resolvent, Options, Stream),
+			computation # display(stream, Stream)])
 	   | Commands]\Commands;
 
     Command = ctree(Tree) :
-      Cs = [to_context(pi_utils # close_tree(Tree)) | Commands]\Commands;
+      Cs = [to_context(pi_utils # close_tree(Tree))| Commands]\Commands;
 
     Command = ptree(Tree) :
-      Command' = ptree(Tree, []) |
-	expand;
+      Cs = [to_context([pi_monitor # options(O, O),
+			pi_utils # show_tree(Tree, O?, Stream),
+			computation # display(stream, Stream)])
+	   | Commands]\Commands;
 
     Command = ptree(Tree, Options) :
       Cs = [to_context([computation # display(stream, Stream, []),
@@ -146,6 +187,29 @@ expand(Command, Cs) :-
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree, Depth) 
 	   | Commands]\Commands;
 
+    Command = '^' :
+      Cs = [display_stream(Bindings',[]),
+            to_context([computation # dictionary(bindings, Bindings, 0),
+			pi_monitor # options(O, O),
+		pi_utils # show_value(Bindings?, O?, Bindings')])
+	   | Commands]\Commands;
+
+    Command = {Hat, X}, Hat =?= '^',
+    X =?= '^' :
+      Cs = [to_context([computation # dictionary(bindings, Bindings, 1),
+			pi_monitor # options(O, O),
+			pi_utils # show_value(Bindings?, O?, Bindings')]),
+	    display_stream(Bindings'?, [])
+	   | Commands]\Commands;
+
+    Command = {Hat, X}, Hat =?= '^',
+    X =\= '^' :
+      Cs = [to_context([pi_monitor # options(O, O) | Stuff])
+	   | Commands]\Commands |
+	display_variables(X, O?, Stuff);
+
+    Command = forward(Any) :
+      Cs = [Any | Commands]\Commands;
 
 % To retain system-macro and normal shell capabilities, forward generated
 % commands to the shell via the  Commands  difference list.
@@ -387,6 +451,8 @@ close(Out) :-
     true :
       close_channel(Out) .
 
+/********************** Added for pifcp development **************************/
+
 parse_rpc(RPC, Name) :-
 
     RPC =?= Module # _ :
@@ -395,3 +461,37 @@ parse_rpc(RPC, Name) :-
     otherwise :
       RPC = _,
       Name = "?".
+
+display_variables(X, Options, Xs) :-
+
+    X =  `VarName,
+    string(VarName) :
+      Xs ! computation # dictionary(find, VarName, Value, Reply) |
+        display_variable(Reply, VarName, Value, Options, Xs');
+
+    otherwise :
+      Xs ! computation # dictionary(find, X, Value, Reply) |
+        display_variable(Reply, X, Value, Options, Xs').
+
+display_variable(Reply, Id, Value, Options, Xs) :-
+
+    Reply = true,
+    string(Id), known(Value) :
+      Xs = [pi_utils # show_value(Value, Options, Value'),
+	    computation # display(term, Id = Value', known(Value'))];
+
+    integer(Id) :
+      Xs ! processor # link(execute(concatenate,{['_X',Id], Id', 0, 10000})) | 
+	self;
+
+    Reply = true,
+    unknown(Value), string(Id) : Options = _,
+      Xs = [computation # display(term, uninstantiated_variable(Id))] ;
+        
+    Reply = false,
+    unknown(Value) , string(Id) : Options = _,
+      Xs = [computation # display(term, undeclared_variable(Id))] ;
+
+    otherwise :
+      Reply = _, Value = _, Options = _,
+      Xs = [computation # display(term, invalid_variable_name(Id))].
