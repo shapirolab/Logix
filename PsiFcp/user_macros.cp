@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/09/26 08:35:07 $
+		       	$Date: 2000/10/03 11:25:59 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -42,6 +42,12 @@ expand(Command, Cs) :-
 % add your macros here....
 
 % Psi Calculus macros
+
+    Command = psc :
+      Cs = [to_context(psi_monitor # psifunctions([])) | Commands]\Commands;
+
+    Command = psc(FS) :
+      Cs = [to_context(psi_monitor # psifunctions(FS)) | Commands]\Commands;
 
     Command = options(New) :
       Command' = options(New, _) |
