@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.2 1999/07/01 07:22:56 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.3 2000/01/16 06:55:19 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -16,7 +16,7 @@
    dbx:
      compile with -g
    dec:
-     sets ULTRIX flag, enables running on dec workstations
+     sets ULTRIX flag, enables running on dec workstations or intel pcs
      add cnv.c to files.
    doors:
      foreign function - doors api.
@@ -28,6 +28,8 @@
      build makefile for hpux 9.05
    interface:
      foreign function - operating system interface
+   linux:
+     builds makefile for linux kernel 2.2.12, redhat 6.1
    math:
      foreign function - mathamatical functions
    opt:
@@ -82,6 +84,7 @@ static char *fileS = "file";
 static char *freeze_termS = "freeze_term";
 static char *interfaceS = "interface";
 static char *hpux_9d05S = "hppa1d1_hpux_9d05";
+static char *linux_6d1 = "linux_2d2d12_redhat_6d1";
 static char *mathS = "math";
 static char *noptS = " ";
 static char *optS = "-O";
@@ -109,6 +112,7 @@ static char *freeze_termV = "";
 static char *hpux_9d05V = "";
 static char *interfaceV = "";
 static char *libsV = "";
+static char *linux_6d1V = "";
 static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
@@ -266,9 +270,26 @@ main(argc, argv)
       }
       continue;
     case 'l':
-      /* libnsl */
-      libsV = "-lnsl";
-      continue;
+      switch (*S++) {
+      case 'i':
+	switch (*S++) {
+	case 'b':
+	  /* libnsl */
+	  libsV = "-lnsl";
+	  continue;
+	case 'n':
+	  /* linux_2d2d12_redhat_6d1 */
+	  linux_6d1V = linux_6d1;
+	  cnvV = cnvS;
+	  continue;
+	default:
+	  printf("mkmk: Unknown option %s\n", *argv);
+	  exit();
+	}
+      default:
+	printf("mkmk: Unknown option %s\n", *argv);
+	exit();
+      }
     case 'm':
       /* math */
       mathV = LinkFunc[LinkFuncNum] = mathS;
@@ -409,6 +430,9 @@ main(argc, argv)
 
   if (strcmp(hpux_9d05V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DHPUX", "", "", Pos);
+  }
+  if (strcmp(linux_6d1V, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);
   }
   if (strcmp(sgi_5d2V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DSGI", "", "", Pos);

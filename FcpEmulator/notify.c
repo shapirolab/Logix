@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.2 2000/01/16 06:55:20 bill Exp $ */
 
 #include	<stdio.h>
 extern	FILE *DbgFile, *OutFile;
@@ -909,6 +909,53 @@ set_signals_masks()
   sigaddset(((sigset_t *) &ExitMask), _SIGRESERVE);
   sigaddset(((sigset_t *) &ExitMask), SIGDIL);
  
+}
+
+#endif
+
+#ifdef	LINUX
+
+set_signals_masks()
+{
+  sigemptyset(((sigset_t *) &NormalMask));
+  sigaddset(((sigset_t *) &NormalMask), SIGURG);
+  sigaddset(((sigset_t *) &NormalMask), SIGCHLD);
+  sigaddset(((sigset_t *) &NormalMask), SIGIO);
+  sigaddset(((sigset_t *) &NormalMask), SIGWINCH);
+
+  ResumeMask = NormalMask;
+  sigaddset(((sigset_t *) &ResumeMask), SIGCONT);
+
+  PauseMask = ResumeMask;
+  sigaddset(((sigset_t *) &PauseMask), SIGTSTP);
+  sigaddset(((sigset_t *) &PauseMask), SIGTTIN);
+  sigaddset(((sigset_t *) &PauseMask), SIGTTOU);
+
+  DumpMask = PauseMask;
+  sigaddset(((sigset_t *) &DumpMask), SIGQUIT);
+  sigaddset(((sigset_t *) &DumpMask), SIGILL);
+  sigaddset(((sigset_t *) &DumpMask), SIGTRAP);
+  sigaddset(((sigset_t *) &DumpMask), SIGABRT);
+  /* sigaddset(((sigset_t *) &DumpMask), SIGEMT); */
+  sigaddset(((sigset_t *) &DumpMask), SIGFPE);
+  sigaddset(((sigset_t *) &DumpMask), SIGBUS);
+  sigaddset(((sigset_t *) &DumpMask), SIGSEGV);
+  /* sigaddset(((sigset_t *) &DumpMask), SIGSYS); */
+  /* sigaddset(((sigset_t *) &DumpMask), SIGLOST); */
+
+  ExitMask = DumpMask;
+  sigaddset(((sigset_t *) &ExitMask), SIGHUP);
+  sigaddset(((sigset_t *) &ExitMask), SIGINT);
+  sigaddset(((sigset_t *) &ExitMask), SIGPIPE);
+  sigaddset(((sigset_t *) &ExitMask), SIGALRM);
+  sigaddset(((sigset_t *) &ExitMask), SIGTERM);
+  sigaddset(((sigset_t *) &ExitMask), SIGXCPU);
+  sigaddset(((sigset_t *) &ExitMask), SIGXFSZ);
+  sigaddset(((sigset_t *) &ExitMask), SIGVTALRM);
+  sigaddset(((sigset_t *) &ExitMask), SIGPROF);
+  sigaddset(((sigset_t *) &ExitMask), SIGUSR1);
+  sigaddset(((sigset_t *) &ExitMask), SIGUSR2);
+
 }
 
 #endif

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/file.c,v 1.2 1999/11/28 12:33:13 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/file.c,v 1.3 2000/01/16 06:55:16 bill Exp $ */
 /*
 **	file.c - foreign kernals for handling files.
 **
@@ -28,7 +28,9 @@
 #endif
 #include	<stdlib.h>
 
+#ifndef LINUX
 extern char *sys_errlist[];
+#endif
 
 extern FILE *DbgFile;
 

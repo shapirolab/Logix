@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.2 2000/01/16 06:55:14 bill Exp $ */
 /*
  **	fcp.h  -  defines data structures, machine word format
  **		  and various macros
  **	NOTE when changing macros, to leave things as single occurence.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 1999/07/01 07:15:10 $
+ **		       	     $Date: 2000/01/16 06:55:14 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.1 $
+ **			     $Revision: 1.2 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/fcp.h,v $
  */
 
@@ -183,7 +183,9 @@ typedef trailT	*trailP;
 #define HOByteMask	0xf0000000
 
 #ifdef	ULTRIX
+ #ifndef LINUX
 #define	HOByte	0x10000000
+ #endif
 #endif
 
 #ifdef	SGI
@@ -191,6 +193,10 @@ typedef trailT	*trailP;
 #endif
 
 #ifdef	HPUX
+#define	HOByte	0x40000000
+#endif
+
+#ifdef	LINUX
 #define	HOByte	0x40000000
 #endif
 

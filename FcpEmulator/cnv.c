@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/cnv.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/cnv.c,v 1.2 2000/01/16 06:55:12 bill Exp $ */
 
 
 #include	"codes.h"
@@ -1185,13 +1185,13 @@ imp_cnv_ctl(PString)                       /* control */
     case assign_com_Real_SRd:    /* 0x076 sub-op */
     case assign_com_tr_Real_SRd: /* 0x083 sub-op */
       for (; Ia > 0; Ia--) {
-	cnv_pc_double(Vb);
+	cnv_pc_double();
 	cnv_pc_reg();
       }
       next_instr();
     case copy_Real_CpId:         /* 0x04a sub-op */
       for (; Ia > 0; Ia--) {
- 	cnv_pc_double(Vb);
+ 	cnv_pc_double();
  	cnv_pc_subarg();
       }
       next_instr();
@@ -2563,13 +2563,13 @@ exp_cnv_ctl(PString)
     case assign_com_Real_SRd:    /* 0x076 sub-op */
     case assign_com_tr_Real_SRd: /* 0x083 sub-op */
       for (; Ia > 0; Ia--) {
-	cnv_pc_double(Vb);
+	cnv_pc_double();
 	cnv_pc_reg();
       }
       next_instr();
     case copy_Real_CpId:         /* 0x04a sub-op */
       for (; Ia > 0; Ia--) {
- 	cnv_pc_double(Vb);
+ 	cnv_pc_double();
  	cnv_pc_subarg();
       }
       next_instr();
@@ -2688,6 +2688,7 @@ exp_cnv_ctl(PString)
 
     /* Ask/5 */
 
+#ifdef DEEPFREEZE
   case dfreeze:			/* "dfreeze", 5 */  /* 0x171 */
     cnv_pc_reg();
     cnv_pc_reg();
@@ -2697,6 +2698,7 @@ exp_cnv_ctl(PString)
     cnv_pc_intra_offset();  
     cnv_pc_intra_offset();  
     next_instr();
+#endif
 
     /* Tell/0 Kernels */
     

@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.2 1999/11/28 12:33:14 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.3 2000/01/16 06:55:17 bill Exp $ */
 /*
 **	interface.c - unix interface functions.
 **
 **	Michael Hirsch and Bill Silverman		February 1986
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 1999/11/28 12:33:14 $
+**		       	     $Date: 2000/01/16 06:55:17 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.2 $
+**			     $Revision: 1.3 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
 **
 */
@@ -195,7 +195,9 @@ interface(T)
     case 'e' :
       {
 	extern int sys_nerr;
+#ifndef LINUX
 	extern char *sys_errlist[];
+#endif
 
 	heapP ErrorString;
 	heapT ErrorNumber;
