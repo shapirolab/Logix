@@ -3,9 +3,9 @@
 Table of guard kernel predicates for FCP Abstract Instruction Set
 
 Last update by 		$Author: bill $
-	       		$Date: 1999/07/09 07:02:55 $
+	       		$Date: 2000/01/23 08:56:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/guardtable.cp,v $
 
 Copyright 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -79,9 +79,11 @@ dictionary(In) :-
 
     Guard(ro/1, FCP_dg_is_ro, Ask(ro(_)));
 
+/********************** Crashes emulator 23/01/2000 *************************
     Guard('=='/2, FCP_dg_identical, Ask((_==_)));
 
     Guard('\='/2, FCP_dg_not_identical, Ask((_\=_)));
+*****************************************************************************/
 
     Guard('@<'/2, FCP_dg_is_less, Ask((_@<_)));
 
@@ -263,6 +265,7 @@ dictionary(In) :-
 
     Guard(execute/2, FCP_dg_do_execute, Tell(execute(_,_)));
 
+/********************** Crashes dg compiler 23/01/2000 ***********************
     Guard(dfreeze/4, FCP_dg_dfreeze,
  	    Ask(dfreeze(T, FT, FVL, FTL),
 		[dfreeze(T, [], FT1, FVL1, FTL1), FT1=FT, FVL1=FVL, FTL1=FTL],
@@ -274,6 +277,7 @@ dictionary(In) :-
 		[dfreeze(T, OP, FT1, FVL1, FTL1), FT1=FT, FVL1=FVL, FTL1=FTL],
 		[],[FT1, FVL1, FTL1])
     );
+******************************************************************************/
 
     Guard(invalid/1, FCP_dg_invalid_g,
 	    Ask(invalid(V),
