@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/02/19 07:42:43 $
+		       	$Date: 2003/03/04 15:42:55 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -39,12 +39,13 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
     string(Body1), Body1 =\= true, Body1 =\= self,
     nth_char(1, Body1, C), CHAR_a =< C, C =< CHAR_z :
+      Primes = _,
       Name = Body1,
       CallDefinition = [],
       NextIn = In |
 	extract_id(ProcessDefinition, ProcessName, _Arity),
 	macro_call + (Arguments = [], ChannelNames = _),
-	macroed_call;
+	macroed_call + (MacroArguments = MacroedArguments);
 
     arity(Body1) > 1, arg(1, Body1, self) |
 	extract_id(ProcessDefinition, Name, _Arity),
@@ -72,8 +73,9 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	extract_lhs_parts(ProcessDefinition, ChannelNames, _Outer, _Inner),
 	utils#tuple_to_dlist(Body1, [_ | Arguments], []),
 	macro_call,
-	macroed_call,
-	prime_local_channels(Primes, MacroedArguments, Primed);
+	prime_macro_arguments(Primes, MacroedArguments?, MacroArguments,
+					Primed),
+	macroed_call;
 
     Body1 = `Functor :
       Locals = _,
@@ -256,21 +258,19 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	list_to_string(NL, Message),
 	verify_macro_arguments.
 
-  macroed_call(ProcessName, Name, Primes, Body1, Body2, Errors, NextErrors,
-		MacroedArguments) :-
+  macroed_call(ProcessName, Name, Body1, Body2, Errors, NextErrors,
+		MacroArguments) :-
 
-    list(MacroedArguments) :
+    list(MacroArguments) :
       Body1 = _,
       ProcessName = _,
       NextErrors = Errors |
-	prime_local_channels(Primes, MacroedArguments, Primed),
-	utils#list_to_tuple([Name | Primed?], Body2);
+	utils#list_to_tuple([Name | MacroArguments?], Body2);
 
     otherwise :
       Name = _,
-      Primes = _,
       Body2 = true,
-      Errors = [ProcessName-Body1-MacroedArguments | NextErrors].
+      Errors = [ProcessName-Body1-MacroArguments | NextErrors].
 
   verified_macro_channel(ChannelNames, Locals, ArgTypes, Arguments,
 			  OkArguments, OkArgs, MacroedArguments, Arg, Err) :-
@@ -523,6 +523,29 @@ complete_remote_call(Name, PiCall, Arguments, CompoundCall,
       Errors = [Name - invalid_remote_call(PiCall) | NextErrors].
 
 
+prime_macro_arguments(Primes, MacroedArguments, PrimedArguments, Variables) :-
+
+    MacroedArguments ? Constant, constant(Constant) :
+      PrimedArguments ! Constant |
+	self;
+
+    MacroedArguments ? ?Variable :
+      PrimedArguments ! ?Variable',
+      Variables ! Variable |
+	prime_local_channels(Primes, [Variable], [Variable']),
+	self;
+
+    MacroedArguments ? List, list(List) :
+      Variables = [Reply? | List'?],
+      PrimedArguments = [List'?, Reply] |
+	prime_local_channels(Primes, List, List'),
+	prime_local_channels(Primes, MacroedArguments', [Reply]);
+
+    MacroedArguments =?= [`_] :
+      Variables = PrimedArguments? |
+	prime_local_channels(Primes, MacroedArguments, PrimedArguments).
+
+
 prime_local_channels(Primes, Arguments, Primed) :-
 
     Primes ? {Channel, ChannelP} |
@@ -538,7 +561,11 @@ prime_local_channels(Primes, Arguments, Primed) :-
       ArgsOut ! ChannelP |
 	self;
 
-    ArgsIn ? Arg, Arg =\= Channel :
+    ArgsIn ? `Arg, Arg =?= Channel :
+      ArgsOut ! `ChannelP |
+	self;
+
+    ArgsIn ? Arg, Arg =\= Channel, Arg =\= `Channel :
       ArgsOut ! Arg |
 	self;
 
