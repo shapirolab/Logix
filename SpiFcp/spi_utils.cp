@@ -328,7 +328,7 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
     Refs > 0 :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-			Sender(no_sender), Which(active), Format(short)),
+			Sender(no_sender), Which(none), Format(short)),
 %	inspect_channel(SpiChannel, Format, Result),
 	inspect_channel(SpiChannel, Result),
 	format_channel_name,
@@ -396,8 +396,8 @@ inspect_channel(SpiChannel/*, Format*/, Status) :-
     arg(SPI_MESSAGE_LINKS, Message, Links),
     read_vector(SPI_NEXT_MS, Links, Message'),
     Message' =\= Anchor,
-    Message' = {Type, CId, _Channel, Multiplier, _SendTag, _ReceiveTag,
-			Common, _Links},
+    Message' =?= {Type, CId, _Channel, Multiplier, _SendTag, _ReceiveTag,
+			Common, _Links, _Ambient},
     Common = {PId, _MsList, _Value, _Chosen} :
       List ! Kind(PId, CId, Multiplier) |
 	message_type_to_kind,
@@ -576,7 +576,7 @@ show_value(Argument, Options, Display) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-			Sender(no_sender), Which(active), Format(short)),
+			Sender(no_sender), Which(none), Format(short)),
 	show_cdr.
 
 show_cdr(Argument, Which, Depth, Sender, Format, Display) :-
@@ -685,8 +685,8 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 	channel_creator,
 	show_channel_content;
 
-    Depth =?= 0 :
-    Status =?= [_Type(CreatorBase, _Stream)],
+    Depth =?= 0,
+    Status =?= [_Type(CreatorBase, _Stream)] :
       Status = _,
       Which = _,
       Sender = _,
@@ -882,7 +882,7 @@ show_goal(Goal, Options, SpiFcp, Left, Right) :-
     arity(Goal, Index) :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(active), Format(short)),
+		      Sender(no_sender), Which(none), Format(short)),
 	show_goal2;
 
     Goal =?= (Service#Goal') :
@@ -943,8 +943,9 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
 	goal_channels;
 
     nth_char(1, Name, Char1),
-    CHAR_a =< Char1, Char1 =< CHAR_z |
-	show_goal3 + (X = 2);
+    CHAR_a =< Char1, Char1 =< CHAR_z,
+    X := string_length(Name) |
+	show_goal3;
 
     otherwise,
     make_tuple(Index, Tuple),
@@ -959,27 +960,26 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
   show_goal3(Goal, Index, Which, Depth, Sender, Format,
 		SpiFcp, Left, Right, Name, X):-
 
-    X++,
-    nth_char(X, Name, CHAR_DOLLAR),
-    nth_char(X', Name, Char2),
+    X--,
+    nth_char(X', Name, CHAR_DOLLAR),
+    nth_char(X, Name, Char2),
     CHAR_A =< Char2, Char2 =< CHAR_Z |
 	goal_channels;
 
-    X++,
-    nth_char(X, Name, CHAR_DOLLAR),
-    nth_char(X', Name, CHAR_DOT) |
+    X--,
+    nth_char(X', Name, CHAR_DOLLAR),
+    nth_char(X, Name, CHAR_DOT) |
 	goal_channels;
 
-    X++,
-    otherwise,
-    X' < string_length(Name) |
+    X--,
+    nth_char(X', Name, C),
+    C =\= CHAR_DOLLAR |
 	self;
 
-    X++,
     otherwise,
-    X' >= string_length(Name),
     make_tuple(Index, Tuple),
     arg(1, Tuple, N) :
+      X = _,
       N = Name,
       SpiFcp = Tuple |
 	goal_channels2.
@@ -1157,11 +1157,9 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
 		Head', [end(PiTreeId?) | Head'']),
 	nodes;
 
-    Nodes ? Goal, Goal = _#_ :
-      Head ! {'#', PiGoal?, Level, Time} |
-	show_goal(Goal, Options, PiGoal),
-	nodes;
-
+    Nodes ? Goal, Goal = _#_ |
+      show_remote_goal;
+/*
     Nodes ? reduce(Goal, _Id, Time', BranchList),
     Level++ :
       Head ! Executed |
@@ -1169,12 +1167,37 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
 	show_goal(Goal, Options, PiGoal),
 	executed(PiGoal, Level, Time', Executed, BranchList, Nodes''),
 	nodes;
+*/
+    Nodes ? reduce(Goal, _Id, GoalTime, BranchList) |
+	show_reduced_goal;
 
     Nodes = [] :
       Options = _,
       Level = _,
       Time = _,
       Head = Tail .
+
+  show_reduced_goal(Nodes, Options, Level, Time, Head, Tail, Goal, GoalTime,
+			BranchList) :-
+
+    EXCLUDE_CLAUSE_TESTS(Goal, (GoalTime = _, BranchList = _, nodes));
+
+    otherwise,
+    Level++ :
+      Head ! Executed |
+	nodes(Nodes, Options, Level, Time, Head', Head''),
+	show_goal(Goal, Options, PiGoal),
+	executed(PiGoal, Level, GoalTime, Executed, BranchList, Nodes'),
+	nodes.
+
+  show_remote_goal(Nodes, Options, Level, Time, Head, Tail, Goal) :-
+
+    EXCLUDE_CLAUSE_TESTS(Goal, nodes);
+
+    otherwise :
+      Head ! {'#', PiGoal?, Level, Time} |
+	show_goal(Goal, Options, PiGoal),
+	nodes.
 
   show_treeid(TreeId, PiTreeId) :-
 
@@ -1204,12 +1227,20 @@ executed(PiGoal, Level, Time, Executed, BranchList, Nodes) :-
       Nodes = [] ;
 
     number(Time) :
-      Executed = {'|', PiGoal, Level, Time},
-      Nodes = BranchList ;
+      Executed = {'|', PiGoal, Level, Time} |
+	reduced_goal_branchlist;
 
     unknown(Time) : BranchList = _,
       Executed = {'?', PiGoal, Level, 10000000000000000.0},
       Nodes = [] .
+
+  reduced_goal_branchlist(PiGoal, Nodes, BranchList) :-
+
+    MACRO_CLAUSE_TESTS(PiGoal, (BranchList = _, Nodes = []));
+
+    otherwise :
+      PiGoal = _,
+      Nodes = BranchList.
 
 
 display_tree(Head, Order, TreeTrace) :-
@@ -1347,7 +1378,7 @@ show_goals(Goals, Options, Output) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(active), Format(short)),
+		      Sender(no_sender), Which(none), Format(short)),
 	show_goals(Goals, Which?, Depth?, Sender?, Format?,
 			Result, Output, Result?).
 
