@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/21 12:20:55 $
+		       	$Date: 2000/01/02 10:19:47 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,6 +43,7 @@ expand(Command, Cs) :-
 
 % Pi Calculus macros
 
+/*
     Command = cpf(N, Options) :
       Cs = [to_context([computation # display(stream,Results,[type(unparse)]),
 	  		pi_macros # transform_and_wait(N, N', Results)]),
@@ -50,25 +51,27 @@ expand(Command, Cs) :-
     Command = cpf(N) :
       Command' = cpf(N, []) |
 	expand;
+*/
 
     Command = pc(N) :
       Cs = [to_context(pi_utils # make_channel(N))|Commands]\Commands;
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
-		" cpf(Module)        - compile Module.pi -> Module.cp -> Module.bin",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" i(File)            - input file",
 		" pc(C)              - make pifcp channel C",
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from pifcp channel C",
 		" ps(M,C)            - send M on pifcp channel C",
+                " ptree(Tree)        - Show Pi exectution tree.",
 		" r / r(No)          - resolvent of computation No",
 		" r(Ids) / r(No, Ids)- extract Ids of resolvent of computation No",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
-		" tpf(N)             - Transform pifcp module N to fcp: N.pi -> N.cp",
-		" tpf(Module)        - Transform Module.pi -> Module.cp",
+		" spc(C)             - show Pi channel",
+		" spg / spg(No)      - show Pi goal No",
+                " vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" Service - Goal     - call Service#Goal",
 		" - Goal             - call Current#Goal",
 		" {String}           - invoke UNIX shell sh with String"
@@ -81,9 +84,53 @@ expand(Command, Cs) :-
     Command = ps(M, C) :
       Cs = [to_context(pi_utils # send(M, C)) |Commands]\Commands;
 
+    Command = spc(C) :
+      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
+      			pi_utils # show_channel(C, [], Results)]) 
+	   | Commands]\Commands;
+
+    Command = spc(C, Options) :
+      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
+			pi_utils # show_channel(C, Options, Results)]) 
+	   | Commands]\Commands;
+
+    Command = spg :
+      Command' = spg(_) |
+	expand;
+
+    Command = spg(No) :
+      Cs = [state(No, Goal, _, _),
+	    to_context([computation # display(stream,Results,[type(ground)]),
+			pi_utils # show_goal(Goal, [], Results)]) 
+	   | Commands]\Commands;
+
+    Command = spg(Goal, Options) :
+      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
+			pi_utils # show_goal(Goal, Options, Results)]) 
+	   | Commands]\Commands;
+
+    Command = ptree(Tree) :
+      Command' = ptree(Tree, []) |
+	expand;
+
+    Command = ptree(Tree, Options) :
+      Cs = [to_context([computation # display(stream,Results,[type(ground)]),
+			pi_utils # show_tree(Tree, Options, Results)]) 
+	   | Commands]\Commands;
+
+    Command = close(Tree) :
+      Cs = [to_context(pi_utils # show_tree(Tree, close, _)) 
+	   | Commands]\Commands;
+
+    Command = vtree(Context, Conjunction, Tree) :
+      Cs = [widgets # vanilla # tree(Context, Conjunction, Tree) 
+	   | Commands]\Commands;
+
+/*
     Command = tpf(N) :
       Cs = [to_context(computation # display(stream,Results, [type(unparse)])),
 	    pi_macros # transform(N, Results) |Commands]\Commands;
+*/
 
 % To retain system-macro and normal shell capabilities, forward generated
 % commands to the shell via the  Commands  difference list.
