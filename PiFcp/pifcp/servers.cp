@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/13 09:03:09 $
+		       	$Date: 2000/02/14 08:35:03 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -527,16 +527,16 @@ make_process_scope(PiLHS, ProcessScope, GlobalList,
 				OuterLHS?, InnerLHS?, _CodeTuple} |
 	parse_lhs(PiLHS, Name, Arity,
 		ParamList, ChannelList, Errors, Errors'?),
-	piutils#check_for_duplicates(ParamList?, ParamList1,
-				{Name?, duplicate_parameter},
-					Errors', Errors''?),
-	piutils#check_for_duplicates(ChannelList?, ChannelList1,
-				{Name?, duplicate_channel},
-					Errors'', Errors'''?),
+	diagnose_duplicates(ParamList?, ParamList1,
+			Name?, duplicate_parameter,
+				Errors', Errors''?),
+	diagnose_duplicates(ChannelList?, ChannelList1,
+			Name?, duplicate_channel,
+			Errors'', Errors'''?),
 	piutils#concatenate_lists([ParamList1?, ChannelList1?], LocalList),
-	piutils#check_for_duplicates(LocalList?, LocalList1,
-				{Name?, channel_duplicates_parameter},
-					Errors''', Errors''''?),
+	diagnose_duplicates(LocalList?, LocalList1,
+			Name?, channel_duplicates_parameter,
+			Errors''', Errors''''?),
 	correct_for_duplication(LocalList?, LocalList1?, ParamList,
 				ChannelList1?, ChannelList2),
 	make_lhs_tuples(Name?, ParamList1?, GlobalList, ChannelList2?,
@@ -910,8 +910,9 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
       Index = 1 |
 	receive_channel_names(Index, Message, Name, Strings, MsChannelNames,
 					Errors, Errors'?),
-	piutils#check_for_duplicates(Strings, UniqueNames,
-		{Name, duplicate_receive_channel}, Errors', NextErrors),
+	diagnose_duplicates(Strings, UniqueNames,
+			Name, duplicate_receive_channel,
+			Errors', NextErrors),
 	instantiate_channels;
 
     otherwise :
@@ -990,3 +991,19 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
       Locals = [ChannelName | NextLocals],
       Primes = NextPrimes.
 
+
+diagnose_duplicates(List1, List2, Name, Diagnostic, Errors, NextErrors) :-
+
+	piutils#remove_duplicate_strings(List1, List2, Reply),
+	check_duplicates_reply.
+
+  check_duplicates_reply(Reply, Name, Diagnostic, Errors, NextErrors) :-
+
+    Reply ? Duplicate :
+      Errors ! (Name - Diagnostic(Duplicate)) |
+	self;
+
+    Reply =?= [] :
+      Name = _,
+      Diagnostic = _,
+      Errors = NextErrors.

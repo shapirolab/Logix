@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/13 09:03:08 $
+		       	$Date: 2000/02/14 08:35:03 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,6 +14,12 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -language(compound).
+-export([concatenate_lists/2, make_lhs_tuple/3,
+	 make_predicate_list/3, names_to_channel_list/2,
+	 remove_duplicate_strings/3, sort_out_duplicates/3,
+	 subtract_list/3, tuple_to_atom/2, update_process_mode/3,
+	 verify_channel/7]).
+
 
 update_process_mode(Mode, GuardMode, NewMode) :-
 
@@ -100,6 +106,55 @@ remove_item(Item, List1, List2) :-
 	self.
 
 
+remove_duplicate_strings(List1, List2, Reply) :-
+
+	ordered_merger(Merger, Duplicates, []),
+	utils#binary_sort_merge(List1, _, Merger),
+	removed_some(List1, List2, Duplicates, Reply).
+
+  removed_some(List1, List2, Duplicates, Reply) :-
+
+    Duplicates =?= [] :
+      Reply = [],
+      List2 = List1;
+
+    Duplicates =\= [] |
+	/* Delete "duplicate" duplicates. */
+	remove_duplicates(Duplicates, Reply),
+	remove_duplicates(List1, List2).
+
+  remove_duplicates(List1, List2) :-
+
+    List1 ? Item,
+    Item =\= "_" :
+      List2 ! Item |
+	delete_duplicate_items(Item, List1', List1''),
+	self;
+
+    List1 ? Item,
+    Item =?= "_" :
+      List2 ! Item |
+	self;
+
+    List1 = [] :
+      List2 = [].
+
+  delete_duplicate_items(Item, ListIn, ListOut) :-
+
+    ListIn ? I,
+    Item =?= I |
+	self;
+
+    ListIn ? I,
+    Item =\= I :
+      ListOut ! I |
+	self;
+
+    ListIn =?= [] :
+      Item = _,
+      ListOut = [].
+
+/*
 check_for_duplicates(List1, List2, ErrorCode, Errors, NextErrors) :-
 
     List1 ? Item,
@@ -143,6 +198,7 @@ check_for_duplicates(List1, List2, ErrorCode, Errors, NextErrors) :-
       ErrorCode = _,
       Errors = NextErrors,
       ListOut = [].
+*/
 
 make_lhs_tuple(Name, ChannelNames, Tuple) :-
 
@@ -211,9 +267,7 @@ ordered_merge(In1, In2, Out, Left, Right) :-
 	ordered_merge;
 
     In1 = [I | _], In2 ? I :
-      Right = _,
-      Left = duplicate,
-      Right' = _ |
+      Left ! I |
 	ordered_merge;
 
     In1 ? I1, In2 = [I2 | _],
@@ -230,9 +284,7 @@ ordered_merge(In1, In2, Out, Left, Right) :-
 
     In1 = [I1 | _], In2 ? I2,
     arg(1, I1, A), arg(1, I2, A) :
-      Right = _,
-      Left = duplicate,
-      Right' = _ |
+      Left ! A |
 	ordered_merge;
 
     In1 = [] :
