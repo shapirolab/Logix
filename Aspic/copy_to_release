@@ -64,6 +64,8 @@ rm -f release/BioSpi/Documentation/BNF.txt
 cp -p BioSpi/Documentation/BNF.txt release/BioSpi/Documentation
 rm -f release/BioSpi/Documentation/user_macros.txt
 cp -p BioSpi/Documentation/user_macros.txt release/BioSpi/Documentation
+rm -f release/BioSpi/Documentation/attributes.txt
+cp -p BioSpi/Documentation/attributes.txt release/BioSpi/Documentation
 rm -f release/BioSpi/Documentation/record.txt
 cp -p BioSpi/Documentation/record.txt release/BioSpi/Documentation
 
