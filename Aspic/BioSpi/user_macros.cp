@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/09/15 11:33:19 $
+		       	$Date: 2002/10/09 07:22:56 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,6 +43,10 @@ expand(Command, Cs) :-
 % add your macros here....
 
 % BioSpi Calculus macros
+
+    Command = format_channel(Kind, Channel, FormattedChannel?^) :
+      Cs = Commands\Commands |
+	format_channel;
 
     Command = psc :
       Cs = [to_context(spi_monitor # spifunctions([])) | Commands]\Commands;
@@ -811,7 +815,8 @@ format_channels(Kind, Channels, Out, Out1) :-
       Kind = _,
       Out = Out1.
 
-  format_channel(Kind, Channel, FormattedChannel) :-
+
+format_channel(Kind, Channel, FormattedChannel) :-
 
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
@@ -976,12 +981,11 @@ format_channels(Kind, Channels, Out, Out1) :-
 
     Kind =?= CHAR_d,
     DimerRequests >= 2,
-    Blocked =?= FALSE,
-    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
-    Weight := Rate*DimerWeight*(DimerWeight - 1) :
+    Blocked =?= FALSE :
       Channel = _,
-      Refs = _,
-      FormattedChannel = Name(Weight) - Refs;
+      DimerWeight = _,
+      QM = "?",
+      FormattedChannel = Name(QM(DimerRequests!)) - Refs;
 
     Kind =?= CHAR_b,
     otherwise :
@@ -1007,13 +1011,11 @@ format_channels(Kind, Channels, Out, Out1) :-
       Blocked = _,
       Channel = _,
       DimerWeight = _,
-      Refs = _,
       QM = "?",
       FormattedChannel = Name(QM(DimerRequests!)) - Refs;
 
     Kind =?= CHAR_c,
     Blocked = TRUE :
-      Blocked = _,
       Channel = _,
       DimerWeight = _,
       Refs = _,
@@ -1022,7 +1024,6 @@ format_channels(Kind, Channels, Out, Out1) :-
 
     Kind =?= CHAR_d,
     Blocked = TRUE :
-      Blocked = _,
       Channel = _,
       DimerWeight = _,
       Refs = _,
