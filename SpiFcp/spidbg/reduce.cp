@@ -4,9 +4,9 @@ Meta-Interpreter of Stochastic Pi Calculus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 
 Last update by          $Author: bill $
-			$Date: 2003/04/01 13:02:34 $
+			$Date: 2003/04/30 07:10:55 $
 Currently locked by     $Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/spidbg/reduce.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,8 +14,9 @@ Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export([debug/6]).
--language(compound).
+-language([evaluate,compound,colon]).
 -mode(trust).
+-include(spi_constants).
 
 Goal	::= Tuple ; String ; List.
 RPCGoal ::= {`'#', Module, Goal}.
@@ -265,6 +266,11 @@ close_tail(Commands,Signals,Spi_Input,Choke_Msg_On_Right,
 /*************************************************************************/
 procedure check_command(Ok, Command, NewCommand, Error).
 check_command(Ok, Command, NewCommand, Error) :-
+	Command = abort :
+	    Ok    = true,
+	    Error = [],
+	    NewCommand = Command;
+
 	Command = clear :
 	    Ok    = true,
 	    Error = [],
@@ -398,7 +404,8 @@ reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 		service_id(SId, {Context,Lc}, {Context2,Rc}),
 		computation_utils # call_context_goal(SId # Goal,
 						Context', NewGoal, Ok),
-		check_context(Ok, NewGoal, Goal - Goal', Signals, Channels),
+		check_context(Ok, Goal, Context', NewGoal, Goal',
+				Signals, Channels, Debug_Info, Debug_Info'),
 		module_name(Goal,Module'),
 		close(NewRc, Signals, Context'),
 		reduce;
@@ -414,17 +421,21 @@ reduce(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info) :-
 		service_id(SId,{Context,Lc},{Context2,Rc}),
 		computation_utils # call_context_goal(SId # Goal,
 						Context', NewGoal, Ok),
-		check_context(Ok, NewGoal, Goal - Goal', Signals, Channels),
+		check_context(Ok, Goal, Context', NewGoal, Goal',
+				Signals, Channels, Debug_Info, Debug_Info'),
 		module_name(Goal,Module'),
 		close(NewRc, Signals, Context'),
 		reduce.
 
   pre_goal(Goal, Debug_Info, NewDebug_Info) :-
 
-	tuple(Goal), arg(1,Goal, Functor),
-	nth_char(1, Functor, C), ascii(a) =< C, C =< ascii(z),
-	Debug_Info = {Breaks, Depth, _Execute_or_Interpret, Channels} :
-	    NewDebug_Info = {Breaks, Depth, execute, Channels};
+	EXCLUDE_CLAUSE_TESTS(Goal,
+	   (Debug_Info = {Breaks, Depth, _Execute_or_Interpret, Channels},
+	    NewDebug_Info = {Breaks, Depth, execute, Channels}));
+
+	MACRO_CLAUSE_TESTS(Goal,
+	   (Debug_Info = {Breaks, Depth, _Execute_or_Interpret, Channels},
+	    NewDebug_Info = {Breaks, Depth, execute, Channels}));
 
 	otherwise :
 	    Goal = _,
@@ -516,6 +527,9 @@ suspend(Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Where) :-
 /*************************************************************************/
 procedure nonurgent_signal(Signal, Debug_Info, NewDebug_Info).
 nonurgent_signal(Signal, Debug_Info, NewDebug_Info) :-
+	Signal = abort :
+	    NewDebug_Info = Debug_Info;
+
 	Signal = suspend :
 	    NewDebug_Info = Debug_Info;
 
@@ -602,16 +616,21 @@ perform(Done, Signals, Circuit, Goal_Info, Debug_Info, Trace_Info, Id) :-
 
   reduce_goal_in_subcomputation(Signals, Goal, IO, Is, Events) :-
 
-	tuple(Goal), arg(1,Goal, Functor),
-	nth_char(1, Functor, C), ascii(a) =< C, C =< ascii(z) :
-	    Signals = _,
+	EXCLUDE_CLAUSE_TESTS(Goal,
+	   (Signals = _,
 	    Events = _,
 	    IO = _,
-	    Is = [];
+	    Is = []));
+
+	MACRO_CLAUSE_TESTS(Goal,
+	   (Signals = _,
+	    Events = _,
+	    IO = _,
+	    Is = []));
 
 	otherwise |
 		monitor_subcomputation(Signals, {Goal, IO, Is}, Events).
-		
+
 /*************************************************************************/
 procedure execute(Context, Context, Clause).
 execute(Context, NewContext, Clause) :-
@@ -714,21 +733,67 @@ newdepth(Depth, NewDepth) :-
 	otherwise  | NewDepth := Depth-1.
 
 /*************************************************************************/
-procedure check_context(Ok, NewGoal, Goals, Signals, Channels).
-check_context(Ok, NewGoal, Goals, Signals, Channels) :-
+procedure check_context(Ok, RPCGoal, Context, Goal, Goal, Signals, Channels,
+				Debug_Info, Debug_Info).
+check_context(Ok, RPC, Context, NewGoal, Goal, Signals, Channels,
+			Debug_Info, New_Debug_Info) :-
 	Ok = true : 
-	    Signals = _, Channels = _,
-	    Goals = _Old - NewGoal ;
+	    Signals = _, RPC = _, Channels = _,
+	    Goal = NewGoal |
+		check_capitalized_name;
 
 	Ok =\= true,
-	Goals = OldG - NewG,
 	Channels = {_IO, User, _Spi} :
-	    NewGoal = _ |
-		unify_when_done(Done,true-NewG),
-		write_channel(pre(Signals, {no_service(OldG),invalid_module},
+	    Context = _,
+	    NewGoal = _,
+	    New_Debug_Info = Debug_Info |
+		unify_when_done(Done,true-Goal),
+		write_channel(pre(Signals, {no_service(RPC),invalid_module},
 				{[],0,interpret,Channels}, _, _, Done)
 				,User).
-		
+
+procedure check_capitalized_name(Goal, Context, Debug_Info, Debug_Info).
+check_capitalized_name(Goal, Context, Debug_Info, New_Debug_Info) :-
+
+	string(Goal),
+	nth_char(1, Goal, C),
+	CHAR_A =< C, C =< CHAR_Z :
+	    Context = _,
+	    Debug_Info = New_Debug_Info;
+
+	tuple(Goal),
+	arg(1, Goal, Name),
+	nth_char(1, Name, C),
+	CHAR_A =< C, C =< CHAR_Z :
+	    Context = _,
+	    Debug_Info = New_Debug_Info;
+
+	otherwise :
+	    Goal = _ |
+		computation_utils#call_list([Context#attributes(A)], Reply),
+		check_interpretable.
+
+procedure check_interpretable(Reply, A, Debug_Info, Debug_Info).
+check_interpretable(Reply, A, Debug_Info, New_Debug_Info) :-
+
+	Reply =?= false :
+	    A = _,
+	    New_Debug_Info = Debug_Info;
+
+	Reply =?= true,
+	A ? mode(interpret) :
+	    A' = _,
+	    New_Debug_Info = Debug_Info;
+
+	Reply =?= true,
+	A ? Other, Other =\= mode(_) |
+		self;
+
+	otherwise,
+	Debug_Info =?= {Breaks, Depth, _Execute_or_Interpret, Channels} :
+	    A = _,
+	    Reply = _,
+	    New_Debug_Info = {Breaks, Depth, execute, Channels}.
 
 /*************************************************************************/
 procedure unify_when_done(Done,Goals).
@@ -777,22 +842,21 @@ close_cntx(Context) :-
 /*************************************************************************/
 procedure monitor_subcomputation(Signals,SubComputation,SubComputation_Events).
 monitor_subcomputation(Signals,SubComputation,SubComputation_Events) :-
-	Signals = [],
-	unknown(SubComputation_Events),
-	SubComputation    = {Goal, IO, In_Stream} :
-	    SubComputation_Events = _,
-	    In_Stream ! abort, In_Stream' = _ |
-		try_to_write(display([subcomputation(Goal),
-					' - aborted.' | Q]\Q, [list]), IO),
-		true;
 
-	Signals?_Signal |
+	Signals?Signal, string(Signal),
+	SubComputation    = {Goal, IO, In} :
+	    In ! signal,
+	    SubComputation' = {Goal, IO, In'} |
 		monitor_subcomputation;
 
-	SubComputation_Events = [] :
-	    Signals = _,
-	    SubComputation = _ |
-		true;
+	Signals?_Signal,
+	otherwise |
+		monitor_subcomputation;
+
+	Signals = [],
+	SubComputation    = {Goal, IO, In} |
+		processor#machine(idle_wait(Done), _Ok),
+		end_subcomputation;
 
 	unknown(Signals),
 	SubComputation_Events = [Event | _SubComputation_Events],
@@ -801,13 +865,54 @@ monitor_subcomputation(Signals,SubComputation,SubComputation_Events) :-
 		true;
 
 	unknown(Signals),
+	SubComputation_Events = [terminated | _SubComputation_Events] :
+	    SubComputation    = {_Goal, _IO, []} |
+		true;
+
+	unknown(Signals),
 	SubComputation_Events?Event,
-	Event =\= failed(call(debug),failed(_,_)),
+	Event =\= failed(call(debug),failed(_,_)), Event =\= terminated,
 	SubComputation = {Goal, IO, Input} |
 		try_to_write(display([subcomputation(Goal), ' - ',
 					Event, '.' | Q] \ Q, [list]), IO),
 		choke_subcomputation(Event, Input),
-		monitor_subcomputation.
+		monitor_subcomputation;
+
+	SubComputation_Events = [] :
+	    Signals = _,
+	    SubComputation = {_Goal, _IO, []} |
+		true.
+
+end_subcomputation(Done, Goal, IO, In, SubComputation_Events) :-
+
+	SubComputation_Events ? _ |
+		self;
+
+	SubComputation_Events = [] :
+	    Done = _,
+	    Goal = _,
+	    IO = _,
+	    In = [];
+
+	known(Done),
+	unknown(SubComputation_Events) :
+	    In = [abort] |
+		wait_subcomputation.
+
+wait_subcomputation(Goal, IO, SubComputation_Events) :-
+
+	SubComputation_Events =?= [] :
+		Goal = _,
+		IO = _;
+
+	SubComputation_Events =?= [terminated | _] :
+		Goal = _,
+		IO = _;
+
+	otherwise |
+		try_to_write(display([subcomputation(Goal),-
+				SubComputation_Events | Q]\Q, [list]), IO).
+
 
 /*************************************************************************/
 procedure choke_subcomputation(Event,SubInput).
