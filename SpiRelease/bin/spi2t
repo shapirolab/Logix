@@ -11,11 +11,16 @@ my %Subs = ();
 
 sub normalize {
   my $other;
-  ($item, $other) = split /\./, shift(@_);
+  ($item, $other) = split /\.+/, shift(@_);
+# Skip multiple leading dots.
   if ($item eq "") {
     $item = $other;
   }
-  $item =~ s/^\s*(\S)\s*/$1/;
+  ($item, $other) = split /\s+/, $item;
+# Skip leading white space.
+  if ($item eq "") {
+    $item = $other;
+  }
   my $substitute = $Subs{$item};
   if ($substitute) {
     $item = $substitute;
