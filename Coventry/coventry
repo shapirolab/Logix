@@ -2,6 +2,8 @@
 #
 # Coventry - Monitor and re-nice TS queue processes.
 #
+# Note: killall is available on SGI, but not on Solaris
+#
 IS_ON=/etc/chkconfig
 COVENTRY=/usr/local/sbin
 COVENTRYD=$COVENTRY/coventryd
@@ -17,14 +19,14 @@ fi
 case $1 in
 	'start')
             if $IS_ON coventry && test -x $COVENTRYD; then
-	        killall coventryd
+	        killall -k 1 coventryd
 	        $ECHO Starting coventry daemon
 	        $COVENTRYD &
 	    fi
 	;;
 	'stop')
 	    $ECHO Stopping coventry daemon.
-	    killall coventryd
+	    killall -k 1 coventryd
 	;;
 	*)
             echo "usage: $0 {start|stop}"

@@ -117,6 +117,7 @@ if ($debug) {# debug
 
 $SIG{"INT"} = "clean_up";
 $SIG{"QUIT"} = "clean_up";
+$SIG{"TERM"} = "clean_up";
 
 # Main loop
 
@@ -153,12 +154,19 @@ while (not $stop) {
 sub clean_up
 {
     my $process;
+    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
 
+if ($debug) {# debug
+		 print "Cleaning up coventry!\n";
+}# endebug
     foreach $process (@coventry) {
+	($user, $unnice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
+	
+	setnice($process,
+		($class eq "gb" || $class eq "gn") ? 0 : $nice);
 if ($debug) {# debug
   print_refed_process("returned to society", $process);
 }# endebug
-	setnice($process, $process->[1]);
     }
     exit 0;
 }
@@ -250,7 +258,7 @@ sub setnice #(process, nice)
     }
     else {
       # $class eq "gn" || $class eq "gb"
-	$nice += $NDPRI_OFFSET;
+	$nice += $NDPRI_OFFSET if $nice;
 	return `setndpri $nice $pid`;
     }
 }
