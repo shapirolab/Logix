@@ -81,7 +81,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	self;
 
     In ? done(Child, Reply) |
-%	DEBUG(done/1, children),
+	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
 	self;
@@ -110,6 +110,12 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	diagnose_unremoved,
 	self;
 
+    In ? new_child(Child) :
+      Children' = [Child | Children] |
+	DEBUG(new_child, added-NewChildId),
+	TERMS(read_vector(AMBIENT_ID,Child,NewChildId)),
+	self;
+
     In ? new_id(Id),
     UniqueId++ :
       Id = UniqueId' |
@@ -124,7 +130,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     In ? suspend(Reply),
     Status =?= running :
       Reply = Status'? |
-%	DEBUG(suspend, suspending),
+	DEBUG(suspend, suspending),
 	processor # machine(idle_queue(Done, SYSTEM_IDLE_PRIORITY), _Ok),
 	control_children(suspend, Children, Children', Ready, Done?),
 	system_suspending(Ready?, SharedChannels, Status'),
@@ -137,7 +143,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 
     In ? resume(Reply),
     Status =?= suspended |
-%	DEBUG(resume, Status'),
+	DEBUG(resume, Status'),
 	system_resume(Scheduler, Children, Children', Status', Reply),
 	self;
 
@@ -153,7 +159,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 
     In ? resolvent(Resolvent),
     Status =?= suspended |
-%	DEBUG(resolvent, resolving),
+	DEBUG(resolvent, resolving),
 	resolve_children(Children, Children', Resolvent, []),
 	self;
 
@@ -205,7 +211,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     Events ? aborted :
       Status = _,
       Status' = aborted |
-%	DEBUG((system: event-aborted), ambient),
+	DEBUG((system: event-aborted), ambient),
 	abort_children(Children, Children'),
 	self;
 
@@ -311,7 +317,7 @@ watcher(RelayEvents, DIn, Done, SId, Domain, Ambient, Debug) :-
 */
 
     RelayEvents ? Other, Other =\= aborted |
-%	DEBUG(relay-Other, trash),
+	DEBUG(relay-Other, trash),
 	self;
 
     Done =?= done :
@@ -373,14 +379,14 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? done(Child, Reply) |
-%	DEBUG(done/1, children),
+	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
 	self;
 
     In ? NewId, NewId =?= new_id(_Id) :
       write_vector(AMBIENT_CONTROL, NewId, Parent, Parent') |
-%	DEBUG(NewId, pass),
+	DEBUG(NewId, pass),
 	self;
 
 /* Procedure Services */
@@ -492,7 +498,7 @@ serve_ambient(In, Events, FromSub, Done,
     In ? new_ambient(Name, ModuleId, Goal),
     ModuleId = [ModuleName | SId] :
       Children' = [NewAmbient'? | Children] |
-%	DEBUG(new_ambient, ambient),
+	DEBUG(new_ambient, ambient),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
 	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient,
 				Lookups, []),
@@ -503,14 +509,14 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? New, New = new_channel(_Creator, Channel, _BaseRate) :
       write_channel(New, Scheduler) |
-%	DEBUG(new_channel/3, scheduler),
+	DEBUG(new_channel/3, scheduler),
 	add_local_channel(Channel, LocalChannels, LocalChannels'),
 	self;
 
     In ? New, New = new_channel(_Creator, Channel, _ComputeWeight,
 					_BaseRate) :
       write_channel(New, Scheduler) |
-%	DEBUG(new_channel/4, scheduler),
+	DEBUG(new_channel/4, scheduler),
 	add_local_channel(Channel, LocalChannels, LocalChannels'),
 	self;
 
@@ -586,21 +592,23 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? new_child(Child) :
       Children' = [Child | Children] |
-%	DEBUG(new_child, added),
+	DEBUG(new_child, added-NewChildId),
+	TERMS(read_vector(AMBIENT_ID,Child,NewChildId)),
 	self;
 
 /* Capability Initialization */
 
     In ? delegate(Ambient^, Ready) :
       Ready = _ |
-%	DEBUG(delegate, Ready),
+	DEBUG(delegate, Ready),
 	self;
 
     In ? enter(Enterer, Ready) :
       write_vector(AMBIENT_CONTROL,
 		   change_parent(Ambient, Removed, Ready),
 		   Enterer, Enterer') |
-%	DEBUG("enter"(Removed, Ready), move_ambient),
+	DEBUG("enter"(Removed, Ready), move_ambient-NewParentId),
+        TERMS(read_vector(AMBIENT_ID,Ambient,NewParentId)),
 	remove_shared_communications(Enterer', SharedChannels, Scheduler,
 					Removed),
 	self;
@@ -609,7 +617,8 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL,
 		   change_parent(Parent, Removed, Ready),
 		   Exiter, Exiter') |
-%	DEBUG("exit"(Removed, Ready), move_ambient),
+	DEBUG("exit"(Removed, Ready), move_ambient-NewParentId),
+        TERMS(read_vector(AMBIENT_ID,Parent,NewParentId)),
 	remove_shared_communications(Exiter', SharedChannels, Scheduler,
 					Removed),
 	self;
@@ -622,7 +631,7 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL,
 		   extract(Goals, Ambient, Ready),
 		   MergingAmbient, MergingAmbient') |
-%	DEBUG(merge/2, merge(Goals)),
+	DEBUG(merge/2, merge(Goals)),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
 	merge_local_channels(Idle, Goals, MergedGoals, pass,
 			     MergingAmbient', Ambient, In'', In'),
@@ -635,7 +644,8 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Ready = true |
-%	DEBUG(change_parent, "no_remove"),
+        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
+	DEBUG(change_parent, NewParentId-"no_remove"),
 	self;
 
     In ? change_parent(Parent', true, Ready),
@@ -645,7 +655,8 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
-	DEBUG(change_parent, "remove p2c & all local communications"),
+	DEBUG(change_parent, NewParentId-"remove p2c & all local communications"),
+        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	remove_shared_communications(Ambient, SharedChannels, Scheduler,
 					Reply1),
 	copy_global_channels,
@@ -657,12 +668,8 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? extract(Goals, MergedAmbient, Ready) :
       Controls ! suspend |
-%	DEBUG(suspend/2, suspend-extract-send-resume),
+	DEBUG(suspend/2, suspend-extract-send-resume),
 	children_to_merged_ambient;
-
-    In ? new_child(Child) :
-      Children' = [Child | Children] |
-	self;
 
 /* Control Services */
 
@@ -735,14 +742,14 @@ serve_ambient(In, Events, FromSub, Done,
 
     Events ? Global,
     Global =?= event(global_channels(List)) |
-%	DEBUG(delegated-Global, scheduler),
+	DEBUG(delegated-Global, scheduler),
 	merge_global_channels(List, GlobalChannels, GlobalChannels',
 			      Scheduler),
 	self;
 
     Events ? Global,
     Global =?= event(global_channels(List, AmbientChannel)) |
-%	DEBUG(delegated-Global, scheduler),
+	DEBUG(delegated-Global, scheduler),
 	unify_without_failure(AmbientChannel, Ambient),
 	merge_global_channels(List, GlobalChannels, GlobalChannels',
 			      Scheduler),
@@ -755,21 +762,21 @@ serve_ambient(In, Events, FromSub, Done,
     FromSub ? delegated([], CCC),
     CCC = {_, Left, Right, _} :
       Left = Right |
-%	DEBUG(delegated-[], trash),
+	DEBUG(delegated-[], trash),
 	self;
 
     FromSub ? delegated(Message, CCC),
     Message =\= [],
     CCC = {_, Left, Right, _} :
       Left = Right |
-%	DEBUG((delegated-message = Message), computation),
+	DEBUG((delegated-message = Message), computation),
 	computation # Message,
 	self;
 
     FromSub ? request(From, Event, Latch, Latch^) :
       Event = _,
       From = _ |
-%	DEBUG((request-from(From) = Event), trash),
+	DEBUG((request-from(From) = Event), trash),
 	self;
 
     Done =?= done, Children =?= [] :
@@ -913,7 +920,7 @@ serve_ambient(In, Events, FromSub, Done,
 	      Event) :-
 
     Event =?= terminated |
-%	DEBUG(event-terminated, done),
+	DEBUG(event-terminated, done),
 	unify_without_failure(Done, done),
 	serve_ambient;
 
@@ -921,7 +928,7 @@ serve_ambient(In, Events, FromSub, Done,
       Controls = [],
       Requests = [],
       close_vector(AMBIENT_CONTROL, Ambient) | 
-%	DEBUG(event-aborted, done),
+	DEBUG(event-aborted, done),
 	unify_without_failure(Done, done),
 	abort_children(Children, Children'),
 	serve_ambient;
@@ -943,7 +950,7 @@ serve_ambient(In, Events, FromSub, Done,
 
     otherwise :
       Event = _ |
-%	DEBUG(event-Event, trash),
+	DEBUG(event-Event, trash),
 	serve_ambient.
 
   children_to_merged_ambient(In, Events, FromSub, Done,
@@ -957,7 +964,8 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL,
 		   change_parent(MergedAmbient, Removed, _Ready),
 		   Child) |
-%	DEBUG("exit"(Removed, Ready), move_ambient),
+	DEBUG("merge"(Removed, Ready), move_ambient-NewParentId),
+        TERMS(read_vector(AMBIENT_ID,MergedAmbient,NewParentId)),
 	remove_shared_communications(Child, SharedChannels, Scheduler,
 					Removed),
 	self;
@@ -1000,7 +1008,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_NAME, Channel, OtherId),
     OtherId =\= Id :
       NewChannelList ! Channel |
-%	DEBUG(lookup, mismatch - Id =\= OtherId),
+	DEBUG(lookup, mismatch - Id =\= OtherId),
 	self;
 
     ChannelList = [Global | _],
@@ -1828,7 +1836,7 @@ resume_controls_when_ready(Reply1, Reply2, Reply3, Ready,
 
 /***************************** formatting ***********************************/
 
-/**
+/*
 format_channel_tuple(Tuple, Out) :-
 
     arity(Tuple, Arity),
@@ -1960,4 +1968,4 @@ format_receive(Receives, Weight, Receive) :-
       Receives = _,
       Weight = _,
       Receive = no_receives.
-**/
+*/
