@@ -251,5 +251,4 @@ Notes:
    processes across ambients (e.g. to sum the counts for a given
    process in all ambients).
 
-2. The s and re (suspend and resume) macros invalidate the output of
-   a record macro.
+2. The re (resume) macro invalidates the output of a record macro.
