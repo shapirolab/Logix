@@ -4,9 +4,9 @@ Main control of Stochastic Pi Calulus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill SIlverman
 
 Last update by          $Author: bill $
-			$Date: 2002/05/15 08:10:08 $
+			$Date: 2002/08/14 08:31:43 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -106,9 +106,9 @@ interpret(Id, RPCGoal) + (SpiOptions = []) :-
     true:
       make_channel(BadOption, _) |
 	spi_utils # parse_options(SpiOptions, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(none)),
+		      Sender(no_sender), Which(none), Format(short)),
 	computation # events(Events),
-	do_debug(Events, Id, RPCGoal, [Depth,Sender,Which]).
+	do_debug(Events, Id, RPCGoal, [Depth,Sender,Which,Format]).
 
 /*************************************************************************/
 procedure do_debug(NonEmpty_Events, Id, RPCGoal, SpiOptions).
