@@ -673,11 +673,44 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
     ascii('A') =< Char2, Char2 =< ascii('Z') |
 	goal_channels;
 
+    nth_char(1, Name, Char1),
+    ascii('a') =< Char1, Char1 =< ascii('z') |
+	show_goal3 + (X = 2);
+
     otherwise,
     make_tuple(Index, Tuple),
     arg(1, Tuple, N) :
       N = Name,
       PiFcp = Tuple |
+	goal_channels1.
+
+  % Blocked code may begin with a lower-case directory name.
+  % Check the first character after '$'.
+
+  show_goal3(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right, Name, X) :-
+
+    X++,
+    nth_char(X, Name, Char1),
+    Char1 =:= ascii('$'),
+    nth_char(X', Name, Char2),
+    ascii('A') =< Char2, Char2 =< ascii('Z') |
+	goal_channels;
+
+    X++,
+    nth_char(X, Name, Char1),
+    Char1 =:= ascii('$'),
+    nth_char(X', Name, Char2),
+    Char2 =:= ascii('.') |
+	goal_channels;
+
+    X++,
+    otherwise,
+    X' < string_length(Name) |
+	self;
+
+    X++,
+    otherwise,
+    X' >= string_length(Name) |
 	goal_channels1.
 
 
@@ -1027,8 +1060,8 @@ show_goal_list(List, Depth, Sender, Which, Result, Left, Right) :-
 collect_resolvent_list(Resolvent, List) :-
 
     Resolvent ? Call,
-    Call = call(_, _) | % :
-%     List ! Call |   
+    Call = call(_, _) :
+      List ! Call |   
 	self;
 
     Resolvent ? [Name | _] # Goals |
@@ -1051,14 +1084,8 @@ collect_resolvent_list(Resolvent, List) :-
 
   collect_resolvent_goals(Name, Goals, List, NextList) :-
 
-    Goals ? Goal,
-    Goal =\= psi_send(_, _, _, _),
-    Goal =\= psi_receive(_, _, _, _) :
+    Goals ? Goal :
       List ! Name(Goal) |
-	self;
-
-    Goals ? _Wait,
-    otherwise |
 	self;
 
     Goals =\= [_ | _],
