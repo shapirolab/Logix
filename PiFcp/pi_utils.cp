@@ -1,38 +1,47 @@
 -language(compound).
 -mode(failsafe).
--export([make_channel/1, make_channel/4, parse_options/5,
+-export([make_channel/1, make_channel/3, make_channel/4, make_channel/6,
+	 parse_options/5,
 	 show_channel/3, show_goal/3, show_goals/3,
 	 show_resolvent/3, show_value/3,
 	 show_tree/3, close_tree/1,
 	 receive/2, send/2]).
 
 
-make_channel(Channel)+(Creator = "SYSTEM", VC = _, MsC = _) :-
+make_channel(Channel) :-
+	make_channel(Channel, "SYSTEM",  _,  _, 0, 0).
+make_channel(Channel, ReceiveMean, SendMean) :-
+	make_channel(Channel, "SYSTEM",  _,  _, ReceiveMean, SendMean).
+make_channel(Channel, Creator, VC, MsC) :-
+	make_channel(Channel, Creator, VC, MsC, 0, 0).
+make_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean) :-
     we(Channel) :
       make_channel(VC, MsC),
-      Channel = Creator(VC, MsC);
+      Channel = Creator(VC, MsC, ReceiveMean, SendMean);
     string(Channel), Channel =\= "_", Channel =\= "" |
 	computation#dictionary(add, Channel, V, R),
-	made_channel(Channel, Creator, VC, MsC, V, R).
+	made_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean, V, R).
 
-  made_channel(Channel, Creator, VC, MsC, V, R) :-
+  made_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean, V, R) :-
     R = new,
     string_to_dlist(Creator, CL, CT),
     string_to_dlist(Channel, Cl, []) :
       CT = [46 | Cl],
       make_channel(VC, MsC),
-      V = Creator'?(VC, MsC) |
+      V = Creator'?(VC, MsC, ReceiveMean, SendMean) |
 	list_to_string(CL, Creator');
     otherwise :
       Creator = _,
       VC = _,
       MsC = _,
+      ReceiveMean = _,
+      SendMean = _,
       V = _ |
 	screen#display(("pi_utils: Can't make_channel" : Channel - R)).
 
 
 send(Message, Channel) :-
-    Channel = _Creator(C, _Stream),
+    Channel = _Creator(C, _Stream, _RM, _SM),
     channel(C) :
       Ms = Sender?(Message, 1, _),
       write_channel(Ms, C) |
@@ -63,13 +72,13 @@ receive(Channel, Message) :-
 	computation#dictionary(find, Channel, V, R),
 	receive_message(Channel, Message, V, R);
 
-    Channel = Creator(C, Stream),
+    Channel = Creator(C, Stream, ReceiveMean, SendMean),
     Stream ? _Sender(_Message, _N, Choice),
     not_we(Choice) :
-      Channel' = Creator(C, Stream') |
+      Channel' = Creator(C, Stream', ReceiveMean, SendMean) |
 	self;
 
-    Channel = _Creator(_C, Stream),
+    Channel = _Creator(_C, Stream, _RM, _SM),
     Stream ? _Sender(M, N, Choice),
     we(Choice) :
       Stream' = _,
@@ -107,7 +116,7 @@ show_named_channel(Channel, Options, Display, Reply) :-
 	computation#display(("pi_utils: Can't show channel" : Channel-Reply));
 
     Reply =?= true,
-    Channel = Name(Vector, Stream), string(Name), vector(Vector) :
+    Channel = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector) :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
@@ -348,7 +357,7 @@ show_value(Argument, Options, Display) :-
 
 show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
-    Argument = Name(Vector, Stream), string(Name), vector(Vector),
+    Argument = Name(Vector, Stream, _, _), string(Name), vector(Vector),
     Depth =\= 0,
     unknown(Stream) :
       Which = _,
@@ -357,7 +366,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = Name,
       Left = Right;
 
-    Argument = Name(Vector, Stream), string(Name), vector(Vector),
+    Argument = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector),
     Depth =\= 0,
     Which =\= none,
     known(Stream) :
@@ -365,7 +374,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = (Name = Content) |
 	show_channel_content;
 
-    Argument = Name(Vector, Stream), string(Name), vector(Vector),
+    Argument = Name(Vector, Stream, _RM, _SM), string(Name), vector(Vector),
     Depth =\= 0,
     Which =?= none,
     known(Stream) :
@@ -374,7 +383,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = (Name!),
       Left = Right;
 
-    Argument = Name(Vector, _Stream), string(Name), vector(Vector),
+    Argument = Name(Vector, _Stream, _RM, _SM), string(Name), vector(Vector),
     Depth =?= 0 :
       Which = _,
       Sender = _,
@@ -419,11 +428,11 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Display = Argument,
       Left = Right;
 
-    Argument = Name(_Vector, _Stream), unknown(Name) :
+    Argument = Name(_Vector, _Stream, _RM, _SM), unknown(Name) :
       PiMacro = _ |
 	show_compound;
 
-    Argument = _Name(Vector, _Stream), unknown(Vector) :
+    Argument = _Name(Vector, _Stream, _RM, _SM), unknown(Vector) :
       PiMacro = _ |
 	show_compound;
 
@@ -443,7 +452,7 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
     Argument ? A :
       Display ! D |
 	show_argument(A, Which, Depth, Sender, false, D, Left, Left'?),
-	self;
+	show_argument + (PiMacro = false);
 
    otherwise :
       Which = _,

@@ -56,38 +56,39 @@ merge_channels(List, Global, New_Global, Last) :-
       Last = _,
       New_Global = Global;
 
-    List ? Name(NewChannel), string(Name), Last @< Name,
+    List ? Name(NewChannel, _ReceiveMean, _SendMean), string(Name),
+    Last @< Name,
     we(NewChannel),
     Global ? Name(PiChannel),
-    PiChannel = Id(Vector, Stream) :
-      NewChannel = Id(Vector, Stream'?),
+    PiChannel = Id(Vector, Stream, ReceiveMean, SendMean) :
+      NewChannel = Id(Vector, Stream'?, ReceiveMean, SendMean),
       New_Global ! Name(NewChannel),
+      Last = _,
       Last' = Name |
 	cdr_past_msgs(Stream, Stream'),
 	self;
 
-    List = [Name(_)|_], string(Name), Last @< Name,
+    List = [Name(_, _, _)|_], string(Name),
     Global ? Entry,
-    Entry = Name1(_ICh),
-    Name1 @< Name :
+    Entry = Last'(_GlobalChannel),
+    Last' @< Name :
       Last = _,
-      New_Global ! Entry,
-      Last' = Name1 |
+      New_Global ! Entry |
 	self;
 
-    List ? Entry,
-    Entry = Name(NewChannel),
+    List ? Name(NewChannel, ReceiveMean, SendMean),
     we(NewChannel),
-    Global = [Name1(_ICh) | _], string(Name), Last @< Name,
-    Name @< Name1,
+    Global = [Name1(_GlobalChannel) | _],
+    string(Name),
+    Last @< Name, Name @< Name1,
     string_to_dlist("global.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = PiChannel?,
-      New_Global ! Entry,
+      New_Global ! Name(NewChannel),
       GT = NL,
       Last' = Name |
 	list_to_string(GL, Id),
-	pi_channel(PiChannel, Id?, _, _),
+	pi_channel(PiChannel, Id?, _, _, ReceiveMean, SendMean),
 	self;
 
     otherwise :

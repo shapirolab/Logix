@@ -10,28 +10,36 @@ string(Text) :- true : Text =
 
 -language(compound).
 
-pi_channel(Channel)+(Creator = 'SYSTEM', VC = _, MsC = _) :-
+pi_channel(Channel) :-
+	pi_channel(Channel, 'SYSTEM', _VC, _MsC, 0, 0).
+pi_channel(Channel, ReceiveMean, SendMean) :-
+	pi_channel(Channel, 'SYSTEM', _VC, _MsC, ReceiveMean, SendMean).
+pi_channel(Channel, Creator, VC, MsC) :-
+	pi_channel(Channel, Creator, VC, MsC, 0, 0).
+pi_channel(Channel, Creator, VC, MsC, ReceiveMean, SendMean) :-
     we(Channel) :
       make_channel(VC, MsC),
-      Channel = Creator(VC, MsC);
+      Channel = Creator(VC, MsC, ReceiveMean, SendMean);
     otherwise :
       Creator = _,
       VC = _,
-      MsC = _ |
+      MsC = _,
+      ReceiveMean = _,
+      SendMean = _ |
 	computation#display(('pi_utils: Can''t make channel' : Channel)).
 
 pi_send(Message, Channel) :-
-    Channel = _Creator(C, _Stream),
+    Channel = _Creator(C, _Stream, _, _),
     channel(C) :
       Ms = Sender?(Message, 1, _),
       write_channel(Ms, C) |
 	pi_monitor#unique_sender('PI_SEND.send', Sender);
     otherwise :
       Message = _ |
-	computation#display(('pi_utils: Can''t send to' : Channel)).
+	computation#display(('fubar: Can''t send to' : Channel)).
 
 pi_send(Sender, Message, Channel) :-
-    Channel = _Creator(C, _Stream),
+    Channel = _Creator(C, _Stream, _, _),
     channel(C) :
       Ms = Sender(Message, 1, _),
       write_channel(Ms, C);
@@ -41,12 +49,12 @@ pi_send(Sender, Message, Channel) :-
 	computation#display(('pi_utils: Can''t send to' : Channel)).
 
 pi_receive(Channel, Message) :-
-    Channel = Creator(C, Stream),
+    Channel = Creator(C, Stream, ReceiveMean, SendMean),
     Stream ? _Sender(_Message, _N, Choice),
     not_we(Choice) :
-      Channel' = Creator(C, Stream') |
+      Channel' = Creator(C, Stream', ReceiveMean, SendMean) |
 	self;
-    Channel = _Creator(_C, Stream),
+    Channel = _Creator(_C, Stream, _, _),
     Stream ? _Sender(M, N, Choice),
     we(Choice) :
       Stream' = _,

@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/14 08:35:03 $
+		       	$Date: 2000/02/23 11:47:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -241,7 +241,7 @@ make_predicate_list(Operator, List, Predicates) :-
 sort_out_duplicates(InLists, Out, Reply) :-
 
 	concatenate_lists(InLists, List),
-	ordered_merger(Merger, Reply, ok),
+	ordered_merger(Merger, Reply, []),
 	utils#binary_sort_merge(List, Out, Merger).    
 
 ordered_merger(In, Left, Right) :-

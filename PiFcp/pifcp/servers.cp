@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/14 08:35:03 $
+		       	$Date: 2000/02/23 11:47:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -165,7 +165,7 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
     Index++ :
-      Tail ! ChannelName(`ChannelName) |
+      Tail ! ChannelName(`ChannelName, 0, 0) |
 	self;
 
     Index > arity(Tuple),
@@ -772,22 +772,25 @@ make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
       Prime = [39],
 
       Iterates =
-	{(`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss)},
+	{(`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
+				`spcm(receive), `spcm(send)},
 	   `pifcp(mss) = [{`"_", `"_", `"_", `pifcp(choice)}
 			 | `pifcp(mssp)],
 	   not_we(`pifcp(choice)) :
-	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp)} |
+	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
+					`spcm(receive), `spcm(send)} |
 		self),
 
-	  (`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss)},
+	  (`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
+				`spcm(receive), `spcm(send)},
 	   `pifcp(mss) =?= [{`SendId, `"_", `"_", `pifcp(chosen)}
 			   | `pifcp(mssp)] :
-	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv),
-					?pifcp(mssp)} |
+	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
+					`spcm(receive), `spcm(send)} |
 		self)
 	},
 
-      Consume = (`ChannelName = {`"_", `"_", `pifcp(mss)},
+      Consume = (`ChannelName = {`"_", `"_", `pifcp(mss), `"_", `"_"},
 	 `pifcp(mss) =?= [{`Sender, ChannelList, `pifcp(tag), `pifcp(choose)}
 			 | `"_" /*pifcp(mssp)*/],
 	  ExcludeSender? :
@@ -817,7 +820,7 @@ make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
 
     true :
       VN = pinch(ChannelName),
-      Guard = {`ChannelName = {`"_", `VN, `"_"},
+      Guard = {`ChannelName = {`"_", `VN, `"_", `"_", `"_"},
 		write_channel({Sender, ChannelList, SendIndex, `pifcp(chosen)},
 				`VN)} .
 

@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/31 13:51:15 $
+		       	$Date: 2000/02/23 11:47:38 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -52,6 +52,9 @@ expand(Command, Cs) :-
 
     Command = pc(N) :
       Cs = [to_context(pi_utils # make_channel(N)) | Commands]\Commands;
+
+    Command = pc(N, R, S) :
+      Cs = [to_context(pi_utils # make_channel(N, R, S)) | Commands]\Commands;
 
     Command = pdb(Service) :
       Cs = [to_context(pi_monitor # options(O, O)),
@@ -210,6 +213,12 @@ expand(Command, Cs) :-
 
     Command = forward(Any) :
       Cs = [Any | Commands]\Commands;
+
+% For testing only!
+
+    Command = tpf(N) :
+      Cs = [to_context(computation # display(stream,Results, [type(unparse)])),
+	    pi_macros # transform(N, Results) |Commands]\Commands;
 
 % To retain system-macro and normal shell capabilities, forward generated
 % commands to the shell via the  Commands  difference list.

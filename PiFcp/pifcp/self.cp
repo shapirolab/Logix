@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/13 09:03:08 $
+		       	$Date: 2000/02/23 11:47:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -89,8 +89,23 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
     GlobalList =?= [] :
       Tail = Old,
       Errors = NextErrors |
-	utils#binary_sort_merge(Head, New).
+	piutils#sort_out_duplicates([Head], New, Reply),
+	diagnose_duplicates + (Diagnostic = duplicate_global_channel).
 
+
+  diagnose_duplicates(Reply, Diagnostic, Errors, NextErrors) :-
+
+    Reply ? Duplicate :
+      Errors ! Diagnostic(Duplicate) |
+	self;
+
+    Reply =?= [] :
+      Diagnostic = _,
+      Errors = NextErrors;
+
+    otherwise :
+      Reply = _,
+      Errors = [Diagnostic | NextErrors].
 
 /************************* Program Transformations ***************************/
 
@@ -177,7 +192,8 @@ process(Status, RHSS, Scope, Process, Nested) :-
     string_to_dlist(Channel, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       MakeChannel = make_channel(`pinch(Channel), `pimss(Channel)),
-      NameChannel = (`Channel = ChannelId?(?pinch(Channel), ?pimss(Channel))),
+      NameChannel = (`Channel = ChannelId?(?pinch(Channel), ?pimss(Channel),
+			0, 0)),
       Dt = Suffix,
       PS = DotName |
 	list_to_string(PH, ChannelId).
