@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/06 13:37:28 $
+		       	$Date: 2000/11/12 10:44:06 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -264,6 +264,42 @@ ordered_merge(In1, In2, Out, Left, Right) :-
 
     In1 = [I1 | _], In2 ? I2,
     arg(1, I1, A), arg(1, I2, A) :
+      Left ! A |
+	ordered_merge;
+
+    In1 ? I1, In2 = [I2 | _],
+    string(I1), arg(1, I2, A2),
+    I1 @< A2 :
+      Out ! I1 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    string(I1), arg(1, I2, A2),
+    A2 @< I1 :
+      Out ! I2 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    string(I1), arg(1, I2, A),
+    I1 =?= A :
+      Left ! A |
+	ordered_merge;
+
+    In1 ? I1, In2 = [I2 | _],
+    arg(1, I1, A1), string(I2),
+    A1 @< I2 :
+      Out ! I1 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    arg(1, I1, A1), string(I2),
+    I2 @< A1 :
+      Out ! I2 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    arg(1, I1, A), string(I2),
+    A =?= I2 :
       Left ! A |
 	ordered_merge;
 

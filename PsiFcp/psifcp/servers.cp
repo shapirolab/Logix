@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/06 13:37:27 $
+		       	$Date: 2000/11/12 10:44:05 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -623,7 +623,8 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 
     true :
       ProcessDefinition = {Name?, Arity?, ChannelNames?, LHSS, _CodeTuple},
-      LHSS = {OuterLHS?, InnerLHS?} |
+      LHSS = {OuterLHS?, InnerLHS?},
+      Notes ! variables(Parameters?) |
 	parse_lhs(PiLHS, WeightRate, Name, Arity,
 			ParamList, ChannelList, NewChannelList,
 				Errors, Errors'?),
@@ -631,7 +632,7 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 			Name?, duplicate_parameter,
 				Errors', Errors''?),
 	utilities#sort_out_duplicates([ChannelList?], ChannelList1, DChs),
-	check_duplicates_reply(DChs?, Name?, duplicate_channel,
+	diagnose_replies(DChs?, Name?, duplicate_channel,
 				Errors'', Errors'''?),
 	utilities#sort_out_duplicates([NewChannelList?], NewChannelList1, _),
 	utilities#concatenate_lists([ParamList1?, ChannelList1?], LocalList),
@@ -642,9 +643,14 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 				ChannelList1?, ChannelList2),
 	make_lhs_tuples(Name?, ParamList1?, GlobalNames, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
+	extract_parameters(NewChannelList1?, Parameters, ParameterNames),
+	atom_to_arguments(OuterLHS, Arguments),
+	utilities#subtract_list(ParameterNames, Arguments, Undeclared),
+	diagnose_replies(Undeclared, Name, undeclared_parameter,
+				Errors'''', Errors'''''?),
 	optimize_procedures(NewDefinition, Notes, Out, Out'?),
-	serve_process_scope(ProcessScope?, NewDefinition, WeightRate, Notes,
-				Out', NextOut, Errors'''', NextErrors).
+	serve_process_scope(ProcessScope?, NewDefinition, WeightRate, Notes',
+				Out', NextOut, Errors''''', NextErrors).
 
   correct_for_duplication(L1, L2, P, C1, C2) :-
 
@@ -656,6 +662,16 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
       L1 = _,
       C1 = _ |
 	utilities#subtract_list(L2, P, C2).
+
+  atom_to_arguments(Atom, Arguments) + (Index = 2) :-
+
+    Index++ =< arity(Atom),
+    arg(Index, Atom, `Name) :
+      Arguments ! Name |
+	self;
+
+    Index > arity(Atom) :
+      Arguments = [].
 
 optimize_procedures(ProcessDefinition, Notes, Out, NextOut) :-
 
@@ -736,7 +752,6 @@ export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
       Export = false,
       NextExports = Exports.
 
-
 add_process_definition(ProcessDefinition, PLHSS, Progeny, NewProgeny) :-
 
     ProcessDefinition =?= {Name, _Arity, _ChannelNames, LHSS, _CodeTuple},
@@ -748,6 +763,88 @@ add_process_definition(ProcessDefinition, PLHSS, Progeny, NewProgeny) :-
       ProcessDefinition = _,
       PLHSS = [],
       NewProgeny = Progeny.
+
+extract_parameters(Declarations, Parameters, Names) :-
+
+    Declarations ? String, string(String) |
+	self;
+
+    Declarations ? _ChannelName(BaseRate),
+    BaseRate =?= infinite |
+	self;
+
+    Declarations ? _ChannelName(BaseRate),
+    BaseRate =\= infinite |
+	validate_arguments([BaseRate], Parameters, Parameters'?,
+				Names, Names'?),
+	self;
+
+    Declarations ? _ChannelName(BaseRate, Weighter), string(Weighter) |
+	validate_arguments([BaseRate], Parameters, Parameters'?,
+				Names, Names'?),
+	self;
+
+    Declarations ? _ChannelName(BaseRate, Weighter),
+    Weighter =?= `Name :
+      Parameters ! Weighter,
+      Names ! Name |
+	validate_arguments([BaseRate], Parameters', Parameters''?,
+				Names', Names''?),
+	self;
+
+    Declarations ? _ChannelName(BaseRate, Weighter),
+    Weighter =\= `_,
+    tuple(Weighter) |
+	utils#tuple_to_dlist(Weighter, [Functor, _ | Arguments], []),
+	validate_weighter_functor(Functor, Parameters, Parameters'?,
+					Names, Names'?),
+	validate_arguments([BaseRate | Arguments?], Parameters', Parameters''?,
+				Names', Names''?),
+	self;
+
+    Declarations ? _ChannelName(_BaseRate, Weighter),
+    otherwise :
+      Names ! Weighter |
+	self;
+
+    Declarations = [] :
+      Parameters = [],
+      Names = [].
+
+  validate_weighter_functor(Functor, Parameters, NextParameters,
+				Names, NextNames) :-
+
+    string(Functor) :
+      Parameters = NextParameters,
+      Names = NextNames;
+
+    Functor = `Name :
+      Parameters = [Functor | NextParameters],
+      Names = [Name | NextNames];
+
+    otherwise :
+      Parameters = NextParameters,
+      Names = [Functor | NextNames].
+
+  validate_arguments(Arguments, Parameters, NextParameters,
+			Names, NextNames) :-
+
+    Arguments ? Number, number(Number) |
+	self;
+
+    Arguments ? Variable, Variable =?= `Name :
+      Parameters ! Variable,
+      Names ! Name |
+	self;
+
+    Arguments ? Other,
+    otherwise :
+      Names ! Other |
+	self;
+
+    Arguments = [] :
+      Parameters = NextParameters,
+      Names = NextNames.
 
 
 parse_lhs(PiLHS, WeightRate, Name, Arity, ParamList,
@@ -790,7 +887,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     Channels ? ChannelName,
     string(ChannelName),
     nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
-    WeightRate = PSI_DEFAULT_WEIGHT_NAME(BaseRate) :
+    WeightRate =?= PSI_DEFAULT_WEIGHT_NAME(BaseRate) :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
 	self;
@@ -838,10 +935,27 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
       NewChannelList ! ChannelName(BaseRate) |
 	self;
 
+    Channels ? ChannelName(BaseRate),
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    BaseRate =?= `_ :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(BaseRate) |
+	self;
+
     Channels ? ChannelName(BaseRate, Weighter),
     string(ChannelName),
     nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
     number(BaseRate), BaseRate >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
+	validate_new_weighter(Weighter, NewWeighter, Errors, Errors'?),
+	self;
+
+    Channels ? ChannelName(BaseRate, Weighter),
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    BaseRate = `_ :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
 	validate_new_weighter(Weighter, NewWeighter, Errors, Errors'?),
@@ -860,27 +974,41 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 
   validate_new_weighter(Weighter, NewWeighter, Errors, NextErrors) :-
 
-    /* Ammend this procedure for variable weighter, variable weighter name */
     string(Weighter), nth_char(1, Weighter, C),
     ascii('a') =< C, C =< ascii('z') :
       NewWeighter = Weighter,
       Errors = NextErrors;
 
-    tuple(Weighter), arg(1, Weighter, Name),
+    Weighter = `Name,
+    string(Name), nth_char(1, Name, C),
+    ascii('A') =< C, C =< ascii('Z') :
+      NewWeighter = Weighter(`"_"),
+      Errors = NextErrors;
+
+    tuple(Weighter),
+    arg(1, Weighter, Name),
     string(Name), nth_char(1, Name, C),
     ascii('a') =< C, C =< ascii('z') |
-	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
+	utils#tuple_to_dlist(Weighter, [Name | Args], []),
 	validate_new_weighter_params,
 	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
+
+    tuple(Weighter), Weighter =\= `_ |
+	utils#tuple_to_dlist(Weighter, [Variable | Args], []),
+	validate_new_weighter_params,
+	utils#list_to_tuple([Variable, `"_" | Params], NewWeighter);
 
     otherwise :
       Errors = [invalid_new_weighter(Weighter) | NextErrors],
       NewWeighter = PSI_DEFAULT_WEIGHT_NAME.
 
-  /* Ammend this procedure for variable parameters */
   validate_new_weighter_params(Args, Params, Errors, NextErrors) :-
 
     Args ? Arg, number(Arg) :
+      Params ! Arg |
+	self;
+
+    Args ? Arg, Arg = `_ :
       Params ! Arg |
 	self;
 
@@ -1107,7 +1235,7 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
   local_or_prime(ChannelName, ChannelNames, 
 	Locals, NextLocals, Primes, NextPrimes) :-
 
-    ChannelNames = [ChannelName | _],
+    ChannelNames = [ChannelName | _],
     string_to_dlist(ChannelName, CL, Prime) :
       Prime = [39],
       Locals = NextLocals,
@@ -1125,13 +1253,13 @@ parse_message(Name, ChannelNames, Message, MsChannelNames, Locals, Primes,
 diagnose_duplicates(List1, List2, Name, Diagnostic, Errors, NextErrors) :-
 
 	utilities#remove_duplicate_strings(List1, List2, Reply),
-	check_duplicates_reply.
+	diagnose_replies.
 
 
-check_duplicates_reply(Reply, Name, Diagnostic, Errors, NextErrors) :-
+diagnose_replies(Reply, Name, Diagnostic, Errors, NextErrors) :-
 
-    Reply ? Duplicate :
-      Errors ! (Name - Diagnostic(Duplicate)) |
+    Reply ? Erroneous :
+      Errors ! (Name - Diagnostic(Erroneous)) |
 	self;
 
     Reply =?= [] :
