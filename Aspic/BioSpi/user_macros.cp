@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2003/06/20 14:18:53 $
+		       	$Date: 2004/05/31 06:35:07 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.14 $
+			$Revision: 1.15 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -104,13 +104,14 @@ expand(Command, Cs) :-
 		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
 		"",
-		"        options for sp* :",
-		" none/note/active   - type of messages displayed",
-		" sender/no_sender   - show name of message sender",
-		"       format options for record and trace :",
-		"           short/process/creator/full",
-		"       format options for channel display :",
-		"             short/base/creator/full"
+		"        name options for channel display",
+		"             short/base/creator/full",
+		"        annotation options for channel display:",
+                "             none/active/note",
+		"        additional option for ptree:",
+		"           process replaces base above",
+                "           goal order:",
+		"             prefix/execute"
 		
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
