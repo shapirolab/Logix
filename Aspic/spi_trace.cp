@@ -66,7 +66,7 @@ runit(Goal, File, Cutoff, Scale, Format) :-
 	write_channel(debug(Stream), Scheduler, Scheduler'),
 	write_channel(cutoff(Cutoff), Scheduler'),
 	computation#[Goal, events(Events)],
-	spi_utils#show_value(Values?, [Style, 0], Processes),
+	spi_utils#show_value(Values?, [Style, 3], Processes),
 	synchronize_output,
 	screen#display_stream(Out?, [put(File), width(10000)]),
 	filter_data;
