@@ -3,6 +3,7 @@
 -export([make_channel/1, make_channel/2, make_channel/3,
 	 make_channel/4, make_channel/5,
 	 parse_options/5,
+	 "SPC"/1, "SPC"/2,
 	 show_channel/3, show_goal/3, show_goals/3,
 	 show_resolvent/3, show_value/3,
 	 show_tree/3, close_tree/1,
@@ -106,6 +107,14 @@ receive(Channel, Message) + (Stream = _) :-
       V = _ |
 	computation#display(("pi_utils: Can't receive from" : Channel - R)).
     
+
+"SPC"(Channel) :-
+	pi_monitor#options(Options, Options),
+	"SPC"(Channel, Options?).
+
+"SPC"(Channel, Options) :-
+	computation#display(term, Display, known(Display)),
+	show_channel.
 
 show_channel(Channel, Options, Display) :-
 
@@ -230,7 +239,7 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Stream = _,
       Depth = _,
       Sender = _,
-      Content = "?",
+      Content = "!",
       Left = Right.
 
 show_message(Id, Message, Tag, Choice, Stream, Which, Depth, Sender, Content,
