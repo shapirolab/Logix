@@ -36,11 +36,11 @@ capability indicator - e.g.
 
    from record(porin#"System",ppp,10,creator) :
 
-      -molecule(3):Molecule.0 -> enter public.cell1
-      -cell(6):Porin.0 <- accept public.cell1
+      -molecule(3):Molecule.0 -> enter cell1
+      -cell(6):Porin.0 <- accept cell1
 
-      -molecule(2):Molecule.0 -> exit public.cell2
-      -cell(6):Porin.0 <- expel public.cell2
+      -molecule(2):Molecule.0 -> exit cell2
+      -cell(6):Porin.0 <- expel cell2
 
    from record(complex_merge#"System",mmm,10,full) :
 
