@@ -1,20 +1,20 @@
 /*
-Precompiler for compound procedures.
+Precompiler for Pi Calculus procedures.
 
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/15 13:46:21 $
+		       	$Date: 1999/12/21 12:35:05 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
-% -export([transform/5]).
-% -mode(trust).
+-export([transform/5]).
+-mode(interrupt).
 -language(compound).
 
 /*
@@ -88,11 +88,12 @@ serve_empty_scope(In, Exports, Errors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(LHS, ProcessScope) |
+    In ? process(LHS, Status, ProcessScope) |
 	make_process_scope(LHS, ProcessScope, [],
-			In'', In'?, ProcessDefinition, Errors, Errors'?),
-	export_process(ProcessDefinition?, Exports, Exports'?),
-	add_process_definition(ProcessDefinition?, Progeny, Progeny'),
+			In'', In'?, NewDefinition, Errors, Errors'?),
+	compute_status,
+	export_process(NewDefinition?, Exports, Exports'?),
+	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
     In = [] :
@@ -110,11 +111,12 @@ serve_empty_scope(In, Exports, Errors) +
 **
 **   In is the request input stream:
 **
-**      atoms(Outer, Inner) - return ProcessDefinition OuterAtom and InnerAtom.
+**      atoms(Outer, Inner) - return ProcessDefinition's
+**                            OuterAtom and InnerAtom.
 **
-**      body_receive(Channel, Body) - verify channel; construct body.
+**      body_receive(Channel, Body, ChannelVar, ChannelList)
 **
-**      body_send(Message, Channel, PiChannel, PiMessage)
+**      body_send(Message, Channel, Sender, ChannelList, ChannelVar)
 **
 **          
 **
@@ -153,21 +155,27 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
       Inner = InnerAtom |
 	self;
 
-    In ? body_receive(Channel, Body),
-    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
-	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
-	make_body_receive,
+    In ? body_receive(Channel, Message, ChannelVar, ChannelList),
+    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+      ChannelVar = `ChannelName |
+	verify_channel(Name, Channel, Channels, Locals,
+			ChannelName, Errors, Errors'?),
+	message_to_channels(ProcessDefinition, true, Message, MChannels,
+				Errors', Errors''?),
+	channels_to_variables(MChannels?, Variables, N),
+	make_channel_list,
 	self;
 
-    In ? body_send(Message, Channel, Channel', PiMessage),
+    In ? body_send(Message, Channel, Sender, ChannelList, ChannelVar),
     ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
-      PiMessage = {Sender?, ChannelList?, 1, `"_"} |
-	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
-	message_to_channels(ProcessDefinition, Message, MessageChannels,
+      ChannelVar = `ChannelName |
+	verify_channel(Name, Channel, Channels, Locals,
+			ChannelName, Errors, Errors'?),
+	make_sender,
+	message_to_channels(ProcessDefinition, false, Message, MChannels,
 				Errors', Errors''?),
 	/* Check channels */
-	make_sender,
-	channels_to_variables(MessageChannels?, Variables, N),
+	channels_to_variables(MChannels?, Variables, N),
 	make_channel_list,
 	self;
 
@@ -182,18 +190,32 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
       Cs = Channels |
 	self;
 
+    In ? error(Description),
+    arg(1, ProcessDefinition, Name) :
+      Errors ! (Name - Description) |
+	self;
+
     In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
     ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
-      Locals = _, Primes = _ |
-	verify_channel(Name, Channel, Channels, Channel', Errors, Errors'?),
+      Primes = _ |
+	verify_channel(Name, Channel, Channels, Locals,
+			Channel', Errors, Errors'?),
 	parse_message(ProcessDefinition, Message, ChannelList,
 			Locals', Primes', Errors', Errors''?),
 	make_guard_receive,
 	self;
 
-    In ? error(Description),
-    arg(1, ProcessDefinition, Name) :
-      Errors ! (Name - Description) |
+    In ? guard_send(Channel, Message, SendId, SendIndex, Guard),
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+	verify_channel(Name, Channel, Channels, Locals,
+			ChannelName, Errors, Errors'?),
+	message_to_channels(ProcessDefinition, false, Message, MChannels,
+				Errors', Errors''?),
+	/* Check channels */
+	channels_to_variables(MChannels?, Variables, N),
+	make_channel_list,
+	make_guard_sender,
+	make_guard_send,
 	self;
 
     In ? lookup_functor(Functor, CallType, CallDefinition),
@@ -219,12 +241,13 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 	list_to_string(DL, Id),
 	self;
 
-    In ? process(LHS, ProcessScope),
+    In ? process(LHS, Status, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
 	concatenate(Locals, Channels, GlobalList),
 	make_process_scope(LHS, ProcessScope, GlobalList,
-			In'', In'?, CallDefinition, Errors, Errors'?),
-	add_process_definition(CallDefinition?, Progeny, Progeny'),
+			In'', In'?, NewDefinition, Errors, Errors'?),
+	compute_status,
+	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
     In ? remote_call(Call1, Call2),
@@ -233,11 +256,6 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 			Errors, Errors'?, 2, channels),
 	complete_remote_call(ProcessDefinition, Call1, Arguments, Call2,
 				Errors', Errors''?),
-	self;
-	
-    In ? status(Status),
-    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} |
-	compute_status,
 	self;
 
     In = [] :
@@ -366,18 +384,18 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 				Out, NextOut, Errors'''', NextErrors).
 
 
-compute_status(OuterAtom, InnerAtom, Status) :-
+compute_status(NewDefinition, Status) :-
 
+    NewDefinition = {_Name, _Arity, _Channels, OuterAtom, _InnerAtom},
     OuterAtom =?= [] :
-      InnerAtom = _,
       Status = nil;    
 
+    NewDefinition = {_Name, _Arity, _Channels, OuterAtom, InnerAtom},
     OuterAtom =\= [], OuterAtom =?= InnerAtom :
       Status = single;
 
     otherwise :
-      OuterAtom = _,
-      InnerAtom = _,
+      NewDefinition = _,
       Status = double.
 
 export_process(ProcessDefinition, Exports, NextExports) :-
@@ -577,44 +595,74 @@ make_guard_receive(Channel, ChannelList, SendId, Iterates, Consume) :-
 
       Consume = (`Channel = {`"_", `"_", `"Mss"},
 		 `"Mss" ? {`Sender, ChannelList, `"ChoiceTag", `"Choose"},
-		 ExcludeSender? :
-		   `"Choose" = `"ChoiceTag"),
+		 ExcludeSender? : CancelSends?),
+      Choose = (`"Choose" = `"ChoiceTag"),
 
       TestWe = we(`"Choose") |
 
 	list_to_string(CL, ChannelP),
-	exclude_sender.
+	receive_sender.
 
-  exclude_sender(SendId, Sender, TestWe, ExcludeSender) :-
+  receive_sender(SendId, Sender, TestWe, ExcludeSender, Choose, CancelSends) :-
 
     SendId =?= "_" :
       Sender = "_",
-      ExcludeSender = TestWe;
+      ExcludeSender = TestWe,
+      CancelSends = Choose;
 
     otherwise :
       Sender = "Sender",
-      ExcludeSender = (`SendId =\= `Sender, TestWe).
+      ExcludeSender = (`SendId =\= `Sender, TestWe),
+      CancelSends = (`"Chosen" = 0, Choose).
 
 
-make_sender(Name, Channel, Sender) :-
+make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
+
+    string_to_dlist('V', VL, VS),
+    string_to_dlist(ChannelName, Suffix, []) :
+      VS = Suffix,
+      Guard = {`ChannelName = {`"_", `VN, `"_"},
+		write_channel({Sender, ChannelList, SendIndex, `"Chosen"},
+				`VN)} |
+	list_to_string(VL, VN).
+
+  make_guard_sender(SendId, Name, ChannelName, Sender) :-
+
+    SendId =?= "_" |
+	make_sender;
+
+    otherwise :
+      Name = _,
+      ChannelName = _,
+      Sender = `SendId.
+
+
+make_sender(Name, ChannelName, Sender) :-
 
     string_to_dlist(Name, NL, NC),
-    string_to_dlist(Channel, CL, []) :
+    string_to_dlist(ChannelName, CL, []) :
       NC = [46 | CL] |
 	list_to_string(NL, Sender).
 
-message_to_channels(ProcessDefinition, Message, Channels,
-		Errors, NextErrors) + (Index = 1) :-
+
+message_to_channels(ProcessDefinition, Underscore, Message, Channels,
+			Errors, NextErrors) + (Index = 1) :-
 
     Message = [] :
       ProcessDefinition = _,
+      Underscore = _,
       Index = _,
       Channels = [],
       Errors = NextErrors;
 
     arg(Index, Message, Channel), string(Channel), Channel =\= "",
-    Index++ :
+    Underscore =\= true, Index++ :
       Channels ! Channel |
+	self;
+
+    arg(Index, Message, Channel), string(Channel), Channel =\= "",
+    Underscore =?= true, Index++ :
+      Channels ! `"_" |
 	self;
 
     arg(Index, Message, `Anonymous), Anonymous =?= "_",
@@ -624,6 +672,7 @@ message_to_channels(ProcessDefinition, Message, Channels,
 
     Index > arity(Message) :
       ProcessDefinition = _,
+      Underscore = _,
       Message = _,
       Channels = [],
       Errors = NextErrors;
@@ -638,40 +687,35 @@ message_to_channels(ProcessDefinition, Message, Channels,
 
     otherwise,
     arg(1, ProcessDefinition, Name) :
+      Underscore = _,
       Index = _,
       Channels = [],
       Errors = [(Name - invalid_channel_list(Message)) | NextErrors].
 
 
-verify_channel(Name, Channel, Channels, OkChannel, Errors, NextErrors) :-
+verify_channel(Name, Channel, Channels, Locals, OkChannel,
+		Errors, NextErrors) :-
 
     Channels ? Other, Channel =\= Other |
 	self;
 
     Channels ? Channel :
       Channels' = _,
+      Locals = _,
       Name = _,
       OkChannel = Channel,
       Errors = NextErrors;
 
+    Channels = [], Locals =\= [] :
+      Channels' = Locals,
+      Locals' = [] |
+	self;
+
     otherwise :
       Channels = _,
+      Locals = _,
       OkChannel = "_",
       Errors = [Name - illegal_communication_channel(Channel) | NextErrors].
-
-
-make_body_receive(Channel, Body) :-
-
-    Channel =\= "_" :
-      /*
-      ** Generate code to discard one message;
-      ** it does not update receive stream pointer.
-      */
-      Body = pi_utils#receive(`Channel, `"_");
-
-    otherwise :
-      Channel = _,
-      Body = true.
 
 
 parse_message(ProcessDefinition, Message, ChannelList, Locals, Primes,
@@ -954,14 +998,13 @@ program(Source, Exports, Terms, Errors) :-
 	serve_empty_scope(Scope?, Exports, Errors),
 	process_definitions+(Processes = [], EndScope = [], NextTerms=[]).
 
-process_definitions(Source, Processes, Scope, EndScope, Terms, NextTerms) :-
+process_definitions(Source, Processes, Terms, NextTerms, Scope, EndScope) :-
 
     Source ? (LHS :- RHSS) :
-      Scope ! process(LHS, ProcessScope),
-      ProcessScope ! status(Status) |
-	process_definitions(Processes, [], ProcessScope', ProcessScope''?,
-				Nested, Nested'?),
-	process(Status?, RHSS, ProcessScope'', Process, Nested'),
+      Scope ! process(LHS, Status, ProcessScope) |
+	process_definitions(Processes, [], Nested, Nested'?,
+				ProcessScope, ProcessScope'?),
+	process(Status?, RHSS, ProcessScope', Process, Nested'),
 	nested_procedures(Process, Nested?, Terms, Terms'?),
 	self;
 
@@ -974,12 +1017,6 @@ process_definitions(Source, Processes, Scope, EndScope, Terms, NextTerms) :-
       Processes = _,
       Terms = NextTerms,
       Scope = EndScope.
-
-
-RHSS ::= RHS ; {`";", RHS, RHSS}.
-RHS ::= CommaList ; (Guard | CommaList).
-Guard ::= CommaList ; (CommaList : CommaList).
-CommaList, Ask, Tell, Body ::= Any ; (Any , CommaList).
 
 
 process(Status, RHSS, Scope, Process, Nested) :-
@@ -995,51 +1032,23 @@ process(Status, RHSS, Scope, Process, Nested) :-
       Nested ! (OuterAtom? :- Initializer?),
       Status' = initialized |
 	Index := arity(OuterAtom) + 1,
-	arg(1, InnerAtom, Name),
+	arg(1, OuterAtom, Name),
 	initialize_channels(Index, InnerAtom, Name, Initializer),
 	self;
 
     Status =\= nil, Status =\= double, /* single or initialized */
-    RHSS =?= (_|_) :
-      Scope ! atoms(_, InnerAtom),
-      Process = (InnerAtom? :- RHSS'?) |
-	guarded_clause(RHSS, RHSS', _("_"), Nested, [], Scope', []);
-
-    Status =\= nil, Status =\= double, /* single or initialized */
-    RHSS =?= (_;_) :
-      Scope ! atoms(_, InnerAtom),
-      Process = (InnerAtom? :- RHSS'?) |
-	guarded_clauses(RHSS, RHSS', Scope', Nested);
-
-    Status =\= nil, Status =\= double, /* single or initialized */
     RHSS =\= (_|_), RHSS =\= (_;_)  :
-      Scope ! atoms(_, InnerAtom),
-      Process = (InnerAtom? :- RHSS''?) |
-	transform_body(RHSS, RHSS', Nested, [], Scope', [], Guard, []),
-	guard_from_body(Guard, RHSS'?, RHSS'').
+      Scope ! atoms(_OuterAtom, InnerAtom),
+      Process = (InnerAtom? :- RHSS'?) |
+	transform_body(RHSS, RHSS', Nested, [], Scope', []);
 
-guard_from_body(Guard, RHSS1, RHSS2) :-
+    Status =\= nil, Status =\= double, /* single or initialized */
+    otherwise :
+      Scope ! atoms(_OuterAtom, InnerAtom),
+      Process = (InnerAtom? :- RHSS'?) |
+	guarded_clauses(RHSS, RHSS', Nested, Scope').
 
-    Guard =?= [] :
-      RHSS2 = RHSS1;
-
-    Guard =\= [] :
-      RHSS2 = (Ask? : Tell? | RHSS1) |
-	complete_ask_tell.
-
-complete_ask_tell(Guard, Ask, Tell) :-
-
-    Guard = [(A : T)] :
-      Ask = A,
-      Tell = T;
-
-    Guard ? (A : T), Guard' =\= [] :
-      Ask = (A, Ask'?),
-      Tell = (T, Tell'?) |
-	self.
-
-
-initialize_channels(Index, Atom, Name, Initializer) +
+  initialize_channels(Index, Atom, Name, Initializer) +
 			(MakeAll = More?, More) :-
 
     Index < arity(Atom),
@@ -1050,22 +1059,25 @@ initialize_channels(Index, Atom, Name, Initializer) +
 	self;
 
     Index =:= arity(Atom),
-    arg(Index, Atom, `Channel) :
+    arg(Index, Atom, `Channel),
+    arg(1, Atom, PName) :
       More = (MakeChannel?, NameChannel?),
-      Initializer = (true : MakeAll | Name) |
+      Initializer = (true : MakeAll | PName) |
 	make_and_name_channel.
 
-make_and_name_channel(Name, Channel, MakeChannel, NameChannel) :-
+  make_and_name_channel(Name, Channel, MakeChannel, NameChannel) :-
 
+    string_to_dlist(".", DotName, Dt),
     string_to_dlist(Channel, Suffix, []),
     string_to_dlist(Name, PH, PS),
     string_to_dlist("V", VH, VS),
     string_to_dlist("Ms", MsH, MsS) :
       MakeChannel = make_channel(`VA?, `MsA?),
       NameChannel = (`Channel = ChannelId?(`VA?, `MsA?)),
-      PS = Suffix?,
-      VS = Suffix?,
-      MsS = Suffix? |
+      Dt = Suffix,
+      PS = DotName,
+      VS = Suffix,
+      MsS = Suffix |
 	list_to_string(PH, ChannelId),
 	list_to_string(VH, VA),
 	list_to_string(MsH, MsA).
@@ -1088,86 +1100,232 @@ nested_procedures(Process, Nested, Terms, NextTerms) :-
       Terms = NextTerms.
 
 
-guarded_clauses(RHS1, RHS2, Nested, Scope) :-
-	RHS2 = guard(RHS1),
-	Nested = [],
-	Scope = [].
+guarded_clauses(RHS1, RHS2, Nested, Scope) +
+		(Mode = none, SendId = _, NextNested = [], NextScope = [],
+			 Index = 0, NextRHSS, RHSS = NextRHSS?,
+			 NextSends = []) :-
 
-guarded_clause(RHS1, RHS2, Type, Nested, NextNested, Scope, NextScope) :-
-	
-    RHS1 =?= (Channel ? Message | Body1) :
-      Type = receive(SendId),
+    RHS1 =?= (_ | _),
+    Index++ :
+      NextRHSS = [Clauses?] |
+	guarded_clause(RHS1, GuardMode(SendId?, Index'), Clauses,
+			Nested, Nested'?, Scope, Scope'?),
+	update_process_mode(Mode, GuardMode, Mode'),
+	make_right_hand_side + (Index = 1),
+	make_rhs2;
+
+    RHS1 =?= (Guarded ; RHS1'), Guarded =?= (_|_),
+    Index++ :
+      NextRHSS ! Clauses? |
+	guarded_clause(Guarded, GuardMode(SendId?, Index'), Clauses,
+			Nested, Nested'?, Scope, Scope'?),
+	update_process_mode(Mode, GuardMode, Mode'),
+	self;
+
+    otherwise :
+      Index = _,
+      Scope ! error(invalid_guarded_clause(RHS1)),
+      NextRHSS = [] |
+	make_right_hand_side + (Index = 1),
+	make_rhs2.
+
+  update_process_mode(Mode, GuardMode, NewMode) :-
+
+    GuardMode =?= none :
+      NewMode = Mode;
+
+    Mode =?= none :
+      NewMode = GuardMode;
+
+    Mode =?= GuardMode :
+      NewMode = GuardMode;
+
+/* What about compare? */
+    Mode =\= none, GuardMode =\= none, Mode =\= GuardMode :
+      NewMode = mixed.
+
+
+  make_rhs2(Mode, SendId, ClauseList, Sends, RHS2,
+	Nested, NextNested, Scope, NextScope) :-
+
+    Mode =?= send :
+      SendId = "_",
+      RHS2 = (Writes | SendChoices),
+      Nested = [(ChoiceAtom? :- FcpClauses?) | NextNested],
+      Scope = [atoms(OuterAtom, InnerAtom) | NextScope] |
+	arg(1, OuterAtom, PName),
+	make_choice_name(PName, ".sends", SendChoices),
+	make_predicate_list(';', ClauseList, FcpClauses),
+	sends_to_writes(Sends, Writes),
+	make_choice_atom+(Name = SendChoices, ChoiceVars = [`"Chosen"]);
+
+    Mode =?= mixed :
+      SendId = "Sendid",
+      RHS2 = (Writes | pi_monitor#unique_sender(PName?, `SendId),
+			MixedChoices),
+      Nested = [(ChoiceAtom? :- FcpClauses?) | NextNested],
+      Scope = [atoms(OuterAtom, InnerAtom) | NextScope] |
+	arg(1, OuterAtom, PName),
+	make_choice_name(PName?, ".mixed", MixedChoices),
+	make_predicate_list(';', ClauseList, FcpClauses),
+	sends_to_writes(Sends, Writes),
+	make_choice_atom+(Name = MixedChoices,
+			ChoiceVars = [`"Chosen", `SendId]);
+
+    /* Only receives */
+    otherwise :
+      Mode = _,
+      Sends = _,
+      SendId = "_",
+      RHS2 = FcpClauses?,
+      Nested = NextNested,
+      Scope = NextScope |
+	make_predicate_list(';', ClauseList, FcpClauses).
+
+  sends_to_writes(Sends, Writes) +
+	(NextAsk, Asks = NextAsk?, NextTell, Tells = NextTell) :-
+
+    Sends ? {Ask, Tell}, Sends' =\= [] :
+      NextAsk = (Ask, NextAsk'?),
+      NextTell = (Tell, NextTell'?) |
+	self;
+
+    Sends =?= [{Ask, Tell}] :
+      NextAsk = Ask,
+      NextTell = Tell,
+      Writes = (Asks : Tells).
+
+  make_choice_name(Prefix, Suffix, Name) :-
+    string_to_dlist(Prefix, PL, PS),
+    string_to_dlist(Suffix, SL, []) :
+      PS = SL |
+	list_to_string(PL, Name).
+
+  make_choice_atom(InnerAtom, Name, ChoiceVars, ChoiceAtom) :-
+	utils#tuple_to_dlist(InnerAtom, [_|Channels], ChoiceVars),
+	utils#list_to_tuple([Name|Channels], ChoiceAtom).
+
+  make_right_hand_side(RHSS, Index, ClauseList, Sends, NextSends) :-
+
+    RHSS ? RHS,
+    RHS = {Mode, RHSList},
+    Index++ |
+	make_clauselist(Mode, Index, RHSList, ClauseList, ClauseList'?,
+			Sends, Sends'?),
+	self;
+
+    RHSS =?= [] :
+      Index = _,
+      ClauseList = [],
+      Sends = NextSends.
+
+
+  make_clauselist(Mode, Index, RHSList, ClauseList, NextClauseList,
+			Sends, NextSends) :-
+
+    Mode = send,
+    RHSList ? {Send, Body}:
+      Sends ! Send,				 %ng - have to split Ask,Tell
+      ClauseList ! (`"Chosen" = Index | Body) |
+	self;
+
+    Mode = receive,
+    RHSList ? Receive :
+      ClauseList ! Receive |
+	self;
+
+    RHSList =?= [] :
+      Mode = _,
+      Index = _,
+      ClauseList = NextClauseList,
+      Sends = NextSends.
+
+
+guarded_clause(RHS1, Control, Clauses, Nested, NextNested,
+			Scope, NextScope) :-
+
+    /* Recognize compound_guard */
+    RHS1 =?= (Guard | Guarded), Guarded =?= (_ | _) :
+
+      RHS1' = (Guard | `Call?) |
+	expand_new_scope([], Guarded, [], Call,
+		Nested, Nested'?, Scope, Scope'?),
+	self;
+
+    RHS1 =?= (Channel ? Message | Body1), Body1  =\= (_ | _) :
+      Control = receive(SendId, _SendIndex),
       Scope ! guard_receive(Channel, Message, SendId, Iterates, Consume),
-      Clause = (Ask? : Tell? | Body2?) |
+      Clause = (Consume? | Body2?) |
 	receive_in_guard_iterates,
-	complete_ask_tell([Consume | Guards], Ask, Tell),
-	transform_body(Body1, Body2, Nested, NextNested,
-			Scope', NextScope, Guards, []);
-/*
-    RHS1 =?= (Channel ! Message | RHS1') :
-      Type = send(SendId),
-      Scope ! guard_send(Channel, Message, SendId, Sender) |
-	send_in_guard,
-	complete_ask_tell([Consume | Guards], Ask, Tell),
-	transform_body(Body1, Body2, Nested, NextNested,
-			Scope', NextScope, Guards, []);
-*/
+	transform_body(Body1, Body2, Nested, NextNested, Scope', NextScope);
+	
+    RHS1 =?= (Channel ! Message | Body1), Body1  =\= (_ | _) :
+      Control = send(SendId, SendIndex),
+      Scope ! guard_send(Channel, Message, SendId, SendIndex, Guard),
+      Clauses = send([{Guard, Body2?}]) |
+	transform_body(Body1, Body2, Nested, NextNested, Scope', NextScope);
+
     otherwise :
       RHS1 = (Guard | _),
-      RHS2 = true,
-      Type = none(_),
+      Clauses = true,
+      Control = none(_, _),
       Nested = NextNested,
       Scope = [error(invalid_guard(Guard)) | NextScope].
 
 
-receive_in_guard_iterates(SendId, Iterates, Clause, RHS2) :-
+  receive_in_guard_iterates(SendId, Iterates, Clause, Clauses) :-
 
     SendId =?= "_",
-    Iterates =?= {Iterate, _Mixed} :
-      RHS2 = (Iterate ; Clause);
+    Iterates =?= {Cdr, _Mixed} :
+      Clauses = receive([Cdr, Clause]);
 
     SendId =\= "_",
     Iterates =?= {Cdr, Mixed} :
-      RHS2 = (Cdr ; Mixed ; Clause).
+      Clauses = receive([Cdr, Mixed, Clause]).
       
 
-transform_body(Body1, Body2, Nested, EndNested,
-		Scope, EndScope, Guards, EndGuards) :-
+transform_body(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
+    true :
+      NextGoals = [] |
+	transform_body1,
+	make_predicate_list(',', Goals?, Body2).
 
-    Body1 = (B1, Body1') :
-      Body2 = (B2?, Body2'?) |
-	transform_body(B1, B2, Nested, Nested'?, Scope, Scope'?, Guards, Guards'?),
+  transform_body1(Body1, Goals, NextGoals, Nested, EndNested,
+			Scope, EndScope) :-
+
+    Body1 = (Body2, Body1') |
+	transform_body1(Body2, Goals, Goals'?, Nested, Nested'?,
+			Scope, Scope'?),
 	self;
 
-    Body1 = (Channel ! Message) :
-      Body2 = true,
-      Scope ! body_send(Message, Channel, Channel', PiMessage),
+    Body1 = (Channel ? Message) :
+      Scope ! body_receive(Channel, Message, Channel', ChannelList),
+      Goals = [pi_receive(Channel'?, ChannelList?) | NextGoals],
       Nested = EndNested,
-      Scope' = EndScope |
-	send_from_body;
+      Scope' = EndScope;
 
-    Body1 = (Channel ? _Message) :
-      Scope ! body_receive(Channel, Body2),
+    Body1 = (Channel ! Message) :
+      Scope ! body_send(Message, Channel, Sender, ChannelList, Channel'),
+      Goals = [pi_send(Sender?, ChannelList?, Channel'?) | NextGoals],
       Nested = EndNested,
-      Scope' = EndScope,
-      Guards = EndGuards;
+      Scope' = EndScope;
 
     list(Body1) :
-      Guards = EndGuards |
+      Goals = [Body2 | NextGoals] |
 	new_scope;
 
     Body1 =?= Name # Call1, string(Name) :
-      Body2 = (Name # Call2) |
-	parse_remote_call(Call1, Call2, Scope, Scope'?),
-	self;
+      Goals = [(Name # Call2) | NextGoals],
+      Nested = EndNested |
+	parse_remote_call(Call1, Call2, Scope, EndScope);
 
     otherwise :
+      Goals = [Body2 | NextGoals],
       Scope ! call(Body1, Body2),
       Nested = EndNested,
-      Scope' = EndScope,
-      Guards = EndGuards.
+      Scope' = EndScope.
 
-new_scope(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
+  new_scope(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
 
     Body1 =?= [(_ :- _) | _] :
       Body2 = true,
@@ -1189,14 +1347,15 @@ new_scope(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
     Channels =\= (_ :- _), Body =\= (_ :- _) |
 	expand_new_scope.
 
+
 expand_new_scope(Channels, Body, Processes, Body2,
 		Nested, EndNested, Scope, EndScope) :-
     true :
       Scope ! new_scope_id(Id),
       Body2 = Id? |
 	make_new_lhs,
-	process_definitions([(LHS :- Body)], Processes,
-			Scope', EndScope, Nested, EndNested).
+	process_definitions([(LHS :- Body)], Processes, Nested, EndNested,
+				Scope', EndScope).
 
 
 make_new_lhs(Id, Channels, LHS) :-
@@ -1227,18 +1386,6 @@ parse_remote_call(Call1, Call2, Scope, NextScope) :-
     tuple(Call1), arg(1, Call1, `_) :
       Scope = [remote_call(Call1, Call2) | NextScope].
 
-send_from_body(Channel, PiMessage, Guards, EndGuards) :-
-
-    Channel =?= "_" :
-      PiMessage = _,
-      Guards = EndGuards;
-
-    Channel =\= "_",
-    string_to_dlist(Channel, CL, []) :
-      VL = [86 | CL],
-      Guards = [(`Channel = {(`"_"), `VC, (`"_")} :
-		write_channel(PiMessage, `VC)) | EndGuards] |
-	list_to_string(VL, VC).
 
 /**** Utilities ****/
 
@@ -1303,3 +1450,28 @@ search_for_duplicate(Item, ListIn, ListOut,
       ErrorCode = _,
       Errors = NextErrors,
       ListOut = [].
+
+
+make_predicate_list(Operator, List, Predicates) :-
+
+    List =?= [] |
+      Operator = _,
+      Predicates = true;
+
+    List ? true,
+    List' =\= [] |
+      self;
+
+    List ? Predicate, Predicate =\= true,
+    List' ? true :
+      List''' = [Predicate | List''] |
+	self;
+
+    List ? Predicate, Predicate =\= true,
+    List' =\= [], List' =\= [true | _] :
+      Predicates = {Operator, Predicate, Predicates'?} |
+	self;
+
+    List =?= [Predicate] :
+      Operator = _,
+      Predicates = Predicate.
