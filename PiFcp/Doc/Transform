@@ -19,15 +19,20 @@ Representations and transformations of the PiFcp language to Compound Fcp
 
 <channel>        ::~ <pi_channel>
 
-  <pi_channel>     ::= <creator>(<fcp_channel>, <message_stream>,
-                                 <receive_mean>, <send_mean>)
+  <pi_channel>     ::= <creator>(<fcp_2-vector>, <arguments>)
+
+  <arguments>      ::= <receive_mean>, <send_mean>
 
   <creator> identifies the <process> which created the channel; it is used
             for debugging and includes the <variable> representing the channel
-            and the <name> of the creating <process>.
+            and the <name> of the creating <process>.  It is also a unique id
+            for the <send> clause(s) of a mixed communication process.
 
-   <fcp_channel> is used to <send> a <message> on the <channel>, appending
-                 the corresponding <pi_message> to the <message_stream>.
+   <fcp_2-vector> is used to <send> a <message> on the <channel>, appending
+                  the corresponding <pi_message> to the <message_stream>,
+                  by writing the first fcp-channael of the vector.  The second
+                  fcp-channel records the current first active message in the
+                  <channel>.
 
    <receive_mean> and <send_mean> are means of exponential distributions
                   from which communication delays are sampled.
@@ -39,11 +44,14 @@ When a <channel> name begins with a lower case letter, the transformation
 converts it to an Fcp variable of the same name; declared process names
 begin with an upper case letter.
 
-To <receive> a <message> the two/three corresponding Fcp clauses cdr down
-the <message_stream> to a <pi_message> whose <choice> is writable, and which
-was NOT offered (sent) by another <clause> of the same active <process>
-(This may occur in a mixed choice <process>.)  The <choice_tag> and the
-<choice> of the selected <pi_message> are unified to consume the <message>. 
+
+To <receive> a <message> the second fcp-channel is read (read_vector/3) to
+obtain the current view of the stream; then the two/three corresponding Fcp
+clauses cdr down the <message_stream> to a <pi_message> whose <choice> is
+writable, and which was NOT offered (sent) by another <clause> of the same
+mixed communication.  The <choice_tag> and the <choice> of the selected
+<pi_message> are unified to consume the <message>, and a store in the second
+fcp-channel resets the current view of the stream.
 
 To <send> one or more synchronized <message>s, a procedure offers the
 <message>(s) by writing each <pi_message> on its communication channel. 
@@ -57,8 +65,8 @@ are in the generated procedure; in this case, if some other sender is
 synchronized with the received <pi_message>, the offered <message>s are
 withdrawn by unifying <choice> with 0.
 
-Each <process> is represented by an Fcp procedure.  Each <channel> which is a
-parameter or an added <channel> of the <process> is represented by a
+Each <process> is represented by an Fcp procedure.  Each <channel> which
+is a parameter or an added <channel> of the <process> is represented by a
 <pi_channel> - the Fcp variable which represents the <pi_channel> has the same
 name as the <channel>.
 
@@ -157,8 +165,8 @@ communications can be resolved until an associated delay is finished.  The
 delays are determined dynamically by a call to a monitor, which samples a
 value from an exponential distribution whose mean is defined within the object
 (<pi_channel>) which represents the communication channel.  Additional
-parameters to the generated procedure are fcp variables; Each variable is
-unknown until the associated delay is finished.
+parameters to the generated procedure are fcp variables; Each such variable
+is unknown until the associated delay is finished.
 
 A <call> to <atom> or to <name>( <substitution_list> ) to a <process> within
 the same <program> is implemented by a compound-fcp call to the named
