@@ -511,3 +511,8 @@ reply(Reply, ShouldBe, Function) :-
    Reply =\= ShouldBe |
 	computation # event(("For function" : Function ; "Received" - Reply,
 				"Expecting" - ShouldBe)).
+
+ok(What, Where) :-
+
+    What = true |
+	screen#display((Where: "Response" = What)).
