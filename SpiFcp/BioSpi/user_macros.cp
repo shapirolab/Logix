@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/06/07 12:34:56 $
+		       	$Date: 2002/07/01 07:35:37 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,7 +15,8 @@ Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -export([expand/2]).
 -mode(trust).
--language(compound).
+-language([evaluate,compound,colon]).
+-include(spi_constants).
 
 /*	expand/2
 
@@ -189,7 +190,7 @@ expand(Command, Cs) :-
 	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
 
     Command = trace(Goals, File, Limit, Scale) |
-	ambient_run(Goals, Run, trace#run(Run, File, Limit, Scale), Cs);
+	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit, Scale), Cs);
 
     Command = trace(Goals, File, Limit, Scale, Format) |
 	ambient_run(Goals, Run,
@@ -449,18 +450,20 @@ ambient_run(Goals, Run, Action, Cs) :-
 
     Goals =?= (Service # _Call) :
       Run = Goals |
-      Cs = [ambient_server#run(Action, _ControlChannel),
+      Cs = [to_context(spi_monitor#reset),
+	    ambient_server#run(Action, _ControlChannel),
 	    service(Service?) | Commands]\Commands;
 
     Goals =?= (# Call) :
       Run = (Service? # Call),
-      Cs = [service(Service),
+      Cs = [service(Service), to_context(spi_monitor#reset),
 	    ambient_server#run(Action, _ControlChannel),
 	    service(Service?) | Commands]\Commands;
 
     otherwise :
        Run = repeat#run(Goals),
-       Cs = [ambient_server#run(Action, _ControlChannel) | Commands]\Commands.
+       Cs = [to_context(spi_monitor#reset),
+	     ambient_server#run(Action, _ControlChannel) | Commands]\Commands.
 
 ambient_signal(Signal, No, Goal, Commands, Commands1) :-
 
@@ -523,7 +526,10 @@ ambient_tree(No, Goal, Commands, Commands1) :-
   format_ambient_tree(Ambients, Indent, Tree, NextTree) :-
     Ambients ? Ambient :
       write_channel(state(State), Ambient) |
-	format_ambient_state_parts(Indent, State?, Tree, Tree'),
+	extract_ambient_state_parts,
+	format_ambient_id(Id, Indent, Tree, Tree'),
+	format_ambient_channels(Channels, Indent, Tree', Tree''),
+	format_ambient_children(Children, Indent, Tree'', Tree'''),
 	self;
 
     Ambients ? _ClosedAmbient,
@@ -534,29 +540,156 @@ ambient_tree(No, Goal, Commands, Commands1) :-
       Indent = _,
       Tree = NextTree.
 
-  format_ambient_state_parts(Indent, State, Tree, NextTree) :-
+  extract_ambient_state_parts(State, Id, Channels, Children) :-
 
-    State ? id(Name(Index)) :
-      Tree ! Node |
-	utils # append_strings([Indent, Name, "(", Index, ")"], Node),
+    State ? id(Id^) |
 	self;
 
-    State ? id(system) |
+    State ? children(Children^) |
 	self;
 
-    State ? children(Children),
-    string_to_dlist(Indent, IL, [32, 32]),
-    list_to_string(IL, Indent') :
-      State' = _ |	% Assuming that id precedes children in state
-	format_ambient_tree(Children, Indent', Tree, NextTree);
+    State ? private(PrivateChannels) |
+	copy_list(PrivateChannels, Channels, Channels'),
+	self;
 
-    State ? Other,
-    Other =\= id(_), Other =\= children(_) |
+    State ? global(GlobalChannels) |
+	copy_list(GlobalChannels, Channels, Channels'),
+	self;
+
+    State ? shared(SharedChannels) |
+	copy_list(SharedChannels, Channels, Channels'),
+	self;
+
+    State ? _Other,
+    otherwise |
 	self;
 
     State =?= [] :
+      Children = _,
+      Id = _,
+      Channels = [] .
+
+  format_ambient_id(Id, Indent, Tree, NextTree) :-
+
+    Id =?= Name(Index) :
+      Tree ! Node,
+      Tree' = NextTree |
+	utils # append_strings([Indent, Name, "(", Index, ")"], Node);
+
+    Id =?= system :
       Indent = _,
-      NextTree = Tree.
+      Tree = NextTree.
+
+  format_ambient_children(Ambients, Indent, Tree, NextTree) :-
+    string_to_dlist(Indent, IL, [32, 32]),
+    list_to_string(IL, Indent') |
+	format_ambient_tree.
+
+  format_ambient_channels(Channels, Indent, Tree, NextTree) :-
+
+    Channels ? Channel,
+    vector(Channel) :
+      Tree ! (Indent | FormattedChannel) |
+	format_ambient_channel,
+	self;
+
+    Channels =?= [] :
+      Indent = _,
+      Tree = NextTree.
+
+  format_ambient_channel(Channel, FormattedChannel) :-
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_BIMOLECULAR,
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    SendWeight + ReceiveWeight =:= 0 :
+      FormattedChannel = Name - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_BIMOLECULAR,
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    SendWeight + ReceiveWeight > 0 :
+      FormattedChannel = {Name, SendWeight, ReceiveWeight} - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_HOMODIMERIZED,
+    read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
+    DimerWeight =:= 0 :
+      FormattedChannel = Name - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_HOMODIMERIZED,
+    read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
+    DimerWeight > 0 :
+      FormattedChannel = {Name, DimerWeight} - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_INSTANTANEOUS,
+    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),  
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor) |
+	count_requests(SendAnchor, SendRequests),
+	count_requests(ReceiveAnchor, ReceiveRequests),
+	format_instantaneous_state;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_UNKNOWN :
+      FormattedChannel = Name - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =\= SPI_UNKNOWN,
+    Type =\= SPI_BIMOLECULAR,
+    Type =\= SPI_HOMODIMERIZED,
+    Type =\= SPI_INSTANTANEOUS :
+      FormattedChannel = Name(type = Type) - Refs.
+
+  count_requests(Anchor, Requests) + (Request = Anchor, Counter = 0) :-
+
+    arg(SPI_MESSAGE_LINKS, Request, Links),
+    read_vector(SPI_NEXT_MS, Links, Request'),
+    Request =\= Anchor,
+    Request' =\= Request,
+    Counter++ |
+	self;
+
+    otherwise :
+      Anchor = _,
+      Request = _,
+      Requests = Counter.
+
+  format_instantaneous_state(SendRequests, ReceiveRequests, Name, Refs,
+				FormattedChannel) :-
+
+    SendRequests =:= 0,
+    ReceiveRequests =:= 0 :
+      FormattedChannel = Name / Refs;
+
+    SendRequests > 0,
+    ReceiveRequests =:= 0 :
+      FormattedChannel = (Name ! SendRequests - Refs);
+
+    SendRequests =:= 0,
+    ReceiveRequests > 0 :
+      FormattedChannel = (Name ? ReceiveRequests - Refs);
+
+    SendRequests > 0,
+    ReceiveRequests > 0 :
+      FormattedChannel = (Name : blocked(SendRequests, ReceiveRequests) - Refs).
 
 
 edit(Editor, Module,
@@ -680,3 +813,13 @@ display_variable(Reply, Id, Value, Options, Xs) :-
     otherwise :
       Reply = _, Value = _, Options = _,
       Xs = [computation # display(term, invalid_variable_name(Id))].
+
+
+copy_list(In, Out, Next) :-
+
+    In ? Item :
+      Out ! Item |
+	self;
+
+    In =?= [] :
+      Out = Next.
