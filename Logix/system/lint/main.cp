@@ -1,6 +1,6 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/main.cp,v 1.1 1999/07/09 07:03:11 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/main.cp,v 1.2 2002/11/16 11:37:10 bill Exp $ */
 -export([first/6]).
--mode(trust).
+%-mode(trust).
 -language(compound).
 
 procedure first(Kind, Attributes, Terms, Dict_dl, L_options, Gi_options).
@@ -79,7 +79,7 @@ display_missing_attributes(_) :-
 	otherwise | true.
 
 
-check_attributes(As, Ids, Attributes, Done) :-
+check_attributes(As, Ids, MonitorExports, Done) + (Attributes = {_M,_X,_E}) :-
 
     As ? Attribute |
 	attribute_id(Attribute, Id),
@@ -88,23 +88,68 @@ check_attributes(As, Ids, Attributes, Done) :-
 	check_attributes; 
 
     As = [],
-    Attributes = {M, E} : Ids = _ |
+    Attributes = {M, X, E} : Ids = _ |
 	unify_without_failure(Done?(M), done([])),
-	unify_without_failure(Done?(E), done([])).
+	unify_without_failure(Done?(X), done([])),
+	unify_without_failure(Done?(E), done([])),
+	export_list.
+
+  export_list(M, X, E, MonitorExports) :-
+
+    X =?= [] :
+      MonitorExports = {M, E};
+
+    E =?= [] :
+      MonitorExports = {M, X};
+
+    X =\= [], E =\= [] :
+      MonitorExports = {M, XE?} |
+	concatenate_lists([[X],[E]],XE).
+
+  concatenate_lists(Lists, Out) :-
+
+    Lists = [List | Rest],
+    List ? Item, Item =\= [], Item =\= [_ | _] :
+      Out ! Item,
+      Lists' = [List' | Rest] |
+	self;
+
+    Lists = [List | Rest],
+    List ? Item, Item =\= [], Item =?= [_ | _] :
+      Lists' = [Item, List' | Rest] |
+	self;
+
+    Lists = [List | Rest],
+    List ?  [] :
+      Lists' = [List' | Rest] |
+	self;
+
+    Lists ? [] |
+	concatenate_lists;
+
+    Lists =?= [] :
+      Out = [].
 
 
 check_attribute(Reply, Attribute, Attributes, Done1, Done2) :-
 
     Reply = new,
     Attribute = monitor(Name),
-    Attributes = {M, _} |
+    Attributes = {M, _, _} |
 	check_monitor_name(Name, M, Done1, Done2);
 
     Reply = new,
-    Attribute = export(E),
+    Attribute = export(X),
+    X =\= all,
+    Done1 = done :
+      Attributes = {_, X, _},
+      Done2 = done ;
+
+    Reply = new,
+    Attribute = entries(E),
     E =\= all,
     Done1 = done :
-      Attributes = {_, E},
+      Attributes = {_, _, E},
       Done2 = done ;
 
     Reply = new,
