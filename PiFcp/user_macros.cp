@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/23 11:47:38 $
+		       	$Date: 2000/03/07 11:51:37 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.10 $
+			$Revision: 1.11 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -215,6 +215,22 @@ expand(Command, Cs) :-
       Cs = [Any | Commands]\Commands;
 
 % For testing only!
+
+    Command = pi2cmp(N) :
+      Command' = pi2cmp(N, []) |
+	expand;
+
+    Command = pi2cmp(N, Options) :
+      Cs = [to_context(computation # display(stream,Results, [type(unparse)])),
+	    pi_macros # pi2cmp(N, Options, Results) |Commands]\Commands;
+
+    Command = pi2fcp(N) :
+      Command' = pi2fcp(N, []) |
+	expand;
+
+    Command = pi2fcp(N, Options) :
+      Cs = [to_context(computation # display(stream,Results, [type(unparse)])),
+	    pi_macros # pi2fcp(N, Options, Results) |Commands]\Commands;
 
     Command = tpf(N) :
       Cs = [to_context(computation # display(stream,Results, [type(unparse)])),

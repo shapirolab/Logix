@@ -1,12 +1,40 @@
 -monitor(serve).
--language(compound).
--export([get_global_channels/1, global_channels/1, options/2, reset/1]).
+-language([evaluate,compound,colon]).
+-export([get_global_channels/1, global_channels/1, global_channels/2,
+	 scheduler/1,
+	 options/2, reset/1]).
+
+/*
+SORT(Merger, List, Sorted) => 
+	ordered_merger(Merger1),
+	binary_sort_merge(List, Sorted, Merger).
+
+MERGE(Merger, Sorted, List1, List2, Pair) =>
+	ordered_merger(Merger),
+	binary_merge([Sorted, List1], [Pair | List2], Merger).
+*/
+
+SORT(Merger, List, Sorted) =>
+	quick_sort_pairs(List, Sorted).
+
+MERGE(Merger, Sorted, List1, List2, Pair) =>
+	merge_pairs(Sorted, List1, [Pair | List2]).
+
+RAN =>  4.					/* random real number */
+LN  =>  9.					/* natural logarithm */
 
 serve(In) :-
-    Dash := ascii('-') |
-	serve(In, 1, Dash, nil, [], [{0, _}, {[], _}]).
 
-serve(In, UID, Dash, Tree, Options, Global) :-
+    In =?= [] |
+	true;
+
+    In =\= [],
+    Dash := ascii('-') |
+	server(In, 1, Dash, nil, [], [{0, _}, {[], _}], Scheduler),
+	processor#link(lookup(math, Offset), Ok),
+	start_scheduling(Scheduler, Offset, Ok).
+
+server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
 
     In ? unique_sender(String, Name),
     string_to_dlist(String, Head, [Dash | Tail]),
@@ -17,6 +45,10 @@ serve(In, UID, Dash, Tree, Options, Global) :-
 	self;
 
     In ? global_channels(List) |
+	merge_channels(List, Global, Global', ""),
+	self;
+
+    In ? global_channels(List, Scheduler^) |
 	merge_channels(List, Global, Global', ""),
 	self;
 
@@ -37,6 +69,13 @@ serve(In, UID, Dash, Tree, Options, Global) :-
 	unify_without_failure(Options, Old),
 	self;
 
+    In ? scheduler(Scheduler^) |
+	self;
+
+    In ? debug(Debug) :
+      write_channel(debug(Debug), Scheduler) |
+	self;
+
     In ? Other,
     otherwise |
 	self,
@@ -47,7 +86,8 @@ serve(In, UID, Dash, Tree, Options, Global) :-
       Dash = _,
       Tree = _,
       Options = _,
-      Global = _ .
+      Global = _,
+      close_channel(Scheduler).
 
 
 merge_channels(List, Global, New_Global, Last) :-
@@ -126,3 +166,337 @@ cdr_past_msgs(In, Out) :-
 
     unknown(In) :
       Out = In.
+
+start_scheduling(Scheduler, Offset, Ok) :-
+
+    Ok =?= true :
+      make_channel(Scheduler, Schedule),
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential}) |
+	scheduling(Schedule, Offset, NegativeExponential,
+			0, [], [], false, _Wakeup, _Debug);
+
+    Ok =\= true :
+      Scheduler = _,
+      Offset = _ |
+	fail(math_offset(Ok)).
+
+scheduling(Schedule, Offset, NegativeExponential,
+		Now, PairList, NewList,	Waiting, Wakeup, Debug) :-
+
+    Schedule ? schedule([receive(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
+    Waiting =\= true,
+    WakeupTime := integer(Now - Mean*NegativeExponential) :
+/**************************** Debugging line ********************************/
+      Debug ! receive(Ic, WakeupTime),
+      Wakeup = _,
+      Waiting' = true,
+      Schedule'' = [schedule(More) | Schedule'],
+      NewList' = [{WakeupTime, WakeVar} | NewList],
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential'}) |
+	processor#machine(idle_wait(Wakeup'), _Ok),
+	self;
+
+    Schedule ? schedule([send(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
+    Waiting =\= true,
+    WakeupTime := integer(Now - Mean*NegativeExponential) :
+/**************************** Debugging line ********************************/
+      Debug ! send(Ic, WakeupTime),
+      Wakeup = _,
+      Waiting' = true,
+      Schedule'' = [schedule(More) | Schedule'],
+      NewList' = [{WakeupTime, WakeVar} | NewList],
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential'}) |
+	processor#machine(idle_wait(Wakeup'), _Ok),
+	self;
+
+    Schedule ? schedule([receive(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, Mean, _Send), Mean >= 0,
+    Waiting =?= true,
+    WakeupTime := integer(Now - Mean*NegativeExponential) :
+      Debug ! receive(Ic, WakeupTime),
+      Schedule'' = [schedule(More) | Schedule'],
+      NewList' = [{WakeupTime, WakeVar} | NewList],
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential'}) |
+	self;
+
+    Schedule ? schedule([send(Channel, WakeVar) | More]),
+    Channel = Ic(_Vc, _Sc, _Receive, Mean), Mean >= 0,
+    Waiting =?= true,
+    WakeupTime := integer(Now - Mean*NegativeExponential) :
+/**************************** Debugging line ********************************/
+      Debug ! send(Ic, WakeupTime),
+      Schedule'' = [schedule(More) | Schedule'],
+      NewList' = [{WakeupTime, WakeVar} | NewList],
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential'}) |
+	self;
+
+    Schedule ? schedule([]) |
+	self;
+
+    Schedule =?= [] :
+      Debug = [],
+      Offset = _,
+      NegativeExponential = _,
+      Now = _,
+      PairList = _,
+      NewList = _,
+      Waiting = _,
+      Wakeup = _;
+
+/**************************** Debugging code ********************************/
+    Schedule ? Other,
+    Other =\= schedule(_), Other =\= debug(_), Other =\= input(_) |
+	fail(Other),
+	self;
+
+    Schedule ? input(Stream) :
+      Stream = Schedule'? |
+	self;
+
+    Schedule ? debug(Stream) :
+      Stream = Debug? |
+	self;
+/***************************************************************************/
+
+    Wakeup =?= done,
+    PairList =?= [],
+    NewList =?= [] :
+/**************************** Debugging line ********************************/
+      Debug ! Now-none,
+      Waiting = _,
+      Waiting' = false,
+      Wakeup' = _ |
+	self;
+
+    Wakeup =?= done,
+    PairList ? {Now', Signal}, PairList' =?= [],
+    NewList =?= [] :
+/**************************** Debugging line ********************************/
+      Debug ! Now-Now',
+      Now = _,
+      Waiting = _,
+      Signal = true, % done(Now, Now'),
+      Waiting' = false |
+%     Now'' = 0 |
+	self;
+
+    Wakeup =?= done,
+    PairList ? {Now', Signal}, PairList' =\= [],
+    NewList =?= [] :
+/**************************** Debugging line ********************************/
+      Debug ! Now-Now',
+      Now = _,
+      Signal = true | % done(Now, Now') |
+	processor#machine(idle_wait(Wakeup'), _Ok),
+	self;
+
+    Wakeup =?= done,
+    NewList =\= [] :
+/**************************** Debugging line ********************************/
+      Debug ! Now-Now',
+      Now = _,
+      Pair = {Now', true}, % done(Now, Now')},
+      NewList' = [] |
+	SORT(Merger1, NewList, Sorted),
+	MERGE(Merger2, Sorted, PairList, PairList', Pair),
+	processor#machine(idle_wait(Wakeup'), _Ok),
+	self.
+
+quick_sort_pairs(List, Sorted) + (Tail = []) :-
+
+
+    List ? Pair, Pair = {Time, Event} |
+	partition_pairs(Time, Event, List', Small, Large),
+	quick_sort_pairs(Small?, Sorted, [Pair | LSorted]),
+	quick_sort_pairs(Large?, LSorted, Tail);
+
+    List ? _,
+    otherwise |
+	self;
+
+    List = [] :
+      Sorted = Tail.
+
+
+merge_pairs(S1, S2, S3) :-
+
+    S1 ? Pair, Pair =?= {X, _V1},
+    S2 = [{Y, _V2} | _],
+    X < Y :
+      S3 ! Pair |
+	self;
+
+    S1 =?= [{X, _V1} | _],
+    S2 ? Pair, Pair =?= {Y, _V2},
+    Y < X :
+      S3 ! Pair |
+	self;
+
+    S1 ? Pair,
+    S2 ? Match :
+      Pair = Match,
+      S3 ! Pair |
+	self;
+
+    S1 = [] :
+      S3 = S2;
+
+    S2 = [] :
+      S3 = S1.
+
+  partition_pairs(X, E, List, Small, Large) :-
+
+    List ? Pair, Pair =?= {Y, _V},
+    X > Y :
+      Small ! Pair |
+	self;
+
+    List ? Pair, Pair =?= {Y, _V},
+    X < Y :
+      Large ! Pair |
+	self;
+
+    List ? Pair, Pair =?= {X, V} :
+      V = E |
+	self;
+
+    List = [] :
+      X = _,
+      E = _,
+      Small = [],
+      Large = [].
+
+/********************* Borrowed from Logix: utils.cp *************************/
+/*************************  Slower Sort/Merge ********************************
+ordered_merger(In) :-
+
+    In ? ordered_merge(In1, In2, Out) |
+	ordered_merge(In1, In2, Out),
+	ordered_merger;
+
+    In = [] |
+	true.
+
+ordered_merge(In1, In2, Out) :-
+
+    In1 ? T1, T1 = {I1, _}, In2 = [{I2, _} | _],
+    I1 < I2 :
+      Out ! T1 |
+	ordered_merge;
+
+    In1 = [{I1, _} | _], In2 ? T2, T2 = {I2, _},
+    I2 < I1 :
+      Out ! T2 |
+	ordered_merge;
+
+    In1 = [T1 | _], In2 ? T2 :
+      T1 = T2 |
+	ordered_merge;
+
+    In1 = [] :
+      In2 = Out;
+
+    In2 = [] :
+      In1 = Out.
+
+binary_merge(In, Out, Merger) :-
+    true :
+      make_channel(CH, Merger) |
+	level1_merge_server(In, Odds, Evens, PairList),
+	binary_merger(Odds, Evens, PairList, Out, CH, done, Done),
+	close_merger(Done, CH).
+
+level1_merge_server(In, Odds, Evens, PairList) :-
+
+    In ? Odds^ |
+	level1_merge_server(In', Evens, PairList);
+
+    otherwise : In = _,
+      Odds = [], Evens = [],
+      PairList = [] .
+
+level1_merge_server(In, Evens, PairList) :-
+
+    In ? Evens^ :
+      PairList ! {One, Two} |
+	level1_merge_server(In', One, Two, PairList');
+
+    otherwise : In = _,
+      Evens = [],
+      PairList = [] .
+
+
+binary_sort_merge(In, Out, Merger) :-
+    true :
+      make_channel(CH, Merger) |
+	level1_sort_server(In, Odds, Evens, PairList),
+	binary_merger(Odds, Evens, PairList, Out, CH, done, Done),
+	close_merger(Done, CH).
+
+level1_sort_server(In, Odds, Evens, PairList) :-
+
+    In ? Odd :
+      Odds = [Odd] |
+	level1_sort_server(In', Evens, PairList);
+
+    otherwise : In = _,
+      Odds = [], Evens = [],
+      PairList = [] .
+
+level1_sort_server(In, Evens, PairList) :-
+
+    In ? Even :
+      Evens = [Even],
+      PairList ! {One, Two} |
+	level1_sort_server(In', One, Two, PairList');
+
+    otherwise : In = _,
+      Evens = [],
+      PairList = [] .
+
+
+binary_merger(In1, In2, PairList, Out, CH, Left, Right) :-
+
+    list(In2) :
+      write_channel(ordered_merge(In1, In2, In1'), CH) |
+	binary_merger2(PairList, In2', PairList', CH, Left, Left'),
+	binary_merger;
+
+    In2 = [] : PairList = _, CH = _, 
+      In1 = Out,
+      Left = Right .
+
+binary_merger1(PairList, UpList, CH, Left, Right) :-
+
+    PairList ? {In1, In2} :
+      UpList ! {Out1, Out2},
+      write_channel(ordered_merge(In1, In2, Out1), CH) |
+	binary_merger2(PairList', Out2, UpList', CH, Left, Right);
+
+    PairList = [] : CH = _,
+      UpList = [],
+      Left = Right .
+
+binary_merger2(PairList, Out, UpList, CH, Left, Right) :-
+
+    PairList ? {In1, In2} :
+      write_channel(ordered_merge(In1, In2, Out), CH) |
+	binary_merger1(PairList', UpList, CH, Left, Right);
+
+    PairList = [] : CH = _,
+      Out = [],
+      UpList = [],
+      Left = Right .
+
+
+close_merger(done, CH) :-
+    true :
+      close_channel(CH) .
+*****************************************************************************/
