@@ -32,7 +32,7 @@ STOPPED => Reply = _.
 */
 
 %SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
-SPIOFFSETS => {SpiOffset, SpiOffset, unbound, SpiOffset, SpiOffset}.
+SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
 %SPIOFFSETS => {unbound, unbound, unbound, unbound, unbound}.
 
 initialize(In) :-
@@ -42,7 +42,7 @@ initialize(In) :-
 
     In =\= [] :
       SpiOffset = _,
-      Options = [],
+      Options = [3],		% preset depth - others default
       Ordinal = 1,
       SpiOffsets = SPIOFFSETS,
       DefaultWeighter = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
@@ -425,6 +425,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **
 **    debug(Debug?^)
 **    end_debug
+**    diagnostic(ApplicationDiagnostic)
 **
 ** State:
 **
@@ -700,6 +701,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Debug' = _ |
 	self;
 
+    Schedule ? diagnostic(Diagnostic) :
+      Debug ! Diagnostic |
+	screen#display(("Application Diagnostic" -> Diagnostic)),
+	self;
+
     Schedule ? spifunctions(List),
     arity(SpiOffsets, Arity),
     make_tuple(Arity, SpiOffsets'),
@@ -874,6 +880,9 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     Schedule ? close(_, Reply) :
       Reply = [] |
+	self;
+
+    Schedule ? diagnostic(_) |
 	self;
 
     Schedule ? Other,
@@ -1172,7 +1181,7 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       InstantaneousAnchor = _,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
       Reply = true,
-      DEBUG((ChannelName: sink));
+      DEBUG((ChannelName: sink(unnatural(BaseRate))));
 
     Result =?= true,
     number(BaseRate),
@@ -1191,7 +1200,8 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       InstantaneousAnchor = _,
       Scheduler = _,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
-      Reply = "invalid base rate"(ChannelName - BaseRate);
+      Reply = "invalid base rate"(ChannelName - BaseRate),
+      DEBUG((ChannelName: sink(invalid(BaseRate))));
 
     Result =\= true :
       BasedAnchor = _,
@@ -1201,7 +1211,8 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       InstantaneousAnchor = _,
       Scheduler = _,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
-      Reply = Result.
+      Reply = Result,
+      DEBUG((ChannelName : sink(Result))).
 
   complete_weighter_tuple(Reply, ComputeWeight, WeighterIndex,
 			  WeighterTuple, Reply1) :-
