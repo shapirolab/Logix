@@ -1,5 +1,7 @@
-rm release/README
-cp -p README release
+rm SPI/README
+cp -p README SPI
+rm -f release/INSTALL
+cp -p INSTALL release
 rm -f release/BioSpi/README
 cp -p BioSpi/README release/BioSpi
 
