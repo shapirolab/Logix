@@ -1,9 +1,22 @@
-The .cp modules in this directory may be compiled and executed - e.g.
+The .cp modules in this directory may be compiled automatically and executed -
+e.g.
 
-    c(eg1)
-    run(eg1,20)
+    run(eg1#"Cytoplasm",20)
 
 The sub-directories vesicle and complex may be compiled and executed - e.g.
 
     c(complex)
-    run(complex,10)
+    run(#"System",10)
+
+You may also compile and record the output:
+
+    record(eg1#"Cytoplasm",eee,20)
+
+or compile and record the output:
+
+    c(complex)
+    record(#"System",ccc,10)
+
+Note that a module is only compiled automatically, if its corresponding .bin
+file is older than the .cp file.  Sub-directories are never compiled
+automatically.
