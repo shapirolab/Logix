@@ -2,8 +2,10 @@
 
 #define DEFAULT 0
 
-#define SQUARE 998
-#define POLY 999
+/******************************  Examples *******************************/
+#define SQUARE 100
+#define POLY   101
+/************************************************************************/
 
 struct weighter {
   char *name;
@@ -13,13 +15,14 @@ struct weighter {
 /* Add the name and index of your computation to the following table. */
 
 struct weighter weighttab[] = {
-  /* Add here in the form:
+  /* Add weighter entries here in the form:
     { name, index },
   */
 
   /*****************************  Examples ******************************/
   { "square", SQUARE },
   { "poly", POLY },
+  /**********************************************************************/
 
   { "default", DEFAULT }
 };
@@ -50,9 +53,9 @@ double psi_compute_bimolecular_weight(int method,
       break;
     }
 
-  /* Add your own case: computation here in the form:
+  /* Add your own computation here in the form:
 
-    case: <index of named computation> {
+    case <index of named computation>: {
       result = <biomolecular computation>;
       break;
     }
@@ -75,7 +78,7 @@ double psi_compute_bimolecular_weight(int method,
       result = rate*sum;
       break;
     }
-      
+    /**********************************************************************/
 
     default : {
       fprintf(stderr, "invalid weight computation index: '%i'.\n", method);
@@ -96,12 +99,12 @@ double psi_compute_homodimerized_weight(int method, double rate, int dimers,
       result = (rate*dimers*(dimers-1))/2;
       break;
     }
-  /* Add your own case: computation here in the form:
+  /* Add your own computation here in the form:
 
-    case: <index of named computation>
+    case <index of named computation>: {
       result = <homodimerized computation>;
       break;
-
+    }
   */
 
     default : {
