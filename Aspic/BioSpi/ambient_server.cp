@@ -11,6 +11,8 @@ AMBIENT_ARITY => 2.
 AMBIENT_CONTROL => 1.
 AMBIENT_ID => 2.
 
+DIAGNOSTIC(D) => send_to_scheduler(diagnostic(D), Scheduler, _).
+
 /**/
 DEBUG(TAG,ARG) => true.
 TERMS(Terms) => true.
@@ -118,7 +120,7 @@ run(Commands, System, Out) :-
 **
 **   Children - list of FCP vectors to child ambients
 **   SharedChannels - list of inter-ambient channels in use by children
-**   Status - one of suspended,resumed
+**   Status - one of running,suspended
 **   UniqueId - integer updated and assigned to new ambients
 **
 ** FCP Vectors
@@ -248,7 +250,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 
     In ? Other,
     otherwise |
-	fail(ambient(system) ? Other, unknown),
+	server_failed(system, Other),
 	self;
 
     Children =?= [],
@@ -293,8 +295,8 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
   system_suspend(In, Events, Children, UniqueId, Status, SharedChannels,
 			Scheduler, Ambient, Debug, Done) :-
 
-    known(Done) :
-      write_channel(record_item(reset("")), Scheduler, Scheduler') |
+    known(Done) |
+	send_to_scheduler(record_item(reset("")), Scheduler, Scheduler'),
 	control_children(suspend, Children, Children', Ready),
 	system_suspended(Ready?, SharedChannels, Status),
 	serve_system + (SharedChannels = []).
@@ -349,8 +351,8 @@ ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
     channel(Scheduler),
     string(AmbientName),
     integer(UniqueId) :
-      AmbientId = AmbientName(UniqueId),
-      write_channel(debug_note((ParentId->AmbientId)), Scheduler).
+      AmbientId = AmbientName(UniqueId) |
+	send_to_scheduler(debug_note((ParentId->AmbientId)), Scheduler, _).
 
 
 request_commands(Commands, Requests, EndRequests) :-
@@ -451,7 +453,7 @@ serve_ambient0(In, Events, FromSub, Done,
 **
 **   Children - list of FCP vectors to child ambients
 **   SharedChannels - list of inter-ambient channels in use by children
-**   Status - one of suspended,resumed
+o**   Status - one of running,suspended
 **   UniqueId - integer updated and assigned to new ambients
 **
 ** FCP Vectors
@@ -495,12 +497,12 @@ serve_ambient(In, Events, FromSub, Done,
 /* Procedure Services */
 
     In ? Close, Close =?= close(ChannelTuple) :
-      write_channel(close(DEBUGC(ChannelTuple, WaitChannelTuple?), Reply),
+      write_channel(close(DEBUGC(ChannelTuple, WaitChannelTuple?), Result),
 		    Scheduler) |
 	DEBUGC(true,debug_remove_channels),
-	DEBUG(close - Reply - ChannelTuple - PrivateChannels - SharedChannels,
+	DEBUG(close - Result - ChannelTuple - PrivateChannels - SharedChannels,
 		scheduler),
-	remove_local_channels(Reply, ChannelTuple,
+	remove_local_channels(Result, ChannelTuple,
 			      PrivateChannels, PrivateChannels',
 			      SharedChannels, SharedChannels', Unremoved),
 	pass_unremoved;
@@ -859,7 +861,7 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
 	DEBUG((other = Other), fail),
 	/* other(Other) = In'?, */
-	fail(ambient(AmbientId) ? Other, unknown),
+	server_failed(AmbientId, Other),
 	self;
 
     Events ? Public,
@@ -1056,9 +1058,10 @@ serve_ambient(In, Events, FromSub, Done,
 	abort_children(Children, Children'),
 	serve_ambient;
 	
-    Event = failed(Goal, Reason),
+    Event =?= failed(Goal, Reason),
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
-	computation # failed(AmbientId@Goal, Reason),
+	spi_utils#show_goal(Goal, [], Goal'),
+	event_failed,
 	serve_ambient;
 		
     Event =?= comment(Comment),
@@ -1100,6 +1103,20 @@ serve_ambient(In, Events, FromSub, Done,
       Controls ! request(extract(all, Goals)) |
 	resume_ambient_when_ready.
 
+  event_failed(AmbientId, Goal, Reason) :-
+
+    Goal =?= [Module | _] # Call,
+    arg(1, Call, Name),
+    nth_char(1, Name, C),
+    CHAR_A =< C, C =< CHAR_Z |
+	event_failed1;
+
+    otherwise |
+	computation # failed(AmbientId@Goal, Reason).
+
+  event_failed1(AmbientId, Module, Call, Reason) :-
+    known(Call) |
+	computation # failed(AmbientId@Module#Call, Reason).
 
 lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 	 Scheduler, Ambient, Debug) + (Last = "") :-
@@ -1187,7 +1204,28 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 	       format_channel(NewChannel, NC)
 	),
 	rate_to_baserate,
-	update_new_channel.
+	update_new_channel;
+
+    /* Scheduler closed */
+    ChannelList = [],
+    otherwise,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
+      AddRefs = _,
+      Debug = _,
+      Last = _,
+      Scheduler = _,
+      NewChannelList = [] |
+	server_failed(AmbientId, lookup(Id, PrivateChannel, SharedChannel, "*"));
+
+   ChannelList = [],
+   otherwise,
+   string(Ambient) :
+      AddRefs = _,
+      Debug = _,
+      Last = _,
+      Scheduler = _,
+      NewChannelList = [] |
+	server_failed(Ambient, lookup(Id, PrivateChannel, SharedChannel, "*")).
 
   rate_to_baserate(Type, Rate, BaseRate) :-
 
@@ -1223,7 +1261,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id) :
       NewChannelList = [Channel | ChannelList],
       SharedChannel = Channel |
-	ambient_diagnostic("shared weight/rate conflict!" - Id, Scheduler).
+	DIAGNOSTIC("shared weight/rate conflict!" - Id).
 
   verify_shared_channel_type(PrivateChannel, Channel, SharedChannel,
 			     ChannelList, NewChannelList, Scheduler) :-
@@ -1258,8 +1296,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id) :
       SharedChannel = Channel,
       NewChannelList = ChannelList |
-	ambient_diagnostic("shared type conflict!" - Id(Type =\= SharedType),
-				Scheduler).
+	DIAGNOSTIC("shared type conflict!" - Id(Type =\= SharedType)).
     
 
 add_local_channel(Channel, PrivateChannels, NewPrivateChannels) :-
@@ -1587,9 +1624,11 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
     List ? Name(_NewChannel, BaseRate),
     PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
-    BaseRate =\= OtherBaseRate :
+    BaseRate =\= OtherBaseRate,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
       NewPublicChannels ! Entry |
-	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+	fail(public_channel(AmbientId # rate_conflict(Name -
+					BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
@@ -1636,9 +1675,11 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
     List ? Name(_NewChannel, BaseRate),
     PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
-    BaseRate =\= OtherBaseRate :
+    BaseRate =\= OtherBaseRate,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
       NewPublicChannels ! Entry |
-	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+	fail(public_channel(AmbientId # rate_conflict(Name -
+				BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
@@ -1649,23 +1690,6 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
       NewPublicChannels ! Entry |
 	self;
 
-    List ? Name(NewChannel, BaseRate),
-    we(NewChannel),
-    PublicChannels =?= [Name1(_, _, _) | _],
-    string(Name),
-    Last @< Name, Name @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Name, NL, []) :
-      NewChannel = NewChannel'?,
-      List'' = [Name(NewChannel', BaseRate) | List'],
-      PublicChannels' =
-	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate)
-	| PublicChannels],
-      write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
-				BaseRate), Scheduler),
-      GT = NL |
-	list_to_string(GL, Id),
-	self;
 
     List ? Name(NewChannel, CW, BaseRate),
     Last @< Name,
@@ -1683,18 +1707,21 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
       Last' = Name |
 	self;
 
-    List ? Name(_NewChannel, BaseRate, _),
+    List ? Name(_NewChannel, _ComputeWeight, BaseRate),
     PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherBaseRate, _),
-    BaseRate =\= OtherBaseRate :
+    BaseRate =\= OtherBaseRate,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
       NewPublicChannels ! Entry |
-	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+	fail(public_channel(AmbientId # rate_conflict(Name -
+				BaseRate =\= OtherBaseRate))),
 	self;
 
     List ? Name(_NewChannel, ComputeWeight, _),
     PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
-    ComputeWeight =\= OtherComputeWeight :
+    ComputeWeight =\= OtherComputeWeight,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
       NewPublicChannels ! Entry |
-	fail(public_channel(compute_weight_conflict(Name -
+	fail(public_channel(AmbientId # compute_weight_conflict(Name -
 				ComputeWeight =\= OtherComputeWeight))),
 	self;
 
@@ -1723,26 +1750,26 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
 	list_to_string(GL, Id),
 	self;
 
-    otherwise :
+    otherwise,
+    List ? Item,
+    arg(1, Item, Name), string(Name),
+    arg(2, Item, PC), we(PC) :
+      Last = _,
+      List' = _,
+      Scheduler = _,
+      NewPublicChannels = PublicChannels,
+      ReadyAmbient = Ambient;
+
+    otherwise,
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
       Last = _,
       Scheduler = _,
       NewPublicChannels = PublicChannels,
       ReadyAmbient = Ambient |
-	fail(merge_public_channels(List)).
+	computation # failed(AmbientId@merge_public_channels(List)).
 
 
 /***************************** Utilities ************************************/
-
-
-ambient_diagnostic(Diagnostic, Scheduler) :-
-
-    true :
-      write_channel(diagnostic(Diagnostic), Scheduler);
-
-    /* This is the case where the Scheduler has closed. */
-    otherwise :
-      Diagnostic = _,
-      Scheduler = _ .
 
 
 ambient_suspending(ReadyChildren,
@@ -1935,7 +1962,7 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
       PreviousMs = _,
       NewRemoved = Removed |
       /* This should never happen - internal failure!? */
-	ambient_diagnostic((Ambient:remove(Name)-failed(Index)), Scheduler).
+	DIAGNOSTIC((Ambient:remove(Name)-failed(Index))).
 
 
 resume_ambient_when_ready(In, Events, FromSub, Done,
@@ -1959,6 +1986,47 @@ resume_controls_when_ready(Reply1, Reply2, Reply3, Ready,
     known(Reply1), known(Reply2), known(Reply3) :
       Ready = true,
       Controls = [resume | NewControls].
+
+
+send_to_scheduler(Ms, Scheduler, Scheduler') :-
+
+    true :
+      write_channel(Ms, Scheduler, Scheduler');
+
+    otherwise :
+      Ms = _,
+      Scheduler' = Scheduler.
+
+server_failed(Server, Failure) :-
+
+    Failure =?= lookup(_Locus, [], []^) :
+      Server = _;
+
+    Failure =?= lookup(_Locus, PrivateChannel, []^),
+    vector(PrivateChannel) :
+      Server = _;
+
+    Failure =?= lookup(_Locus, [], []^, _Addrefs) :
+      Server = _;
+
+    Failure =?= lookup(_Locus, PrivateChannel, []^, _Addrefs),
+    vector(PrivateChannel) :
+      Server = _;
+
+    Failure =?= new_channel(_Creator, []^, _BaseRate) :
+      Server = _;
+
+    Failure =?= new_channel(_Creator, []^, _ComputeWeight, _BaseRate) :
+      Server = _;
+
+    Failure =?= close(_ChannelTuple) :
+      Server = _;
+
+    Failure =?= start(_Signature, _Operations, _Message, _Chosen) :
+      Server = _;
+
+    otherwise |
+	fail(Server # Failure).
 
 /***************************** formatting ***********************************/
 /*
