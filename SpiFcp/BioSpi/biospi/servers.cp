@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:10 $
+		       	$Date: 2002/05/29 06:20:04 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,13 +14,13 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -language([evaluate, compound, colon]).
--export([serve_empty_scope/6]).
+-export([serve_empty_scope/7]).
 
 -include(spi_constants).
 -include(bio_constants).
 
 /*
-** serve_empty_scope/6+8
+** serve_empty_scope/7+7
 **
 ** Serve requests from first-level processes.  See serve_process_scope/8+6
 **
@@ -32,7 +32,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **
 **      error(Diagnostic) - copy Diagnostic to Errors stream.
 **
-**      export(Name) - add to exports
+**      ambient(Name) - add to named Ambients.
 **
 **      lookup_functor(Functor, CallType, CallDefinition)
 **
@@ -63,9 +63,11 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **
 ** Output:
 **
-**   Exports is a list of exported procedures, name/arity.
+**   Exports is a list of exported procedure identifiers.
 **
-**   Entries is a list of generated processes for first level procedure entry.
+**   Ambients is a list of generated ambient procedure names.
+**
+**   Generated is a list of processes for first level procedure entry.
 **
 **   Optimize is a list of procedure object descriptors.
 **
@@ -76,19 +78,21 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **   Progeny is a list of child ProcessDefinitions.
 **
 **   Refs, AddRef is a list of deferred lookup_functor/3 requests.
+**
+**   Sum, Summed is a list of called summed processes.
 */
 
-serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors)
+serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
 		+ (Progeny = [], Refs = AddRef?, AddRef,
-		   Sums,  AddExports,
-		   Summed = Sums?, AmbientExports = AddExports?) :-
+		   Sums, Summed = Sums?) :-
 
     In ? error(Error) :
       Errors ! Error |
 	self;
 
-    In ? export(Export) :
-      AddExports ! Export |
+    In ? ambient(Ambient),
+    string(Ambient) :
+      Ambients ! Ambient |
 	self;
 
     In ? lookup_functor(Functor, CallType, CallDefinition) :
@@ -105,7 +109,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors)
 	make_prefix_call(Export, Prefix),
 	create_entry(GlobalDescriptors, GlobalNames, Prefix?,
 			ProcessDefinition?, NewDefinition,
-			Entries, Entries'?, Optimize, Optimize'?),
+			Generated, Generated'?, Optimize, Optimize'?),
 	add_process_definition(NewDefinition?, LHSS, Progeny, Progeny'),
 	self;
 
@@ -118,14 +122,14 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors)
 	self;
 
     In = [] :
-      AddExports = [],
+      Ambients = [],
       Controls = _,
       AddRef = [],
-      Exports = AmbientExports,
+      Exports = [],
       Sums = [] |
 	find_process_refs(Refs, Progeny, [], []),
 	/* sum_procedures. */
-	call#sum_procedures(Summed, Entries, Optimize, [/*develope*/], Errors).
+	call#sum_procedures(Summed, Generated, Optimize, [], Errors).
 
   make_prefix_call(Export, Prefix) :-
 
@@ -139,7 +143,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors)
 
 create_entry(GlobalDescriptors, GlobalNames, Prefix,
 		ProcessDefinition, NewDefinition,
-		Entries, NextEntries, Optimize, NextOptimize) :-
+		Generated, NextGenerated, Optimize, NextOptimize) :-
 
     ProcessDefinition =?= {Name, Arity, ChannelNames, LHSS, CodeTuple},
     Name =\= NULL,
@@ -149,8 +153,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     Index++,
     string_to_dlist(Name, NL, [CHAR_DOT, CHAR_ZERO]),
     list_to_string(NL, Name') :
-      Entries ! export(OuterLHS, Initializer?, []),
-      NextEntries = Entries',
+      Generated ! export(OuterLHS, Initializer?, []),
+      NextGenerated = Generated',
       Optimize ! procedure([call(Name'?)], Arity, OuterLHS, _Value),
       NextOptimize = Optimize',
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
@@ -167,7 +171,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     GlobalNames =\= [],
     Index := arity(OuterLHS) :
       GlobalDescriptors = _,
-      NextEntries = Entries,
+      NextGenerated = Generated,
       NextOptimize = Optimize,
       NewDefinition = {Name, Arity, ChannelNames'?, NewLHS?, CodeTuple},
       NewLHS = {OuterLHS'?, InnerLHS'?} |
@@ -179,7 +183,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
       GlobalNames = _,
       Prefix = _,
       NewDefinition = ProcessDefinition,
-      Entries = NextEntries,
+      Generated = NextGenerated,
       NextOptimize = Optimize.
 
   split_channels(I, Index, ChannelNames, ParamList, ChannelNameList) :-
@@ -443,8 +447,8 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	self;
 
     /* Pass along */
-    In ? Export, Export = export(_Export) :
-      Out ! Export |
+    In ? Ambient, Ambient = ambient(_Ambient) :
+      Out ! Ambient |
 	self;
 
     /* Pass along */

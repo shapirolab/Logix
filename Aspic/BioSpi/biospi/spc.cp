@@ -4,23 +4,23 @@ Precompiler for Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:10 $
+		       	$Date: 2002/05/29 06:20:04 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--export(stochasticize/2).
+-export(stochasticize/3).
 -mode(interpret).
 -language([evaluate, compound, colon]).
 
 -include(spi_constants).
 -include(bio_constants).
 
-stochasticize(In, Terms) :-
+stochasticize(BlockPrefix, In, Terms) :-
 	stream#hash_table(HashTable),
 	stream#hash_table(SignatureTable),
 	procedure_channels,
@@ -42,9 +42,11 @@ stochasticize(In, Terms) :-
       ProcessTable = HashTable.
 
 /*
-** output/4
+** output/5
 **
 ** Input:
+**
+**   BlockPrefix is a prefix string for new_ambient Name.
 **
 **   In is a stream of  Mode(Atom, RHSS, Procedure).
 **
@@ -73,7 +75,7 @@ stochasticize(In, Terms) :-
 **   Terms is a stream of compound procedures.
 */
 
-output(In, ProcessTable, SignatureTable, Terms) :-
+output(BlockPrefix, In, ProcessTable, SignatureTable, Terms) :-
 
     /* Discard conflicted code. */
     In ? conflict(_Atom, _RHSS, _Procedure) |
@@ -110,6 +112,7 @@ output(In, ProcessTable, SignatureTable, Terms) :-
 	stochastic;
 
     In = [] :
+      BlockPrefix = _,
       Terms = [],
       ProcessTable = [],
       SignatureTable = [entries(Entries)] |
@@ -139,14 +142,14 @@ output(In, ProcessTable, SignatureTable, Terms) :-
       Signature = _.
 
 
-stochastic(In, ProcessTable, SignatureTable, Terms,
+stochastic(BlockPrefix, In, ProcessTable, SignatureTable, Terms,
 	Signature, RHSS, Prototype, Procedure, NewRHSS) :-
 
     Procedure =\= (_ :- _) :
       Signature = _ |
 	analyze_rhss(RHSS, Prototype, [], ChannelTables,
 			ProcessTable, ProcessTable'?),
-	update_rhss(RHSS, [], ChannelTables,
+	update_rhss(BlockPrefix, RHSS, [], ChannelTables,
 		SignatureTable, SignatureTable'?, Rhss),
 	utilities#make_predicate_list(';', Rhss, NewRHSS),
 	output;
@@ -184,8 +187,8 @@ stochastic(In, ProcessTable, SignatureTable, Terms,
 	rewrite_clauses,
 	communication_to_operations,
 	/* Add InterChannels to arguments ([] above) - append to Closes. */
-	update_rhss(Communicate2'''?, InterChannels, ChannelTables,
-		SignatureTable, SignatureTable'?, Communicate2''),
+	update_rhss(BlockPrefix, Communicate2'''?, InterChannels,
+	    ChannelTables, SignatureTable, SignatureTable'?, Communicate2''),
 	generate_inter_comm(Signature, InterChannels?,
 		Communicate2''?, Communicate2', Terms', Terms''),
 	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
@@ -788,7 +791,7 @@ body_channel_usage2(ChannelTable, NewChannelTable, Body,
       NewRefs = 1.
 
 
-update_rhss(RHSS, InterChannels, ChannelTables,
+update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
 		SignatureTable, NextSignatureTable, Rhss) :-
 
     RHSS ? RHS,
@@ -802,12 +805,14 @@ update_rhss(RHSS, InterChannels, ChannelTables,
 	utilities#make_predicate_list(',', NewAsk?, NewAsk'),
 	utilities#make_predicate_list(',', NewTell?, NewTell'),
 	utilities#untuple_predicate_list(',', Goals?, Goals'),
-	ambient_goals(Goals'?, Body', SignatureTable, SignatureTable'?),
+	ambient_goals(BlockPrefix, Goals'?, Body',
+			SignatureTable, SignatureTable'?),
 	utilities#make_predicate_list(',', Body'?, Body),
 	self;
 
     RHSS =?= [] :
       InterChannels = _,
+      BlockPrefix = _,
       ChannelTables = [],
       Rhss = [],
       SignatureTable = NextSignatureTable.
@@ -818,7 +823,8 @@ update_rhss(RHSS, InterChannels, ChannelTables,
   partition_rhs(Body, true^, true^, Body^) :-
     Body =\= (_ | _) | true.
 
-  ambient_goals(Goals, Body, SignatureTable, NextSignatureTable) :-
+  ambient_goals(BlockPrefix, Goals, Body,
+	SignatureTable, NextSignatureTable ):-
 
     Goals =?= [new_ambient(Name, Id, ServiceId, AmbientCh), Id | Goals'] :
       SignatureTable ! lookup(Id, Signature, Signature, _Status),
@@ -826,9 +832,12 @@ update_rhss(RHSS, InterChannels, ChannelTables,
 	      write_channel(new_ambient(Name, ServiceId, Goal?, AmbientCh),
 			    BIO_SCHEDULER)
 	     | Body'?] |
-	utils#tuple_to_dlist(Signature, SignatureList, [AmbientCh]),
+	utils#tuple_to_dlist(Signature, [Functor|SignatureList], [AmbientCh]),
+	string_to_dlist(Functor, FL, []),
+	string_to_dlist(BlockPrefix, LL, FL?),
+	list_to_string(LL?, Functor'),
 	utilities#subtract_list(SignatureList, [`"Scheduler"], GoalList),
-	utils#list_to_tuple(GoalList, Goal),
+	utils#list_to_tuple([Functor'? | GoalList?], Goal),
 	self;
 
     Goals ? Goal,
@@ -837,6 +846,7 @@ update_rhss(RHSS, InterChannels, ChannelTables,
 	self;
 
     Goals = [] :
+      BlockPrefix = _,
       Body = [],
       NextSignatureTable = SignatureTable.
 

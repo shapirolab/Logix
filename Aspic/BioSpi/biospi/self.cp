@@ -1,12 +1,12 @@
 /*
-Transformer for Stochastic Pi Calculus procedures.
+Transformer for Ambient Stochastic Pi Calculus procedures.
 
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:10 $
+		       	$Date: 2002/05/29 06:20:03 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,12 +43,12 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Compound = Terms? |
 
 	/* Get Exported list. */
-	filter_attributes(Attributes1, Attributes1', Exported),
-	Attributes2 = [export(Exports?) | Attributes1'?],
+	filter_attributes(Attributes1, Attributes1', Exported, BlockPrefix),
+	Attributes2 = [export(Exports?), entries(Ambients?) | Attributes1'?],
 	tospifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
-  filter_attributes(In, Out, Exported) :-
+  filter_attributes(In, Out, Exported, BlockPrefix) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
@@ -62,6 +62,11 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Exported = Es |
 	self;
 
+    In ? block_prefix(String),
+    string(String) :
+      BlockPrefix = String |
+	self;
+
     In ? Other,
     otherwise :
       Out ! Other |
@@ -69,25 +74,26 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 
     In =?= [] :
       Out = [] |
-	unify_without_failure(Exported, []).
+	unify_without_failure(Exported, []),
+	unify_without_failure(BlockPrefix, "").
 
 
-program(Source, Exported, Exports, Terms, Errors) :-
-	filter_spifcp_attributes(Source, Exported, Controls,
-					Source', Errors, Errors'?),
-	servers#serve_empty_scope(Scope?, Controls?, Exports,
+program(Source, Exported, Exports, Ambients, BlockPrefix, Terms, Errors) :-
+	filter_spifcp_attributes(Source, Exported, Controls, Source',
+					Errors, Errors'?),
+	servers#serve_empty_scope(Scope?, Controls?, Exports, Ambients,
 				  NextTerms, Optimize, Errors'),
 	process_definitions+(Processes = [], NextScope = []),
 	optimize#initialize(Optimize?, Exports?, Accessible),
 	optimize#procedures(Terms''?, Accessible, [], Terms'),
-	spc#stochasticize(Terms'?, Terms).
+	spc#stochasticize(BlockPrefix?, Terms'?, Terms).
 
 
 /* Extract Exports and Global channel declarations, base rate and weighter. */
 filter_spifcp_attributes(Source, Exported, Controls, NextSource,
-			Errors, NextErrors) +
-	(GlobalDescriptors = [], Defaults = {_Weighter, _Rate},
-	 SpiExports = AddExports?, AddExports) :-
+				Errors, NextErrors) +
+		(GlobalDescriptors = [], Defaults = {_Weighter, _Rate},
+		 SpiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
 	spifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
@@ -891,7 +897,7 @@ transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
 
     string_to_dlist(AMBIENT, AmbientChL, [CHAR_MINUS | IdL?]),
     string_to_dlist(SERVICE, ServiceIdL, [CHAR_MINUS | IdL?]) :
-      Scope = [next_scope_id(Id), export(Id?) | NextScope],
+      Scope = [next_scope_id(Id), ambient(Id?) | NextScope],
       Body = {new_ambient(Name, Id, `ServiceId?, `AmbientCh?)} |
 	string_to_dlist(Id?, IdL, []),
 	list_to_string(AmbientChL, AmbientCh),

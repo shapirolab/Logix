@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:09 $
+		       	$Date: 2002/05/29 06:20:03 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -459,7 +459,7 @@ summed_call(ProcessDefinition, Locals, Primes, Sum, Names, Procedures,
 
 /****************** Summation  Empty server predicates. **********************/
 
-sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
+sum_procedures(Summed, Generated, Optimize, NextOptimize, Errors) +
 			(Cumulated = []) :-
 
     Summed ? Name(Procedures, Call) |
@@ -471,7 +471,7 @@ sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
 
     Summed = [] :
       Cumulated = _,
-      Entries = [],
+      Generated = [],
       Optimize = NextOptimize,
       Errors = [].
 
@@ -514,7 +514,7 @@ sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
       Name = _,
       Reply = new.
 
-  cumulated(Summed, Entries, Optimize, NextOptimize, Errors, Cumulated,
+  cumulated(Summed, Generated, Optimize, NextOptimize, Errors, Cumulated,
 	Name, Calls, Channels, CodeTuples, Call, Reply) :-
 
     Reply =?= found :
@@ -535,7 +535,7 @@ sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
 	make_named_predicates(';', Code?, RHS),
 	utilities#make_lhs_tuple(Name, SumChannels, Tuple),
 	make_sum_procedure(FinalMode?, (Ask? : Tell?), RHS?, Tuple?,
-				Entries, Entries'?),
+				Generated, Generated'?),
 	make_sum_call(Name, Calls, Call, Errors'', Errors'''?),
 	sum_procedures.
 
@@ -680,19 +680,19 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Prepares, Code,
 
 
 /* Compare to make_rhs2 */
-make_sum_procedure(Mode, Requests, RHS, Tuple, Entries, NextEntries) :-
+make_sum_procedure(Mode, Requests, RHS, Tuple, Generated, NextGenerated) :-
 
     Mode =?= communicate :
-      Entries = [Mode(Atom?, (Requests | Chooser?),
+      Generated = [Mode(Atom?, (Requests | Chooser?),
 		      (CommunicationAtom? :- RHS))
-		| NextEntries] |
+		  | NextGenerated] |
 	utilities#tuple_to_atom(Tuple, Atom),
 	utilities#make_communicator(Atom, Chooser, CommunicationAtom);
 
     /* conflict */
     otherwise :
       Requests = _,
-      Entries = [Mode(Atom?, RHS, []) | NextEntries] |
+      Generated = [Mode(Atom?, RHS, []) | NextGenerated] |
 	utilities#tuple_to_atom(Tuple, Atom).
 
 
