@@ -1,0 +1,23 @@
+#! /sbin/sh
+#
+# Coventry - Monitor and re-nice TS queue processes.
+#
+
+if chkconfig verbose 
+then
+    ECHO=echo
+else
+    ECHO=:
+fi
+
+case $1 in
+	'start')
+	    killall coventryd
+	    $ECHO Starting coventry daemon.
+	    coventryd
+	;;
+	'stop')
+	    $ECHO Stopping coventry daemon.
+	    killall coventryd
+	;;
+esac
