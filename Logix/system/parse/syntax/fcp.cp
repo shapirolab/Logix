@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/Logix/system/parse/syntax/fcp.cp,v 1.3 2000/05/03 10:41:57 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/parse/syntax/fcp.cp,v 1.4 2004/06/22 12:11:33 bill Exp $ */
 -language(syntax).
 
 yfx( ';'  , 1070).	% 18/6/89	1050
 yfx( '|'  , 1060).	% 18/6/89	1100
 yfy( ':'  , 1050).	% 18/6/89	1060
-yfx( '&'  ,  990).      % 3/5/2000      1000
 yfx( ','  , 1000).
+yfx( '&'  ,  990).      % 3/5/2000      1000
 yfx( '!'  ,  900).	% 1/1/88	new
 xfy( '?'  ,  900).	% 4/5/88	new
 yfy( '='  ,  800).	% 1/1/88	700
@@ -20,6 +20,7 @@ xfy( '/'  ,  400).
 yfy( '\'  ,  300).
 yfy( ':-' , 1200).
 yfy( '<-' , 1190).	% 18/6/89	new
+yfy( '->' , 1190).	% 02/12/2001	new
 yfy( '=>' , 1010).	% 15/12/91	new
 yfy( '@<' ,  800).	% 1/1/88	700
 yfy( ':=' ,  700).
@@ -51,3 +52,12 @@ yf(  '++' ,  200).	% 27/4/91	new
 yf(  '--' ,  200).	% 27/4/91	new
 fx( 'procedure', 100).	% 1/1/88	new
 xf(  '!'  ,  100).	% 20/10/91	changed from 900
+/* added for ambients */
+fx( 'p2c', 98).		% 17/1/02	new
+fx( 'c2p', 98).		% 17/1/02	new
+fx( 's2s', 98).		% 17/1/02	new
+fx( 'local', 98).	% 29/1/02	new
+fx( 'enter', 98).	% 17/1/02	new
+fx( 'accept', 98).	% 17/1/02	new
+fx( 'exit', 98).	% 17/1/02	new
+fx( 'expel', 98).	% 17/1/02	new
