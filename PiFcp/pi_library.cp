@@ -18,7 +18,7 @@ pi_channel(Channel)+(Creator = 'SYSTEM', VC = _, MsC = _) :-
       Creator = _,
       VC = _,
       MsC = _ |
-	screen#display(('pi_utils: Can''t make channel' : Channel)).
+	computation#display(('pi_utils: Can''t make channel' : Channel)).
 
 pi_send(Message, Channel) :-
     Channel = _Creator(C, _Stream),
