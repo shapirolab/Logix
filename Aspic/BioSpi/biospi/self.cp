@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:56:37 $
+		       	$Date: 2003/08/31 18:41:06 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -127,30 +127,37 @@ program(Source, Exported, Exports, Entries, BlockPrefix, Terms, Errors) :-
 
 /* Extract Exports and Parameter declarations, base rate and weighter. */
 filter_spifcp_attributes(Source, Exported, Controls, NextSource,
-				Errors, NextErrors) +
-		(Parameters = [],
-		 Defaults = {_Weighter, _Rate},
-		 SpiExports = AddExports?, AddExports) :-
+			 Errors, NextErrors) +
+	(Parameters = [],
+	 AllVariables = Variables?, Variables,
+	 Defaults = {_Weighter, _Rate},
+	 SpiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
-	spifcp_attribute(String, Parameters, Parameters',
-		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
+	spifcp_attribute(String,
+			 Parameters, Parameters', Variables, Variables',
+			 Defaults, Defaults', AddExports, AddExports',
+			 Errors, Errors'),
 	self;
 
     Source ? Tuple, Tuple =\= (_ :- _) |
-	spifcp_attribute(Tuple, Parameters, Parameters',
-		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
+	spifcp_attribute(Tuple,
+			 Parameters, Parameters', Variables, Variables',
+			 Defaults, Defaults', AddExports, AddExports',
+			 Errors, Errors'),
 	self;
 
     otherwise :
       AddExports = [],
       NextSource = Source,
-      Errors = NextErrors |
+      Variables = [] |
 	choose_exports(Exported, SpiExports, Exported'),
 	complete_spifcp_attributes.
 
-  spifcp_attribute(Attribute, OldParameters, NewParameters,
-	Defaults, NewDefaults, Exports, NextExports, Errors, Errors') :-
+  spifcp_attribute(Attribute,
+		   OldParameters, NewParameters, Variables, NextVariables,
+		   Defaults, NewDefaults, Exports, NextExports,
+		   Errors, Errors') :-
 
     /* Obsolescent */
     tuple(Attribute), arity(Attribute) >= 2,
@@ -159,7 +166,7 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
 	validate_parameters(Gs?, Defaults, OldParameters, NewParameters,
-				Errors, Errors');
+			    Variables, NextVariables, Errors, Errors');
 
     tuple(Attribute), arity(Attribute) >= 2,
     arg(1, Attribute, public) :
@@ -167,24 +174,27 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Attribute, [_ | Ps], []),
 	validate_parameters(Ps?, Defaults, OldParameters, NewParameters,
-				Errors, Errors');
+			    Variables, NextVariables, Errors, Errors');
 
     tuple(Attribute), arity(Attribute) >= 2,
     arg(1, Attribute, export) :
       NewDefaults = Defaults,
-      NewParameters = OldParameters |
+      NewParameters = OldParameters,
+      Variables = NextVariables |
 	utils#tuple_to_dlist(Attribute, [_ | Es], []),
 	validate_exports(Es?, Exports, NextExports, Errors, Errors');
   
     Attribute = baserate(Rate) :
       Exports = NextExports,
-      NewParameters = OldParameters |
+      NewParameters = OldParameters,
+      Variables = NextVariables |
 	validate_default_base_rate(Rate, Defaults, NewDefaults,
 					Errors, Errors');
 
     Attribute = weighter(Weighter) :
       Exports = NextExports,
-      NewParameters = OldParameters |
+      NewParameters = OldParameters,
+      Variables = NextVariables |
 	validate_default_weighter(Weighter, Defaults, NewDefaults,
 					Errors, Errors');
 
@@ -193,13 +203,15 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
       Errors' = Errors,
       Exports = NextExports,
       NewDefaults = Defaults,
-      NewParameters = OldParameters;
+      NewParameters = OldParameters,
+      Variables = NextVariables;
 
     otherwise :
-      NewDefaults = Defaults,
+      Errors ! invalid_spifcp_attribute(Attribute),
       Exports = NextExports,
+      NewDefaults = Defaults,
       NewParameters = OldParameters,
-      Errors ! invalid_spifcp_attribute(Attribute).
+      Variables = NextVariables.
 
   choose_exports(FcpExports, SpiExports, Exports) :-
 
@@ -214,13 +226,22 @@ filter_spifcp_attributes(Source, Exported, Controls, NextSource,
 	utilities#concatenate_lists([FcpExports, SpiExports], Exports).
 
 
-complete_spifcp_attributes(Exported, Defaults, Parameters, Controls) :-
+complete_spifcp_attributes(Exported, Defaults, Parameters, Controls,
+			   AllVariables, Errors, NextErrors) :-
 
     Defaults =?= {DefaultWeighter, DefaultRate} :
-      Controls = {Exported?, Parameters, ParameterNames?, Defaults} |
+      Controls = {Exported?, Parameters, ParameterNames?,
+		  {FinalDefaultWeighter?, FinalDefaultRate?}
+	         } |
 	extract_parameter_names,
 	unify_without_failure(DefaultWeighter, SPI_DEFAULT_WEIGHT_NAME),
-	unify_without_failure(DefaultRate, infinite).
+	unify_without_failure(DefaultRate, infinite),
+	variable_default_base_rate(DefaultRate, FinalDefaultRate,
+				   ParameterNames, Errors, Errors'),
+	variable_default_weighter,
+	public_variable_names(AllVariables, _,
+			      ParameterNames, NextErrors', NextErrors,
+			      undeclared_public_variable).
 
   extract_parameter_names(Parameters, ParameterNames) :-
 
@@ -231,6 +252,91 @@ complete_spifcp_attributes(Exported, Defaults, Parameters, Controls) :-
 
     Parameters =?= [] :
       ParameterNames = [].
+
+  variable_default_base_rate(Default, FinalDefault,
+			     ParameterNames, Errors, NextErrors) :-
+
+    Default =?= `VariableName |
+	public_variable_name + (FinalVariable = FinalDefault,
+				Diagnostic = non_public_variable_base_rate);
+
+    otherwise :
+      ParameterNames = _,
+      Default = FinalDefault,
+      Errors = NextErrors.
+
+   variable_default_weighter(DefaultWeighter, FinalDefaultWeighter,
+			     ParameterNames, Errors, NextErrors) :-
+
+    string(DefaultWeighter) :
+      ParameterNames = _,
+      DefaultWeighter = FinalDefaultWeighter,
+      Errors = NextErrors;
+
+    DefaultWeighter =?= `VariableName |
+	public_variable_name(VariableName, FinalDefaultWeighter,
+			     ParameterNames, Errors, NextErrors,
+			     non_public_default_weighter);
+
+    tuple(DefaultWeighter), DefaultWeighter =\= `_,
+    arg(1, DefaultWeighter, `VariableName) :
+      Diagnostic = non_public_default_weighter_argument |
+	public_variable_name(VariableName, FinalVariable,
+			     ParameterNames, Errors, Errors',
+			     non_public_default_weighter_name),
+	utils#tuple_to_dlist(DefaultWeighter, [_Functor, Index | Arguments],
+			     []),
+	utils#list_to_tuple([FinalVariable?, Index | FinalArguments?],
+			    FinalDefaultWeighter),
+	public_variable_names;
+
+    tuple(DefaultWeighter), DefaultWeighter =\= `_,
+    arg(1, DefaultWeighter, Variable), Variable =?= `_VariableName :
+      Diagnostic = non_public_default_weighter_argument |
+	public_variable_name(DefaultWeighter, FinalDefault,
+		 	     ParameterNames, Errors, Errors',
+			     non_public_variable_weighter_name),
+	utils#tuple_to_dlist(DefaultWeighter, [_Functor, Index | Arguments],
+			     []),
+	utils#list_to_tuple([FinalDefault?, Index | FinalArguments?],
+			    FinalDefaultWeighter),
+	public_variable_names.
+
+  public_variable_names(Arguments, FinalArguments,
+			ParameterNames, Errors, NextErrors, Diagnostic) :-
+
+    Arguments ? `VariableName :
+      FinalArguments ! DefaultVariable |
+	public_variable_name(VariableName, DefaultVariable, ParameterNames,
+			     Errors, Errors', Diagnostic),
+	self;
+
+    Arguments ? Other,
+    Other =\= `_ |
+	self;
+
+    Arguments =?= [] :
+      Diagnostic = _,
+      ParameterNames =_,
+      Errors = NextErrors,
+      FinalArguments = [].
+
+  public_variable_name(VariableName, FinalVariable,
+		       ParameterNames, Errors, NextErrors, Diagnostic) :-
+
+    ParameterNames ? VariableName :
+      Diagnostic = _,
+      ParameterNames' =_,
+      Errors = NextErrors,
+      FinalVariable = `VariableName;
+
+    ParameterNames ? ParameterName,
+    VariableName =\= ParameterName |
+	self;
+
+    ParameterNames =?= [] :
+      Errors = [Diagnostic(VariableName) | NextErrors],
+      FinalVariable = 0.    
 
 
 validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
@@ -322,9 +428,10 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     string(Name), nth_char(1, Name, C),
     CHAR_a =< C, C =< CHAR_z :
       DefaultWeighter = NewWeighter?,
+      Diagnostic = invalid_default_public_weighter_parameter,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
-	validate_public_weighter_params,
+	validate_public_weighter_params + (Variables= _, NextVariables = _),
 	utils#list_to_tuple([Name, BIO_NULL | Params], NewWeighter);
 
     Defaults = {DefaultWeighter, _DefaultRate},
@@ -333,9 +440,10 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
     string(Name), nth_char(1, Name, C),
     CHAR_A =< C, C =< CHAR_Z :
       DefaultWeighter = NewWeighter?,
+      Diagnostic = invalid_default_public_weighter_parameter,
       NewDefaults = Defaults |
 	utils#tuple_to_dlist(Weighter, [_VariableName | Args], []),
-	validate_public_weighter_params,
+	validate_public_weighter_params + (Variables= _, NextVariables = _),
 	utils#list_to_tuple([`Name, `"_" | Params], NewWeighter);
 
     otherwise :
@@ -343,13 +451,15 @@ validate_default_weighter(Weighter, Defaults, NewDefaults,
       Errors = [invalid_default_weighter(Weighter) | NextErrors].
 
 
-validate_parameters(Parameters, Defaults, Old, New, Errors, NextErrors) +
+validate_parameters(Parameters, Defaults, Old, New,
+		    Variables, NextVariables, Errors, NextErrors) +
 			(Head = Tail?, Tail) :-
 
-    Parameters ? `String,
+    Parameters ? Variable, Variable =?= `String,
     nth_char(1, String, C),
     CHAR_A =< C, C =< CHAR_Z :
-      Tail ! {String} |
+      Tail ! {String},
+      Variables ! Variable |
 	self;
 
     Parameters ? Parameter, string(Parameter),
@@ -372,7 +482,8 @@ validate_parameters(Parameters, Defaults, Old, New, Errors, NextErrors) +
     CHAR_a =< C, C =< CHAR_z,
     Defaults = {SPI_DEFAULT_WEIGHT_NAME, _Rate} :
       Tail ! Parameter(Rate'?) |
-	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	validate_public_channel_rate(Rate, Defaults, Rate',
+				     Variables, Variables', Errors, Errors'),
 	self;
 
     Parameters ? Parameter(Rate), string(Parameter),
@@ -381,21 +492,23 @@ validate_parameters(Parameters, Defaults, Old, New, Errors, NextErrors) +
     Defaults = {Weighter, _Rate},
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       Tail ! Parameter(Rate'?, Weighter) |
-	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	validate_public_channel_rate(Rate, Defaults, Rate',
+				     Variables, Variables', Errors, Errors'),
 	self;
 
     Parameters ? Parameter(Rate, Weighter), string(Parameter),
     nth_char(1, Parameter, C),
     CHAR_a =< C, C =< CHAR_z :
       Tail ! Parameter(Rate'?, Weighter'?) |
-	validate_public_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	validate_public_channel_rate(Rate, Defaults, Rate',
+				     Variables, Variables',Errors, Errors'),
 	validate_public_channel_weighter(Weighter, Defaults, Weighter',
-						Errors', Errors''),
+				 Variables', Variables'', Errors', Errors''),
 	self;
 
     Parameters ? Other,
     otherwise :
-      Errors ! invalid_parameter(Other) |
+      Errors ! invalid_public_parameter(Other) |
 	self;
 
     Parameters =\= [], Parameters =\= [_|_] :
@@ -405,7 +518,8 @@ validate_parameters(Parameters, Defaults, Old, New, Errors, NextErrors) +
     Parameters =?= [] :
       Defaults = _,
       Tail = [],
-      Diagnostic = duplicate_parameter |
+      Diagnostic = duplicate_public_parameter,
+      Variables = NextVariables |
 	utilities#sort_out_duplicates([Head], Head', Reply),
 	diagnose_duplicates(Reply, Diagnostic, Errors, Errors'?),
 	utilities#sort_out_duplicates([Old, Head'?], New, Reply'),
@@ -426,56 +540,65 @@ validate_parameters(Parameters, Defaults, Old, New, Errors, NextErrors) +
       Errors = [Diagnostic | NextErrors].
 
 
-validate_public_channel_rate(Rate, Defaults, NewRate, Errors, NextErrors) :-
+validate_public_channel_rate(Rate, Defaults, NewRate,
+			     Variables, NextVariables, Errors, NextErrors) :-
 
     number(Rate), 0 =< Rate :
       Defaults = _,
       NewRate = Rate,
-      Errors = NextErrors;
+      Errors = NextErrors,
+      Variables = NextVariables;
 
     Rate =?= infinite :
       Defaults = _,
       NewRate = Rate,
-      Errors = NextErrors;
+      Errors = NextErrors,
+      Variables = NextVariables;
 
     string(Rate),
     convert_to_integer(Rate, IntegerRate), 0 =< IntegerRate :
       Defaults = _,
       NewRate = IntegerRate,
-      Errors = NextErrors;
+      Errors = NextErrors,
+      Variables = NextVariables;
 
     string(Rate), otherwise,
     convert_to_real(Rate, RealRate), 0 =< RealRate :
       Defaults = _,
       NewRate = RealRate,
-      Errors = NextErrors;
+      Errors = NextErrors,
+      Variables = NextVariables;
 
     Rate = `Name, string(Name),
     nth_char(1, Name, C),
     CHAR_A =< C, C =< CHAR_Z :
       Defaults = _,
       NewRate = Rate,
-      Errors = NextErrors;
+      Errors = NextErrors,
+      Variables = [Rate | NextVariables];
 
     otherwise,
     Defaults  = _Weighter(DefaultRate) :
       NewRate = DefaultRate,
+      Variables = NextVariables,
       Errors = [invalid_public_channel_rate(Rate) | NextErrors].
 
 
 validate_public_channel_weighter(Weighter, Defaults, NewWeighter,
-					Errors, NextErrors) :-
+			Variables, NextVariables, Errors, NextErrors) :-
 
     string(Weighter), nth_char(1, Weighter, C),
     CHAR_a =< C, C =< CHAR_z :
       Defaults = _,
       NewWeighter = Weighter,
+      Variables = NextVariables,
       Errors = NextErrors;
 
     tuple(Weighter), arg(1, Weighter, Name),
     nth_char(1, Name, C),
     CHAR_a =< C, C =< CHAR_z :
-      Defaults = _ |
+      Defaults = _,
+      Diagnostic = invalid_public_channel_weighter_parameter |
 	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
 	validate_public_weighter_params,
 	utils#list_to_tuple([Name, BIO_NULL | Params], NewWeighter);
@@ -483,10 +606,13 @@ validate_public_channel_weighter(Weighter, Defaults, NewWeighter,
     otherwise,
     Defaults = DefaultWeighter(_DefaultRate) :
       NewWeighter = DefaultWeighter,
-      Errors = [invalid_public_channel_weighter(Weighter) | NextErrors].
+      Errors = [invalid_public_channel_weighter(Weighter) | NextErrors],
+      Variables = NextVariables.
 
 
-validate_public_weighter_params(Args, Params, Errors, NextErrors) :-
+validate_public_weighter_params(Args, Params,
+			Variables, NextVariables,
+			Errors, NextErrors, Diagnostic) :-
 
     Args ? Arg, number(Arg) :
       Params ! Arg |
@@ -502,18 +628,21 @@ validate_public_weighter_params(Args, Params, Errors, NextErrors) :-
       Params ! Arg' |
 	self;
 
-    Args ? Arg, Arg = `Name, string(Name),
+    Args ? Variable, Variable = `Name, string(Name),
     nth_char(1, Name, C),
     CHAR_A =< C, C =< CHAR_Z :
-      Params ! Arg |
+      Params ! Variable,
+      Variables ! Variable |
 	self;
 
     Args ? Arg, otherwise :
-      Errors ! invalid_default_public_weighter_parameter(Arg) |
+      Errors ! Diagnostic(Arg) |
 	self;
 
     Args = [] :
+      Diagnostic = _,
       Params = [],
+      Variables = NextVariables,
       Errors = NextErrors.
 
 /************************* Program Transformations ***************************/
