@@ -1,7 +1,8 @@
 -language(compound).
 -mode(failsafe).
--export([make_channel/1, make_channel/4, show_channel/3,
-	 show_goal/3, show_tree/3, receive/2, send/2]).
+-export([make_channel/1, make_channel/4,
+	 show_channel/3, show_goal/3, show_tree/3, close_tree/1,
+	 receive/2, send/2]).
 
 
 make_channel(Channel)+(Creator = "SYSTEM", VC = _, MsC = _) :-
@@ -105,8 +106,9 @@ show_named_channel(Channel, Options, Display, Reply) :-
 
     Reply =?= true,
     Channel = Name(Vector, Stream), string(Name), vector(Vector) :
+      make_channel(Order, _),
       Display = (Name : Content) |
-	parse_options(Options, _Action, Depth(1), _Order,
+	parse_options(Options, Depth(1), Order(Order),
 		      Sender(no_sender), Which(active)),
 	show_channel_content;
 
@@ -116,7 +118,7 @@ show_named_channel(Channel, Options, Display, Reply) :-
       Display = "not_channel" |
 	computation#display(("pi_utils: Not a channel" : Channel)).
 
-parse_options(Options, Action, Depth, Order, Sender, Which) :-
+parse_options(Options, Depth, Order, Sender, Which) :-
 
     Options =\= [_|_], Options =\= [] :
       Options' = [Options] |
@@ -127,21 +129,12 @@ parse_options(Options, Action, Depth, Order, Sender, Which) :-
 
     Options = [] |
 	unify_without_failure(Options, _),
-	unify_without_failure(Action, A(A)),
 	unify_without_failure(Depth, D(D)),
 	unify_without_failure(Order, O(O)),
 	unify_without_failure(Sender, S(S)),
 	unify_without_failure(Which, W(W)).
 
-  define_option(Options, Action, Depth, Order, Sender, Which, Option) :-
-
-    Option = close :
-      Action = Option(_) |
-	parse_options;
-
-    Option = open :
-      Action = Option(_) |
-	parse_options;
+  define_option(Options, Depth, Order, Sender, Which, Option) :-
 
     integer(Option) :
       Depth = Option(_) |
@@ -288,7 +281,8 @@ show_message_channels(Message, Which, Depth, Sender, Index, Msg) :-
     Index > 1,
     arg(Index, Msg, Display),
     Index--,
-    arg(Index', Message, Argument) |
+    arg(Index', Message, Argument) :
+      Tuple = false |
 	show_argument,
 	self;
 
@@ -299,43 +293,71 @@ show_message_channels(Message, Which, Depth, Sender, Index, Msg) :-
       Sender = _,
       Msg = _.
 
-show_argument(Argument, Which, Depth, Sender, Display) :-
+
+show_argument(Argument, Which, Depth, Sender, Tuple, Display) :-
 
     Argument = Name(Vector, Stream), string(Name), vector(Vector),
     Depth =\= 0,
     unknown(Stream) :
       Which = _,
       Sender = _,
+      Tuple = _,
       Display = Name;
 
     Argument = Name(Vector, Stream), string(Name), vector(Vector),
     Depth =\= 0,
+    Which =\= none,
     known(Stream) :
+      Tuple = _,
       Display = (Name = Content) |
 	show_channel_content;
+
+    Argument = Name(Vector, Stream), string(Name), vector(Vector),
+    Depth =\= 0,
+    Which =?= none,
+    known(Stream) :
+      Sender = _,
+      Tuple = _,
+      Display = (Name!);
 
     Argument = Name(Vector, _Stream), string(Name), vector(Vector),
     Depth =?= 0 :
       Which = _,
       Sender = _,
+      Tuple = _,
       Display = Name;
 
     constant(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
+      Tuple = _,
       Display = Argument;
+
+    tuple(Argument),
+    Tuple = true,
+    arity(Argument, Index),
+    Index++,
+    make_tuple(Index', Msg) :
+      Depth = _,
+      Depth' = 0,
+      Message = Argument,
+      Display = Msg |
+	arg(1, Msg, message),
+	show_message_channels;
 
     ro(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
+      Tuple = _,
       Display = "_?";
 
     we(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
+      Tuple = _,
       Display = "_";
 
     otherwise :
@@ -343,6 +365,7 @@ show_argument(Argument, Which, Depth, Sender, Display) :-
       Which = _,
       Depth = _,
       Sender = _,
+      Tuple = _,
       Display = other/*(Argument)*/.
 
 
@@ -358,11 +381,12 @@ show_goal(Goal, Options, PiFcp) :-
     make_tuple(Index, Result) :
       PiFcp = Result |
 	arg(1, Result, Name),
-	parse_options(Options, action(action), Depth(1), order(order),
+	parse_options(Options, Depth(1), order(order),
 		      Sender(no_sender), Which(active)),
 	goal_channels;
 
-    Goal =?= (_#Goal') |
+    Goal =?= (Service#Goal') :
+      PiFcp = (Service#PiFcp') |
 	self;
 
     otherwise :
@@ -370,12 +394,32 @@ show_goal(Goal, Options, PiFcp) :-
       Options = _,
       PiFcp = "~PiFcp".
 
-goal_channels(Goal, Index, Which, Depth, Sender, PiFcp) :-
+  goal_channels(Goal, Index, Which, Depth, Sender, PiFcp) :-
 
-    Index > 1,
+    Index =?= 3,
+    arg(1, Goal, pi_send),
     arg(Index, Goal, Argument),
     arg(Index, PiFcp, Display),
-    Index-- |
+    Index-- :
+      Tuple = true |
+	show_argument,
+	self;
+
+    Index =?= 3,
+    arg(1, Goal, pi_receive),
+    arg(Index, Goal, Argument),
+    arg(Index, PiFcp, Display),
+    Index-- :
+      Tuple = true |
+	show_argument,
+	self;
+
+    Index > 1,
+    otherwise,
+    arg(Index, Goal, Argument),
+    arg(Index, PiFcp, Display),
+    Index-- :
+      Tuple = false |
 	show_argument,
 	self;
 
@@ -387,62 +431,192 @@ goal_channels(Goal, Index, Which, Depth, Sender, PiFcp) :-
       PiFcp = _.
 
 
+close_tree(Tree) :-
+
+    Tree ? tree(_, Context, BranchList) :
+      close_channel(Context) |
+	close_tree(BranchList),
+	close_tree;
+
+    Tree ? reduce(_, _, Time, _),
+    unknown(Time) |
+	close_tree;
+
+    Tree ? reduce(_, _, Time, BranchList),
+    number(Time) |
+	close_tree(BranchList),
+	close_tree;
+
+    Tree ? _,
+    otherwise |
+	close_tree;
+
+    Tree = [] |
+	true;
+
+    Tree =\= [_|_], Tree =\= [] :
+      Tree' = [Tree] |
+	close_tree.
+
+
 show_tree(Tree, Options, TreeTrace) :-
 
-	parse_options(Options, Action(open), Depth(1), order(order),
+	parse_options(Options, Depth(1), Order(prefix),
 		      Sender(no_sender), Which(active)),
-	nodes([Tree], Action, [Depth, Sender, Which], TreeTrace, []).
+	nodes([Tree], [Depth, Sender, Which], 0, 0, Head, []),
+	display_tree(Head, Order, TreeTrace).
 
-nodes(Nodes, Action, Options, Head, Tail) :-
+nodes(Nodes, Options, Level, Time, Head, Tail) :-
 
     Nodes ? tree(TreeId, Context, BranchList) :
-      Head ! begin(PiTreeId?) |
-	close_context,
+      Level = _,
+      Head ! begin(PiTreeId?, Context, _Link) |
 	show_goal(TreeId, [0], PiTreeId),
-	nodes(BranchList, Action, Options, Head', [end(PiTreeId?) | Head'']),
+	nodes(BranchList, Options, 0, Time,
+		Head', [end(PiTreeId?) | Head'']),
 	nodes;
 
     Nodes ? RPC, RPC = _#_ :
-      Head ! rpc(RPC) |
+      Head ! {'#', RPC, Level, Time} |
 	nodes;
 
-    Nodes ? reduce(Goal, Id, Time, BranchList) :
+    Nodes ? reduce(Goal, _Id, Time', BranchList),
+    Level++ :
       Head ! Executed |
-	nodes(Nodes', Action, Options, Head', Head''),
+	nodes(Nodes', Options, Level, Time, Head', Head''),
 	show_goal(Goal, Options, PiGoal),
-	executed(PiGoal, Id, Time, Executed, BranchList, Nodes''),
+	executed(PiGoal, Level, Time', Executed, BranchList, Nodes''),
 	nodes;
 
     Nodes = [] :
-      Action = _,
       Options = _,
+      Level = _,
+      Time = _,
       Head = Tail .
 
-  close_context(Action, Context) :-
+executed(PiGoal, Level, Time, Executed, BranchList, Nodes) :-
 
-    Action = close :
-      close_channel(Context);
-
-    Action =\= close :
-      Context = _.
-
-executed(PiGoal, Id, Time, Executed, BranchList, Nodes) :-
-
-    Time = failed(_, FailTime) : Id = _, BranchList = _,
-      Executed = failed(PiGoal, FailTime),
+    Time = failed(_, FailTime) : BranchList = _,
+      Executed = {'-', PiGoal, Level, FailTime},
       Nodes = [] ;
 
-    Time = unknown(_, _Time) : Id = _, BranchList = _,
-      Executed = unknown(PiGoal),
+    Time = unknown(_, UnknownTime) : BranchList = _,
+      Executed = {'*', PiGoal, Level, UnknownTime},
       Nodes = [] ;
 
     number(Time) :
-      Id = _,
-      Executed = reduced(PiGoal/*, Id, Time*/),
+      Executed = {'|', PiGoal, Level, Time},
       Nodes = BranchList ;
 
-    unknown(Time) : Id = _, BranchList = _,
-      Executed = suspended(PiGoal),
+    unknown(Time) : BranchList = _,
+      Executed = {'?', PiGoal, Level, 10000000000000000.0},
       Nodes = [] .
 
- 
+
+display_tree(Head, Order, TreeTrace) :-
+
+    Order =?= prefix |
+	display_prefix_order(Head, 0, "", TreeTrace);
+
+    Order =?= execute |
+	sort_on_time(Head, Sorted),
+	display_execute_order.
+
+  display_execute_order(Sorted, TreeTrace) :-
+
+    Sorted ? {Operator, Goal, _, _}, Operator =\= "|" :
+      TreeTrace ! (Operator, "", Goal) |
+	self;
+
+    Sorted ? {"|", Goal, _, _} :
+      TreeTrace ! Goal |
+	self;
+
+    Sorted =?= [] :
+      TreeTrace = [].
+
+
+display_prefix_order(Head, Level, Indent, TreeTrace) :-
+
+    Head ? begin(PiTreeId, _Context, _Link) :
+      Level = _,
+      Indent = _,
+      Level' = 0,
+      Indent' = "",
+      TreeTrace ! (begin : PiTreeId) |
+	self;
+
+    Head ? end(PiTreeId) :
+      TreeTrace ! (end : PiTreeId) |
+	self;
+
+    Head ? Operator(Goal, Level', _Time) :
+      TreeTrace ! {Operator, Indent', Goal} |
+	update_indent(Level, Level', Indent, Indent'),
+	self;
+
+    Head =?= [] :
+      Level = _,
+      Indent = _,
+      TreeTrace = [].
+
+  update_indent(Level1, Level2, Indent1, Indent2) :-
+
+    Level2 > 20,
+    mod(Level2, 20, Level2') |
+	self;
+
+    Level1 < Level2,
+    Level2 =< 20,
+    Level1++,
+    string_to_dlist(Indent1, IL, []),
+    list_to_string([32 | IL], Indent1') |
+	self;
+
+    Level1 > Level2,
+    Level1--,
+    string_to_dlist(Indent1, IL, []),
+    IL ? _,
+    list_to_string(IL', Indent1') |
+	self;
+
+    Level1 =?= Level2 :
+      Indent2 = Indent1.
+
+
+sort_on_time(List, Sorted) + (Tail =[]) :-
+
+    List ? Reduce, Reduce = Functor(_, _, Time), Functor =\= begin |
+	partition(Time, List', Small, Large),
+	sort_on_time(Small?, Sorted, [Reduce | LSorted]),
+	sort_on_time(Large?, LSorted, Tail);
+
+    List ? _,
+    otherwise |
+	self;
+
+    List = [] :
+      Sorted = Tail.
+
+partition(X, List, Small, Large) :-
+
+    List ? begin(_, _, _) |
+	self;
+
+    List ? end(_) |
+	self;
+
+    List ? Reduce, Reduce =?= Operator(_Goal, _Level, Y), Operator =\= begin,
+    X > Y :
+      Small ! Reduce |
+	partition;
+
+    List ? Reduce, Reduce =?= Operator(_Goal, _Level, Y), Operator =\= begin,
+    X =< Y :
+      Large ! Reduce |
+	partition;
+
+    List = [] :
+      X = _,
+      Small = [],
+      Large = [].
