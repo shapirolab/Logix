@@ -18,10 +18,10 @@ The locus and function of a channel is one of:
   EXIT         capability communication between two ambients changing
                from parent-child to siblings.
 
-Channels which differ in name, identifier or locus are different
-channels; channels which have the same name, identifier and locus are
-identical.
-
+Within an ambient, hannels which differ in name, identifier or locus
+are different channels; channels which have the same name, identifier
+and locus are identical.  LOCAL channels are inaccessible except
+within the ambient in which they are declared or created.
 
 A channel may be created in one of several ways.
 
@@ -41,10 +41,10 @@ A channel may be created in one of several ways.
    The declaration creates a new ambient dynamically.  Consider all
    of the LOCAL channels in the ambient of the process which declares
    the new ambient.  All such channels which are needed by the
-   transitive closure of the process and its continuations are inherited
-   by the new ambient.  A  fresh version of each channel is created,
-   with copied id, rate and weighter and with locus LOCAL.  All of the
-   created channels are in the new ambient.
+   transitive closure of the processes called in the new ambient and
+   their continuations are inherited by the new ambient.  A  fresh
+   version of each channel is created, with copied id, rate and weighter 
+   and with locus LOCAL in the new ambient.
 
 4. By s2s reference in a process in a child ambient:
 
@@ -145,8 +145,8 @@ Implementation Notes
     the channel's id is a 2-tuple, whose functor is the channel's
     name, and whose argument is the channel's identifier.
 
-  * When creating a channel in cases 3 and 10, the creating ambient loses
-    a reference to the channel, while the new ambient gains a reference
+  * When creating a channel in case 10, the creating ambient loses a
+    reference to the channel, while the new ambient gains a reference
     to it.
 
   * When an ambient EXITs from its parent ambient or ENTERs a sibling
