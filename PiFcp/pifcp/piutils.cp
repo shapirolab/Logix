@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/15 13:29:57 $
+		       	$Date: 2000/04/06 08:42:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,6 +14,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -language(compound).
+-mode(interrupt).
 -export([concatenate_lists/2, make_lhs_tuple/3,
 	 make_predicate_list/3, untuple_predicate_list/3,
 	 names_to_channel_list/2,
@@ -46,6 +47,10 @@ update_process_mode(Mode, GuardMode, NewMode) :-
     GuardMode =?= mixed :
       NewMode = mixed;
 
+    Mode =?= send,
+    GuardMode =?= cdr :
+      NewMode = send;
+
     Mode =?= receive,
     GuardMode =?= send :
       NewMode = mixed;
@@ -54,6 +59,10 @@ update_process_mode(Mode, GuardMode, NewMode) :-
     GuardMode =?= mixed :
       NewMode = mixed;
 
+    Mode =?= receive,
+    GuardMode =?= cdr :
+      NewMode = receive;
+
     Mode =?= mixed,
     GuardMode =?= receive :
       NewMode = mixed;
@@ -61,6 +70,18 @@ update_process_mode(Mode, GuardMode, NewMode) :-
     Mode =?= mixed,
     GuardMode =?= send :
       NewMode = mixed;
+
+    Mode =?= mixed,
+    GuardMode =?= cdr :
+      NewMode = mixed;
+
+    Mode =?= cdr,
+    GuardMode =?= receive :
+      NewMode = receive;
+
+    Mode =?= cdr,
+    GuardMode =?= send :
+      NewMode = send;
 
     otherwise :
       Mode = _,

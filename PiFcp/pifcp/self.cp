@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/15 13:29:57 $
+		       	$Date: 2000/04/06 08:42:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -377,6 +377,11 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 
   code_reply(Process, FinalMode, SendProcedure, Scope) :-
 
+    FinalMode =?= cdr :
+      Process = cdr(_Atom, ProcessRHS, []),
+      SendProcedure = _,
+      Scope = [code(cdr, [], ProcessRHS)];
+
     FinalMode =?= receive :
       Process = receive(_Atom, ProcessRHS, []),
       SendProcedure = _,
@@ -530,6 +535,13 @@ guarded_clause(RHS1, Control, Clauses, Nested, NextNested,
     RHS1 =?= (Guard | Guarded), Guarded =?= (_ ; _) :
       RHS1' = (Guard | [Guarded]) |
 	self;
+
+    RHS1 =?= (Cdr | self),
+    tuple(Cdr), arity(Cdr) > 1, arg(1, Cdr, cdr) :
+      Control = GuardMode(_, _),
+      Clauses = cdr(ClauseList?),
+      Nested = NextNested,
+      Scope = [guard_cdr(Cdr, ClauseList, GuardMode) | NextScope] ;
 
     RHS1 =?= (Guard | Body1), Body1 =\= (_ | _), Body1 =\= (_ ; _) :
       LastClause = (BodyGuard? | Body2?) |

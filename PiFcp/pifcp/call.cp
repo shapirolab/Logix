@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/14 13:42:02 $
+		       	$Date: 2000/04/06 08:42:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -519,14 +519,16 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
 
     Reply =?= new :
       Cumulated' = [Name | Cumulated] |
-	make_summed_rhs(Name, Calls, CodeTuples, 1, Sends, Code, FinalMode,
-				Errors, Errors'?),
+	make_summed_rhs(Name, Calls, CodeTuples, 1, Sends, Code, Cdrs,
+				FinalMode, Errors, Errors'?),
 	piutils#sort_out_duplicates(Channels?, SumChannels, _Reply),
 	make_named_list(Sends?, Writes, Name-duplicate_send_channel_in_sum,
 				Errors', Errors''?),
 	make_named_guard(Writes?, Ask, Tell),
-	make_named_list(Code?, RHS, Name-duplicate_receive_channel_in_sum,
+	make_named_list(Code?, Code', Name-duplicate_receive_channel_in_sum,
 				Errors'', Errors'''?),
+	piutils#sort_out_duplicates([Cdrs], Cdrs', _),
+	piutils#concatenate_lists([Code'?, Cdrs'?], RHS),
 	make_named_predicates(';', RHS, RHS'),
 	piutils#make_lhs_tuple(Name, SumChannels, Tuple),
 	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS'?, Tuple?,
@@ -561,20 +563,20 @@ make_sum_call(Name, Calls, Call, Errors, NextErrors)
 	make_named_predicates(',', ArgList, Substitutes).
 
 
-make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
+make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, Cdrs, FinalMode,
 		Errors, NextErrors) + (Mode = none, Sender = _) :-
 
     CodeTuples ? ProcessMode(SendRHS, ProcessRHS),
     Calls ? _,
     SendRHS =?= (Idents : Writes | _Relay) |
 	add_sends_and_receives(Idents, Writes, ProcessRHS, Sender?,
-				Index, Index', Sends, Sends'?, Code, Code'?),
+		Index, Index', Sends, Sends'?, Code, Code'?, Cdrs, Cdrs'),
 	piutils#update_process_mode(Mode, ProcessMode, Mode'),
 	self;
 
     CodeTuples ? ProcessMode([], ProcessRHS), ProcessRHS =\= [],
     Calls ? _ |
-	add_receives(ProcessRHS, Sender, Code, Code'?),
+	add_receives(ProcessRHS, Sender, Code, Code'?, Cdrs, Cdrs'),
 	piutils#update_process_mode(Mode, ProcessMode, Mode'),
 	self;
 
@@ -589,6 +591,7 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       Index = _,
       Sends = [],
       Code = [],
+      Cdrs = [],
       FinalMode = Mode,
       Errors = NextErrors |
 	final_process_mode(Name, Mode, Sender).
@@ -609,7 +612,7 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       Sender = [].
 
   add_sends_and_receives(Idents, Writes, ProcessRHS, Sender,
-		Index, NewIndex, Sends, NextSends, Code, NextCode) :-
+	Index, NewIndex, Sends, NextSends, Code, NextCode, Cdrs, NextCdrs) :-
 
     Idents =?= (Identify, Idents'),
     Identify = (`ChannelName = _Tuple),
@@ -650,7 +653,8 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
     Index++ :
       NewIndex = Index',
       Sends = [ChannelName(Idents, Write?) | NextSends],
-      Code = [Index((`pifcp(chosen) = Index : Tell | Body)) | NextCode] |
+      Code = [Index((`pifcp(chosen) = Index : Tell | Body)) | NextCode],
+      Cdrs = NextCdrs |
 	reindex_write(Writes, Sender, Index, Write);
 
     Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
@@ -668,7 +672,8 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
     Index++ :
       NewIndex = Index',
       Sends = [ChannelName(Idents, Write?) | NextSends],
-      Code = [Index((`pifcp(chosen) = Index | Body)) | NextCode] |
+      Code = [Index((`pifcp(chosen) = Index | Body)) | NextCode],
+      Cdrs = NextCdrs |
 	reindex_write(Writes, Sender, Index, Write);
 
     Idents = [] :
@@ -678,13 +683,14 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       Idents = _,
       NewIndex = Index,
       NextSends = Sends,
-      Code = NextCode;
+      Code = NextCode,
+      Cdrs = NextCdrs;
 
     otherwise,
     ProcessRHS = (Cdr ; Receive),
-    Cdr =?= ((`ChannelName = _, _) : _ | self) |
-	analyze_receive(Receive, Sender, ChannelName, Cdr, Code, Code',
-				ProcessRHS'),
+    Cdr =?= ((Assign, _) : _ | self) |
+	analyze_receive_or_cdr(Receive, Sender, Assign,
+			Cdr, Code, Code',Cdrs, Cdrs', ProcessRHS'),
 	self.
 
   reindex_write(Write, Sender, Index, NewWrite) :-
@@ -693,21 +699,40 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       NewWrite = write_channel({Sender, ChannelList, Index, Chosen}, VN).
 
 
-add_receives(Receives, Sender, Code, NextCode) :-
+add_receives(Receives, Sender, Code, NextCode, Cdrs, NextCdrs) :-
 
     Receives = (Cdr ; Receive),
-    Cdr =?= ((`ChannelName = _, _) : _ | self) |
-	analyze_receive(Receive, Sender, ChannelName, Cdr, Code, Code',
-				Receives'),
+    Cdr =?= (Assign, _ : _ | self) |
+	analyze_receive_or_cdr(Receive, Sender, Assign, Cdr,
+				Code, Code', Cdrs, Cdrs', Receives'),
 	self;
+
+    Receives =?= (`ChannelName = _, _ : _ | self) :
+      Sender = _,
+      Code = NextCode,
+      Cdrs = [ChannelName(Receives) | NextCdrs];
 
     Receives =?= [] :
       Sender = _,
-      Code = NextCode.
+      Code = NextCode,
+      Cdrs = NextCdrs.
 
 
-analyze_receive(Receive, Sender, ChannelName, Cdr, Code, NextCode,
-				NextRHS) :-
+analyze_receive_or_cdr(Receive, Sender, Assign, Cdr,
+		Code, NextCode, Cdrs, NextCdrs, NextRHS) :-
+
+    Assign =?= (`ChannelName = {`picdr(_), _, _, _, _}) :
+      Sender = _,
+      Cdrs = [ChannelName(Cdr) | NextCdrs],
+      Code = NextCode,
+      NextRHS = Receive;
+
+    otherwise,
+    Assign = (`ChannelName = _) :
+      Cdrs = NextCdrs |
+	analyze_receive.
+
+analyze_receive(Receive, Sender, ChannelName, Cdr, Code, NextCode, NextRHS) :-
 
     Receive =\= (_ ; _),
     Sender =?= [] :
@@ -843,7 +868,6 @@ make_named_predicates(Operator, List, PredicateList) :-
 				{Operator, Predicate2, PredicateList'}},
       List'' = [Name(Predicate3) | List'] |
 	self;
-
     List ? Name(Predicate1, Predicate2) :
       PredicateList = {Operator, Predicate1, PredicateList'},
       List'' = [Name(Predicate2) | List'] |

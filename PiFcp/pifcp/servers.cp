@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/15 13:29:58 $
+		       	$Date: 2000/04/06 08:42:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -353,6 +353,17 @@ serve_process_scope(In, ProcessDefinition, Means,
 	make_guard_send,
 	self;
 
+    In ? guard_cdr(Cdr, ClauseList, GuardMode),
+    ProcessDefinition =?= {Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
+	message_to_channels(Cdr, Name, ChannelNames, Locals, false,
+				MsChannelNames, Errors, Errors'?, 2),
+	piutils#sort_out_duplicates([MsChannelNames?], CdrNames, DChs),
+	check_duplicates_reply(DChs?, Name?, duplicate_channel_in_cdr,
+				Errors', Errors''?),
+	cdr_clauses,
+	self;
+
     In ? lookup_functor(Functor, CallType, CallDefinition),
     arg(1, ProcessDefinition, Functor) :
       CallType = inner,
@@ -470,6 +481,22 @@ serve_process_scope(In, ProcessDefinition, Means,
     Extract2 =\= true,
     Extract1 =\= Extract2 :
       Comparer = (Extract1, Extract2, Compare).
+
+  cdr_clauses(CdrNames, ClauseList, GuardMode) :-
+
+    CdrNames =?= [] :
+      ClauseList = [],
+      GuardMode = conflict ; % to cancel guard.
+
+   CdrNames = [ChannelName] :
+     ClauseList = [Clause?],
+     GuardMode = cdr |
+	make_guard_cdr;
+
+   CdrNames ? ChannelName, CdrNames' =\= [] :
+     ClauseList ! Clause? |
+	make_guard_cdr,
+	self.
 
 
 /*
@@ -841,37 +868,52 @@ construct_lhs_tuple(Name, Suffix, ChannelNames, Tuple) :-
 	piutils#make_lhs_tuple(Name'?, ChannelNames, Tuple).
 
 
+make_guard_cdr(ChannelName, Clause) :-
+    string_to_dlist(ChannelName, CL, Prime) :
+      Prime = [39],
+
+      Clause =
+	(`ChannelName = {`picdr(id), `picdr(cv), `picdr(mss),
+				`picdr(receive), `picdr(send)},
+	   `picdr(mss) = [{`"_", `"_", `"_", `picdr(choice)}
+			 | `picdr(mssp)],
+	   not_we(`picdr(choice)) :
+	     `ChannelNamePrime = {`picdr(id), `picdr(cv), ?picdr(mssp),
+					`picdr(receive), `picdr(send)} |
+		self) |
+	list_to_string(CL, ChannelNamePrime).
+
 make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
     string_to_dlist(ChannelName, CL, Prime) :
       Prime = [39],
 
       Iterates =
-	{(`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
-				`pifcp(receive), `pifcp(send)},
-	   `pifcp(mss) = [{`"_", `"_", `"_", `pifcp(choice)}
-			 | `pifcp(mssp)],
-	   not_we(`pifcp(choice)) :
-	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
-					`pifcp(receive), `pifcp(send)} |
+	{(`ChannelName = {`pircv(id), `pircv(cv), `pircv(mss),
+				`pircv(receive), `pircv(send)},
+	   `pircv(mss) = [{`"_", `"_", `"_", `pircv(choice)}
+			 | `pircv(mssp)],
+	   not_we(`pircv(choice)) :
+	     `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
+					`pircv(receive), `pircv(send)} |
 		self),
 
-	  (`ChannelName = {`pifcp(id), `pifcp(cv), `pifcp(mss),
-				`pifcp(receive), `pifcp(send)},
-	   `pifcp(mss) =?= [{`SendId, `"_", `"_", `pifcp(chosen)}
-			   | `pifcp(mssp)] :
-	     `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
-					`pifcp(receive), `pifcp(send)} |
+	  (`ChannelName = {`pircv(id), `pircv(cv), `pircv(mss),
+				`pircv(receive), `pircv(send)},
+	   `pircv(mss) =?= [{`SendId, `"_", `"_", `pircv(chosen)}
+			   | `pircv(mssp)] :
+	     `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
+					`pircv(receive), `pircv(send)} |
 		self)
 	},
 
-      Consume = (`ChannelName = {`"_", `"_", `pifcp(mss), `"_", `"_"},
-	 `pifcp(mss) =?= [{`Sender, ChannelList, `pifcp(tag), `pifcp(choose)}
-			 | `"_" /*pifcp(mssp)*/],
+      Consume = (`ChannelName = {`"_", `"_", `pircv(mss), `"_", `"_"},
+	 `pircv(mss) =?= [{`Sender, ChannelList, `pircv(tag), `pircv(choose)}
+			 | `"_" /*pircv(mssp)*/],
 	  ExcludeSender? :
 /* This may only be done if we can handle multiple primes - e.g.
 ** when the message is a <channel_list> which includes  ChannelName .
-**		    `ChannelNamePrime = {`pifcp(id), `pifcp(cv), ?pifcp(mssp),
-**					`pifcp(receive), `pifcp(send)} 
+**		    `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
+**					`pircv(receive), `pircv(send)} 
 */
 	    CancelSends?) |
 
@@ -882,13 +924,13 @@ make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
 
     SendId =?= "_" :
       Sender = "_",
-      ExcludeSender = we(`pifcp(choose)),
-      CancelSends = (`pifcp(choose) = `pifcp(tag));
+      ExcludeSender = we(`pircv(choose)),
+      CancelSends = (`pircv(choose) = `pircv(tag));
 
     otherwise :
-      Sender = pifcp(sender),
-      ExcludeSender = (`SendId =\= `Sender, we(`pifcp(choose))),
-      CancelSends = (`pifcp(chosen) = 0, `pifcp(choose) = `pifcp(tag)).
+      Sender = pircv(sender),
+      ExcludeSender = (`SendId =\= `Sender, we(`pircv(choose))),
+      CancelSends = (`pifcp(chosen) = 0, `pircv(choose) = `pircv(tag)).
 
 
 make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
