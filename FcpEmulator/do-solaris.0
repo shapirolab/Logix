@@ -1,3 +1,0 @@
-#! /bin/csh
-./mkmk sun4_solaris_2d3 concatenate ctl dbg dbx doors file freeze_term \
-interface math timer tty
