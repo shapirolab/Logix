@@ -1,5 +1,6 @@
 -language([evaluate,compound,colon]).
--export([test/2, test/3, "P"/2]).
+-export([test/2, "P"/2]).
+-include(psi_constants).
 
 /*
 ** PsiFcp
@@ -12,31 +13,28 @@
 ** Generated Compound Fcp
 */
 
-  "P"("_var"(a),B) :-
-    "_var"(a) = _(VA, _) :
-      write_channel(receive("P"(a), MsA, 1, 1, Chosen), VA) |
-	"P.receive".
+  "P"("_var"(a), B) :-
+	psi_monitor#scheduler(Scheduler),
+	".P".
 
-  "P.receive"("_var"(a), B, Chosen, MsA) :-
+
+  ".P"("_var"(a), B, Scheduler) :-
+    vector("_var"(a)) :
+      write_channel(start("P", [{PSI_RECEIVE, a, "_var"(a), 1, 1}],
+				Value, Chosen), Scheduler) |
+	"P.comm".
+
+  "P.comm"("_var"(a), B, Scheduler, Chosen, Value) :-
     Chosen = 1,
-    "_var"(a) = _(_, {LA, RA}) :
-      MsA = [],
-      LA = RA |
-	B = received.
+    Value = [] :
+      write_channel(close({"_var"(a)}), Scheduler) |
+      B = received.
 
 /****  Code for testing the generated program ****/
 
 BASERATE => infinite.
 
-test(A, B) + (N = 1) :-
+test(A, B) :-
 	psi_utils#make_channel(A, "test.a", BASERATE),
-	sends(A, B, N).
-
-sends(A, B, N) + (Counter = 0, HoldA = A):-
-  Counter++ < N |
-	psi_utils#send([], A),
-	psi_utils#receive(A, _),
-	self;
-  Counter >= N |
-	psi_utils#send([], A),
-	"P"(HoldA, B).
+	psi_utils#send([],A),
+	"P"(A, B).

@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/26 07:13:17 $
+		       	$Date: 2000/09/26 08:35:29 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -520,18 +520,16 @@ sum_procedures(Summed, Entries, Optimize, NextOptimize, Errors) +
 	make_summed_rhs(Name, Calls, CodeTuples, 1, Prepares, Code,
 			Results, FinalMode, Errors, Errors'?),
 	utilities#sort_out_duplicates(Channels?, SumChannels, _Reply),
-	make_named_list(Prepares?, _Writes, Name-duplicate_send_channel_in_sum,
-				Errors', Errors''?),
+	make_named_list(Prepares?, _Requests,
+		Name-duplicate_channel_in_sum, Errors', Errors''?),
 	make_named_guard(Prepares?, Ask, Tell),
-	make_named_list(Code?, _Code, Name-duplicate_receive_channel_in_sum,
-				Errors'', Errors'''?),
 	/* Eliminate duplicate stream names. */
 	utils#binary_sort_merge(Results, Results'),
 	make_named_predicates(';', Code?, RHS),
 	utilities#make_lhs_tuple(Name, SumChannels, Tuple),
 	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS?, Tuple?,
 				Results'?, Entries, Entries'?),
-	make_sum_call(Name, Calls, Call, Errors''', Errors''''?),
+	make_sum_call(Name, Calls, Call, Errors'', Errors'''?),
 	sum_procedures.
 
 
@@ -638,29 +636,29 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Prepares, Code, Results,
 			Code, NextCode, Results, NextResults) :-
  
     Asks ? Identify,
-    Identify = (`ChannelName = _Tuple),
-    Tells ? Write,
-    Write =?= write_channel(_,_),
+    Identify =?= vector(`ChannelName),
+    Tells ? Request,
+    Request =?= request(Type,_,_,_),
     ClauseList ? Communication,
     Communication =?= (`psifcp(chosen) = _Index : Result = Tuple | Body),
     Index++ :
-      Prepares ! ChannelName(Identify, Write'?),
+      Prepares ! {Type(ChannelName), Identify, Request'?},
       Results ! Result,
       Code ! Index((`psifcp(chosen) = Index : Result = Tuple | Body)) |
-	reindex_write(Write, Name, ChannelName, Index, Write'),
+	reindex_request(Request, ChannelName, Index, Request'),
 	self;
 
     Asks ? Identify,
-    Identify = (`ChannelName = _Tuple),
-    Tells ? Write,
-    Write =?= write_channel(_,_),
+    Identify =?= vector(`ChannelName),
+    Tells ? Request,
+    Request =?= request(Type,_,_,_),
     ClauseList ? Communication,
     Communication =?= (`psifcp(chosen) = _Index, Result = Tuple | Body),
     Index++ :
-      Prepares ! ChannelName(Identify, Write'?),
+      Prepares ! {Type(ChannelName), Identify, Request'?},
       Results ! Result,
       Code ! Index((`psifcp(chosen) = Index, Result = Tuple | Body)) |
-	reindex_write(Write, Name, ChannelName, Index, Write'),
+	reindex_request(Request, ChannelName, Index, Request'),
 	self;
 
     ClauseList = [] :
@@ -672,22 +670,18 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Prepares, Code, Results,
       Code = NextCode,
       Results = NextResults.
 
-  reindex_write(Write, Name, ChannelName, Index, NewWrite) :-
+  reindex_request(Request, ChannelName, Index, NewRequest) :-
 
-    Write = write_channel(
-		Type(_Id, Message, _SendIndex, Multiplier, Chosen),
-			  VN) :
-      NewWrite = write_channel(
-		Type(Name(ChannelName), Message, Index, Multiplier, Chosen),
-			  VN).
+    Request = request(Type, ChannelName, Multiplier, _Index) :
+      NewRequest = request(Type, ChannelName, Multiplier, Index).
 
 
 /* Compare to make_rhs2 */
-make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Results,
+make_sum_procedure(Mode, Name, Requests, RHS, Tuple, Results,
 			Entries, NextEntries) :-
 
     Mode =?= communicate :
-      Entries = [Mode(Atom?, (Writes | SendChoices?), (ChoiceAtom? :- RHS))
+      Entries = [Mode(Atom?, (Requests | SendChoices?), (ChoiceAtom? :- RHS))
 		| NextEntries] |
 	utilities#tuple_to_atom(Tuple, Atom),
 	make_choice_name(Name, ".comm", SendChoices),
@@ -697,7 +691,7 @@ make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Results,
     /* conflict */
     otherwise :
       Name = _,
-      Writes = _,
+      Requests = _,
       Results = _,
       Entries = [Mode(Atom?, RHS, []) | NextEntries] |
 	utilities#tuple_to_atom(Tuple, Atom).
@@ -724,18 +718,18 @@ extract_lhs_parts(Definition, ChannelNames, OuterLHS, InnerLHS) :-
 
 /************************** Summation Utilities ******************************/
 
-make_named_guard(Writes, Ask, Tell) :-
+make_named_guard(Requests, Ask, Tell) :-
 
-    Writes ? _Name(Idents, Write), Writes' =\= [] :
+    Requests ? _Name(Idents, Request), Requests' =\= [] :
       Ask = (Idents, Ask'?),
-      Tell = (Write, Tell'?) |
+      Tell = (Request, Tell'?) |
 	self;
 
-    Writes = [_Name(Idents, Write)] :
+    Requests = [_Name(Idents, Request)] :
       Ask = Idents,
-      Tell = Write;
+      Tell = Request;
 
-    Writes = [] :
+    Requests = [] :
       Ask = true,
       Tell = true.
 

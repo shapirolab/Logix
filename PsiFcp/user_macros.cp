@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/26 06:59:10 $
+		       	$Date: 2000/09/26 08:35:07 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -85,19 +85,15 @@ expand(Command, Cs) :-
 		" spr / spr(No)      - Psi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Psi execution tree",
-		" record(G, F, L)    - record Goal events on File until Limit.",
-		" repeat(GS)         - execute Goals.",
-		" repeat(GS, L)      - execute Goals until Limit.",
-		" repeat(GS, F, L)   - execute Goals, record events on File until Limit.",
-		" run(Goal, Limit)   - record Goal until Limit.",
+		" record(GS, F, L)   - run Goals, record events on File until Limit.",
+		" run(GS)            - run Goals.",
+		" run(GS, L)         - run Goals until Limit.",
 		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
-		" Service - Goal     - call Service#Goal",
-		" - Goal             - call Current#Goal",
 		" {String}           - invoke UNIX shell sh with String",
 		"",
 		"        options for sp*, pdb and ptree:",
 		" Integer            - depth of channel display",
-		" none/active/all    - type of messages displayed",
+		" none/active        - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
 		" prefix/execute     - order of tree display"
 	 ],
@@ -193,20 +189,12 @@ expand(Command, Cs) :-
 			psi_utils # show_tree(Tree, Options, Stream)]) 
 	   | Commands]\Commands;
 
-    Command = record(Goal, File, Limit) :
-      Cs = [psi_record#run(Goal, File, Limit)
-	   | Commands]\Commands;
-
-    Command = repeat(Goals) :
-      Cs = [repeat#run(Goals)
-	   | Commands]\Commands;
-
-    Command = repeat(Goals, Limit) :
-      Cs = [psi_record#run(repeat#run(Goals), Limit)
-	   | Commands]\Commands;
-
-    Command = repeat(Goals, File, Limit) :
+    Command = record(Goals, File, Limit) :
       Cs = [psi_record#run(repeat#run(Goals), File, Limit)
+	   | Commands]\Commands;
+
+    Command = run(Goals) :
+      Cs = [repeat#run(Goals)
 	   | Commands]\Commands;
 
     Command = run(Goal, Limit) :

@@ -4,16 +4,16 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/26 07:19:07 $
+		       	$Date: 2000/09/26 08:35:29 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--export([serve_empty_scope/6, make_guard_receive/5]).
+-export([serve_empty_scope/6]).
 -language(compound).
 
 /*
@@ -324,7 +324,7 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
 			Locals', Primes', Errors''', Errors''''?),
 	call#prime_local_channels(Primes'?, MsChannelNames?, MsChannelNames'),
 	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
-	make_guard_receive,
+	make_communication_guard + (Type = receive),
 	self;
 
     In ? guard_send(Channel, Message, Index, Guards),
@@ -341,7 +341,7 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
 	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
-	make_guard_send,
+	make_communication_guard + (Type = send),
 	self;
 
     In ? logix_variables(Variables) :
@@ -486,10 +486,9 @@ parse_message(Message, Message', Multiplier, Name, Errors, NextErrors) :-
 			ChannelList, NextChannelList) :-
 
     List =?= [C1, C2], C1 =\= "_", C2 =\= "_" :
-      Compare = {Operator, `psich(C1), `psich(C2)} |
-	compare_channel(C1, Extract1, ChannelList, ChannelList'),
-	compare_channel(C2, Extract2, ChannelList'?, NextChannelList),
-	make_comparer;
+      Comparer = {Operator, `C1, `C2} |
+	compare_channel(C1, ChannelList, ChannelList'),
+	compare_channel(C2, ChannelList'?, NextChannelList);
 
     otherwise :
       Operator = _,
@@ -497,7 +496,7 @@ parse_message(Message, Message', Multiplier, Name, Errors, NextErrors) :-
       NextChannelList = ChannelList,
       Comparer = true.
 
-  compare_channel(C, Extract, CL, NCL) :-
+  compare_channel(C, CL, NCL) :-
 
     CL ? Ch, C =\= Ch :
       NCL ! Ch |
@@ -505,36 +504,10 @@ parse_message(Message, Message', Multiplier, Name, Errors, NextErrors) :-
 
     CL ? Ch, C =?= Ch :
       CL' = _,
-      Extract = true,
       NCL = CL;
 
     CL = [] :
-      Extract = (`C = {`"_", `psich(C), `"_"}),
       NCL = [C].
-    
-  make_comparer(Extract1, Extract2, Compare, Comparer) :-
-
-    Extract1 =?= Extract2,
-    Extract1 =?= true :
-      Comparer = Compare;
-
-    /* Somebody wrote  a =?= a  or  a =\= a  */
-    Extract1 =?= Extract2,
-    Extract1 =\= true :
-      Comparer = (Extract1, Compare);
-
-    Extract1 =\= true,
-    Extract2 =?= true :
-      Comparer = (Extract1, Compare);
-
-    Extract1 =?= true,
-    Extract2 =\= true :
-      Comparer = (Extract2, Compare);
-
-    Extract1 =\= true,
-    Extract2 =\= true,
-    Extract1 =\= Extract2 :
-      Comparer = (Extract1, Extract2, Compare).
 
 
 /*
@@ -914,24 +887,11 @@ construct_lhs_tuple(Name, Suffix, ChannelNames, Tuple) :-
 
 
 
-make_guard_receive(Name, ChannelName, Index, Multiplier, Guard) :-
+make_communication_guard(Type, ChannelName, Multiplier, Index, Guard) :-
 			
     true :
-      VN = psich(ChannelName),
-      Guard = {`ChannelName = {`"_", `VN, `"_"},
-		write_channel(receive(Name(ChannelName), `"Message.",
-					Index, Multiplier, `psifcp(chosen)),
-				`VN)} .
-
-
-make_guard_send(Name, ChannelName, Index, Multiplier, Guard) :-
-
-    true :
-      VN = psich(ChannelName),
-      Guard = {`ChannelName = {`"_", `VN, `"_"},
-		write_channel(send(Name(ChannelName), `"Message.",
-					Index, Multiplier, `psifcp(chosen)),
-				`VN)} .
+      Guard = {vector(`ChannelName),
+		request(Type, ChannelName, Multiplier, Index)}.
 
 
 message_to_channels(Message, Name, ChannelNames, Locals, Underscore,

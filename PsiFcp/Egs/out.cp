@@ -1,12 +1,11 @@
 -language([evaluate, compound, colon]).
 -export(["Main"/1, test/1]).
-
-BASERATE => infinite.
+-include(psi_constants).
 
 /*
 ** PiFcp
 **
-**   Main(a) ::= a![], psi_utils#SPC(A).
+**   Main(a) ::= a![], psi_utils#SPC(a).
 **
 */
 
@@ -15,16 +14,24 @@ BASERATE => infinite.
 */
 
   "Main"("_var"(a)) :-
-    "_var"(a) = _(VA, _) :
-      write_channel(send("Main"(a), [], 1, 1, Chosen), VA) |
-	"Main.send".
+	psi_monitor#scheduler(Scheduler),
+	".Main".
 
-  "Main.send"("_var"(a), Chosen) :-
-    Chosen = 1 |
+  ".Main"("_var"(a), Scheduler) :-
+    vector("_var"(a)) :
+      write_channel(start("Main",[{PSI_SEND, a, "_var"(a), 1, 1}],
+				Value, Chosen), Scheduler) | 
+	"Main.comm".
+
+  "Main.comm"("_var"(a), Chosen, Value) :-
+    Chosen = 1 :
+      Value = [] |
 	psi_utils#"SPC"("_var"(a)).
 
 
 /****  Code for testing the generated program ****/
+
+BASERATE => infinite.
 
 test(A) :-
 	psi_utils#make_channel(A, "test.A", BASERATE),

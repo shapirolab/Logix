@@ -1,72 +1,72 @@
--language(compound).
+-language([evaluate,compound,colon]).
 -mode(trust).
 -export([make_channel/1, make_channel/2, make_channel/3,
-	 make_channel/4,
 	 "SPC"/1, "SPC"/2,
 	 parse_options/5,
 	 show_channel/3, show_goal/3, show_goals/3,
 	 show_resolvent/3, show_value/3,
 	 show_tree/3, close_tree/1,
-	 dimer/3, dimer/4, dimer/5,
-	 receive/2, receive/3, receive/4,
-	 send/2, send/3, send/4]).
+	 dimer/3, dimer/4, dimer/5, dimer/6,
+	 receive/2, receive/3, receive/4, receive/5,
+	 send/2, send/3, send/4, send/5]).
+
+-include(psi_constants).
 
 
 make_channel(Channel) :-
-	make_channel(Channel, "SYSTEM", infinite, _).
+	make_channel(Channel, psi, infinite).
 make_channel(Channel, Creator) :-
     string(Creator) |
-	make_channel(Channel, Creator, infinite, _).
+	make_channel(Channel, Creator, infinite).
 make_channel(Channel, BaseRate) :-
-	make_channel(Channel, "SYSTEM",  BaseRate, _).
+	make_channel(Channel, psi, BaseRate).
 make_channel(Channel, Creator, BaseRate) :-
-	make_channel(Channel, Creator, BaseRate, _).
-make_channel(Channel, Creator, BaseRate, FcpChannel) :-
     we(Channel) :
-      Channel = Channel'?,
-      FcpChannel = FcpChannel'? |
-	psi_monitor#new_channel(Creator, Channel', BaseRate),
-	Channel'? = _Creator(FcpChannel', _Circuit);
+      Channel = Channel'? |
+	psi_monitor#new_channel(Creator, Channel', BaseRate);
 
     string(Channel), Channel =\= "_", Channel =\= "" |
 	computation#dictionary(add, Channel, Ch?, Reply),
-	made_channel(Channel, Creator, FcpChannel, BaseRate, Ch, Reply);
+	made_channel(Channel, Creator, BaseRate, Ch, Reply);
 
     otherwise :
       Creator = _,
-      BaseRate = _,
-      FcpChannel = _ |
+      BaseRate = _ |
 	computation#display(("Can't make_channel" : Channel)).
 
-  made_channel(Channel, Creator, FcpChannel, BaseRate, Ch, Reply) :-
+  made_channel(Name, Creator, BaseRate, Channel, Reply) :-
     Reply = new,
     string_to_dlist(Creator, CL, CT),
-    string_to_dlist(Channel, Cl, []) :
+    string_to_dlist(Name, Cl, []) :
       ascii('.', Dot),
       CT = [Dot | Cl] |
 	list_to_string(CL, Creator'),
-	psi_monitor#new_channel(Creator', Ch, BaseRate),
-	Ch? = _Creator(FcpChannel, _Circuit);
+	psi_monitor#new_channel(Creator'?, Channel, BaseRate);
 
     otherwise :
       Creator = _,
-      FcpChannel = _,
       BaseRate = _,
-      Ch = _ |
-	screen#display(("psi_utils: Can't make_channel" : Channel - Reply)).
+      Channel = _ |
+	screen#display(("psi_utils: Can't make_channel" : Name - Reply)).
 
 
 send(Message, Channel) :-
-    send(Message, Channel, 1, _).
+    send(Message, Channel, 1, _, sender).
 send(Message, Channel, Multiplier) :-
-    send(Message, Channel, Multiplier, _).
+    send(Message, Channel, Multiplier, _, sender).
 send(Message, Channel, Multiplier, Chosen) :-
-    Channel = Creator(FcpChannel, _Circuit),
-    channel(FcpChannel) :
-      Send = send(psi(Creator), Message, 1, Multiplier, Chosen),
-      write_channel(Send, FcpChannel);
+	send(Message, Channel, Multiplier, Chosen, sender).
+send(Message, Channel, Multiplier, Chosen, Name) :-
+    vector(Channel),
+    arity(Channel, 11),
+    we(Chosen) :
+      Send = PSI_SEND(Name, Channel, Multiplier, 1) |
+	psi_monitor#scheduler(S),
+	write_channel(start(send, [Send], Value, Chosen), S),
+	transmitted(sending(Name), 1, Chosen, Message, Value);
 
-    string(Channel), Channel =\= "_", Channel =\= "" |
+    string(Channel), Channel =\= "_", Channel =\= "" :
+      Name = _ |
 	computation#dictionary(find, Channel, Ch, Reply),
 	send_message(Message, Channel, Multiplier, Chosen, Ch, Reply);
 
@@ -74,70 +74,87 @@ send(Message, Channel, Multiplier, Chosen) :-
       Message = _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("psi_utils: Can't send to" : Channel)).
+	computation#display(("psi_utils: Can't send to" : Name(Channel))).
 
-  send_message(Message, Channel, Multiplier, Chosen, Ch, Reply) :-
-    Reply = true,
-    [] @< Ch :
-      Channel = _ |
-	send(Message, Ch, Multiplier, Chosen);
+  send_message(Message, Name, Multiplier, Chosen, Channel, Reply) :-
+    Reply = true |
+	send(Message, Channel, Multiplier, Chosen, Name);
 
     otherwise :
       Message = _,
       Multiplier = _, 
-      Ch = _ |
+      Channel = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("psi_utils: Can't send to" : Channel - Reply)).
+	computation#display(("psi_utils: Can't send to" : Name - Reply)).
 
+transmitted(Id, Tag, Chosen, Message, Value) :-
+
+    Chosen = Tag :
+      Id = _,
+      Value = Message;
+
+    Chosen =\= Tag :
+      Message = _,
+      Id = _,
+      Value = _.
+      
  
 receive(Channel, Message) :-
-	receive(Channel, Message, 1, _).
+	receive(Channel, Message, 1, _, receiver).
 receive(Channel, Message, Multiplier) :-
-	receive(Channel, Message, Multiplier, _).
+	receive(Channel, Message, Multiplier, _, receiver).
 receive(Channel, Message, Multiplier, Chosen) :-
-    string(Channel), Channel =\= "_", Channel =\= "" |
+	receive(Channel, Message, Multiplier, Chosen, receiver).
+receive(Channel, Message, Multiplier, Chosen, Name) :-
+    string(Channel), Channel =\= "_", Channel =\= "" :
+      Name = _ |
 	computation#dictionary(find, Channel, Ch, Reply),
 	receive_message(Channel, Message, Multiplier, Chosen, Ch, Reply);
-
-    Channel = Creator(FcpChannel, _Circuit),
-    channel(FcpChannel) :
-      Receive = receive(psi(Creator), Message, 1, Multiplier, Chosen),
-      write_channel(Receive, FcpChannel);
+    vector(Channel),
+    arity(Channel, 11),
+    we(Chosen) :
+      Receive = PSI_RECEIVE(Name, Channel, Multiplier, 2) |
+	psi_monitor#scheduler(S),
+	write_channel(start(receive, [Receive], Value, Chosen), S),
+	transmitted(receiving(Name), 2, Chosen, Message, Value);
 
     otherwise :
       Message = _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("psi_utils: Can't receive from" : Channel)).
+	computation#display(("psi_utils: Can't receive from" : Name(Channel))).
 	
 
-  receive_message(Channel, Message, Multiplier, Chosen, Ch, Reply) :-
-    Reply = true,
-    channel(Ch) :
-      Channel = _ |
-	receive(Ch, Message, Multiplier, Chosen);
+  receive_message(Name, Message, Multiplier, Chosen, Channel, Reply) :-
+    Reply = true |
+	receive(Channel, Message, Multiplier, Chosen, Name);
 
     otherwise :
       Message = _,
       Multiplier = _,
-      Ch = _ |
+      Channel = _ |
 	unify_without_failure(Chosen, 0),
 	computation#display(
-		("psi_utils: Can't receive from" : Channel - Reply)).
+		("psi_utils: Can't receive from" : Name - Reply)).
 
 
 dimer(SendMessage, ReceiveMessage, Channel) :-
-	dimer(SendMessage, ReceiveMessage, Channel, 1, _).
+	dimer(SendMessage, ReceiveMessage, Channel, 1, _, dimer).
 dimer(SendMessage, ReceiveMessage, Multiplier, Channel) :-
-	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, _).
-dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen) :-
-    Channel = Creator(FcpChannel, _Circuit) :
-      Dimer = dimer(psi(Creator), Message, {1, 2}, Multiplier, Chosen),
-      write_channel(Dimer, FcpChannel) |
-	unify_without_failure({Chosen?, Message}, {1, SendMessage}),
-	unify_without_failure({Chosen?, Message}, {2, ReceiveMessage});
+	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, _, dimer).
+dimer(SendMessage, ReceiveMessage, Multiplier, Channel, Chosen) :-
+	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, dimer).
+dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name) :-
+    vector(Channel),
+    arity(Channel, 11) :
+      Chosen = Chosen'?,
+      Dimer = PSI_DIMER(Name, Channel, {1, 2}, Multiplier) |
+	psi_monitor#scheduler(S),
+	write_channel(start(dimer, [Dimer], Value, Chosen'), S),
+	dimered(Chosen'?, SendMessage, ReceiveMessage, Value);
 
-    string(Channel), Channel =\= "_", Channel =\= "" |
+    string(Channel), Channel =\= "_", Channel =\= "" :
+      Name = _ |
 	computation#dictionary(find, Channel, Ch, Reply),
 	dimer_message(SendMessage, ReceiveMessage, Multiplier,
 			Channel, Chosen, Ch, Reply);
@@ -147,75 +164,169 @@ dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen) :-
       ReceiveMessage= _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("psi_utils: Can't dimer on" : Channel)).
+	computation#display(("psi_utils: Can't dimer on" : Name(Channel))).
 
-  dimer_message(SendMessage, ReceiveMessage, Channel, Multiplier,
-			Chosen, Ch, Reply) :-
-    Reply = true,
-    [] @< Ch :
-      Channel = _ |
-	dimer(SendMessage, ReceiveMessage, Multiplier, Chosen, Ch);
+  dimer_message(SendMessage, ReceiveMessage, Name, Multiplier,
+			Chosen, Channel, Reply) :-
+    Reply = true |
+	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name);
 
     otherwise :
       SendMessage = _,
       ReceiveMessage = _,
       Multiplier = _,
-      Ch = _ |
+      Channel = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("psi_utils: Can't dimer on" : Channel - Reply)).
+	computation#display(("psi_utils: Can't dimer on" : Name - Reply)).
+
+dimered(Chosen, SendMessage, ReceiveMessage, Value) :-
+
+    Chosen = 1 :
+      ReceiveMessage = _,
+      Value = SendMessage;
+
+    Chosen = 2 :
+      SendMessage = _,
+      Value = ReceiveMessage;
+
+    Chosen =\= 1, Chosen =\= 2 :
+      SendMessage = _,
+      ReceiveMessage = _,
+      Value = _.
 
 
 "SPC"(Channel) :-
 	psi_monitor#options(Options, Options),
 	"SPC"(Channel, Options?).
 
-"SPC"(Channel, Options) :-
+"SPC"(PsiChannel, Options) :-
 	computation#display(term, Display, known(Display)),
 	show_channel.
 
-show_channel(Channel, Options, Display) :-
+show_channel(PsiChannel, Options, Display) :-
 
-    string(Channel), Channel =\= "_", Channel =\= "" |
-	computation#dictionary(find, Channel, Channel', Reply),
-	show_named_channel;
+    string(PsiChannel), PsiChannel =\= "_", PsiChannel =\= "" |
+	computation#dictionary(find, PsiChannel, PsiChannel', Reply),
+	show_psi_channel;
 
     otherwise |
-	show_named_channel + (Reply = true).
+	show_psi_channel + (Reply = true).
 
 
-show_named_channel(Channel, Options, Display, Reply) :-
+show_psi_channel(PsiChannel, Options, Display, Reply) :-
 	
     Reply =\= true :
       Options = _,
       Display = "not_channel" |
-	computation#display(("psi_utils: Can't show channel" : Channel-Reply));
+	computation#display(("psi_utils: Can't show channel" :
+				PsiChannel-Reply));
 
     Reply =?= true,
-    Channel = Name(FcpChannel, {_Left, _Right}),
-    string(Name), channel(FcpChannel) |
-	show_named_channel1;
+    vector(PsiChannel),
+    read_vector(PSI_CHANNEL_NAME, PsiChannel, Name) |
+	show_psi_channel1;
 
     otherwise :
       Options = _,
       Reply = _,
       Display = "not_channel" |
-	computation#display(("psi_utils: Not a Psi channel" : Channel)).
+	computation#display(("psi_utils: Not a Psi channel" : PsiChannel)).
 
-  show_named_channel1(Name, FcpChannel, Options, Display) :-
+  show_psi_channel1(Name, PsiChannel, Options, Display) :-
 
-    true :
-      write_channel(inspect(Status, []), FcpChannel),
+    read_vector(PSI_CHANNEL_REFS, PsiChannel, Refs),
+    Refs > 0 :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	channel_argument + (Display = Content,
+	inspect_channel(PsiChannel, Result),
+	channel_argument + (Display = Content, Status = [Result],
 		Left = Display, Right = (Name : Content));
 
     /* closed channel */
     otherwise :
-      FcpChannel = _,
+      PsiChannel = _,
       Options = _,
       Display = [Name].
+
+
+inspect_channel(PsiChannel, Status) :-
+
+    read_vector(PSI_CHANNEL_TYPE, PsiChannel, Type),
+    read_vector(PSI_CHANNEL_RATE, PsiChannel, Rate),
+    read_vector(PSI_SEND_ANCHOR, PsiChannel, SendAnchor),
+    read_vector(PSI_RECEIVE_ANCHOR, PsiChannel, ReceiveAnchor),
+    read_vector(PSI_CHANNEL_NAME, PsiChannel, Name) :
+      Status = {Kind?, NameRate?, Sends?} |
+	name_rate_to_namerate,
+	list_messages(SendAnchor, Sends, Receives?),
+	list_messages(ReceiveAnchor, Receives, []).
+
+  name_rate_to_namerate(Type, Name, Rate, Kind, NameRate) :-
+
+    Type =?= PSI_CHANNEL_ANCHOR :
+      Rate = _,
+      Kind = anchor,
+      NameRate = Name(anchor);
+
+    Type =?= PSI_UNKNOWN :
+      Rate = _,
+      Kind = unknown,
+      NameRate = Name(unknown);
+
+    Type =?= PSI_BIMOLECULAR :
+      Kind = bimolecular,
+      NameRate = Name(Rate);
+
+    Type =?= PSI_HOMODIMERIZED :
+      Kind = homodimerized,
+      NameRate = Name(Rate);
+
+    Type =?= PSI_INSTANTANEOUS :
+      Rate = _,
+      Kind = instantaneous,
+      NameRate = Name(infinite);
+
+    Type =?= PSI_SINK :
+      Rate = _,
+      Kind = sink,
+      NameRate = Name(sink);
+
+    otherwise :
+      Type = _,
+      Kind = other(Type),
+      NameRate = other(Name(Rate)).
+
+  list_messages(Anchor, List, Tail) + (Message = Anchor) :-
+
+    arg(PSI_MESSAGE_LINKS, Message, Links),
+    read_vector(PSI_NEXT_MS, Links, Message'),
+    Message' =\= Anchor,
+    Message' = {Type, CId, _Channel, Multiplier, _SendTag, _ReceiveTag,
+			Common, _Links},
+    Common = {PId, _MsList, _Value, _Chosen} :
+      List ! Kind(PId, CId, Multiplier) |
+	type_to_kind,
+	self;
+
+    otherwise :
+      Anchor = _,
+      Message = _,
+      List = Tail.      
+
+  type_to_kind(Type, Kind) :-
+
+    Type =?= PSI_SEND :
+      Kind = send;
+
+    Type =?= PSI_RECEIVE :
+      Kind = receive;
+
+    Type =?= PSI_DIMER :
+      Kind = dimer;
+
+    otherwise :
+      Kind = other(Type).
 
 
 parse_options(Options, Depth, Order, Sender, Which) :-
@@ -289,21 +400,10 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Content = [],
       Left = Right;
 
-    Stream =\= [], Stream =\= [_|_] :
-      Which = _,
-      Depth = _,
-      Sender = _,
-      Content = "invalid stream"(Stream),
-      Left = Right;
-
     Which =\= none,
-    Stream ? Kind(Id, Message, Tag, _Multiplier, Chosen) |
-	clarify_message(Kind, Message, Message'),
-	show_message;
-
-    Which =\= none,
-    Stream ? Other, Other =\= _(_, _, _, _, _) :
-      Content ! "invalid message"(Other) |
+    Stream ? Kind(PId, CId, Multiplier) :
+      Content ! Condensed? |
+	id_and_message,
 	self;
 
     Which =?= none,
@@ -313,134 +413,24 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Content = "!",
       Left = Right.
 
-  clarify_message(Kind, Message, Clarified) :-
+  id_and_message(Kind, PId, CId, Multiplier, Sender, Condensed, Left, Right) :-
 
-    Kind =?= receive :
-      Message = _,
-      Clarified = "_";
+    Sender =?= sender,
+    Multiplier =\= 1 :
+      Condensed = {PId, CId*Multiplier, Kind},
+      Left = Right;
 
-    Kind =?= send :
-      Clarified = Message;
-
-    Kind =?= dimer,
-    Message =?= {SendMessage, _ReceiveMessage} :
-      Clarified = SendMessage.
-
-
-show_message(Kind, Id, Message, Tag, Chosen, Stream, Which, Depth, Sender,
-		Content, Left, Right) :-
-
-    Which =?= active,
-    we(Chosen) :
-      Tag = _,
-      Type = active,
-      Content ! Condensed? |
-	condense_message,
-	show_channel_content;
-
-    Which =?= all :
-      Content ! Condensed? |
-	type_of_choice,
-	condense_message + (Left = Left, Right = Left'?),
-	show_channel_content;
-
-    otherwise :
-      Kind = _,
-      Id = _,
-      Message = _,
-      Tag = _,
-      Chosen = _ |
-	show_channel_content.
-
-  type_of_choice(Tag, Chosen, Type) :-
-
-    we(Chosen) :
-      Tag = _,
-      Type = active;
-
-    ro(Chosen) :
-      Tag = _,
-      Type = suspended;
-
-    not_we(Chosen), Chosen =?= 0 :
-      Tag = _,
-      Type = withdrawn;
-
-    not_we(Chosen), Chosen =\= 0, Tag =?= Chosen :
-      Type = consumed;
-
-    not_we(Chosen), Chosen =\= 0, Tag =\= Chosen :
-      Type = cancelled.
-    
-
-condense_message(Kind, Id, Message, Type, Which, Depth, Sender, Condensed,
-			Left, Right) :-
-
-    unknown(Message) :
-      Which = _,
-      Depth = _,
-      Sender = _ |
-	id_and_message + (Msg = Type);
-
-    known(Type),
-    Message =?= [] :
-      Which = _,
-      Depth = _ |
-	id_and_message + (Msg = Type([]));
-
-    known(Type),
-    Depth > 1,
-    tuple(Message),
-    arity(Message, Index),
-    Index++,
-    make_tuple(Index', Msg),
-    arg(1, Msg, T),
-    Depth-- :
-      T = Type |
-	id_and_message + (Left = Left, Right = Left'?),
-	show_message_args;
-
-    known(Type),
-    Depth =< 1 :
-      Message = _,
-      Which = _,
-      Depth = _ |
-	id_and_message + (Msg = Type);
-
-    otherwise :
-      Which = _,
-      Depth = _,
-      Sender = _ |
-	id_and_message + (Msg = Type(Message)).
-
-  id_and_message(Kind, Id, Msg, Sender, Condensed, Left, Right) :-
-
-    Sender =?= sender :
-      Condensed = {Id, Kind - Msg},
+    Sender =?= sender,
+    Multiplier =?= 1 :
+      Condensed = {PId, CId, Kind},
       Left = Right;
 
     otherwise :
+      CId = _,
+      Multiplier = _,
+      PId = _,
       Sender = _,
-      Id = _,
-      Condensed = Kind - Msg,
-      Left = Right.
-
-
-show_message_args(Message, Which, Depth, Sender, Index, Msg, Left, Right) :-
-
-    Index > 1,
-    arg(Index, Msg, Display),
-    Index--,
-    arg(Index', Message, Argument) |
-	show_argument + (Left = Left, Right = Left'?),
-	self;
-
-    Index =?= 1 :
-      Message = _,
-      Which = _,
-      Depth = _,
-      Sender = _,
-      Msg = _,
+      Condensed = Kind,
       Left = Right.
 
 
@@ -475,8 +465,9 @@ show_value(Argument, Options, Display) :-
 
 show_argument(Argument, Which, Depth, Sender, Display, Left, Right) :-
 
-    Argument = Name(FcpChannel, {_L, _R}), string(Name), channel(FcpChannel) |
-	show_channel_argument;
+    vector(Argument), arity(Argument, CHANNEL_SIZE),
+    read_vector(PSI_CHANNEL_NAME, Argument, Name) |
+	show_channel_argument + (PsiChannel = Argument);
 
     constant(Argument) :
       Which = _,
@@ -499,31 +490,20 @@ show_argument(Argument, Which, Depth, Sender, Display, Left, Right) :-
       Display = Argument,
       Left = Right;
 
-    Argument = Name(_FcpChannel, _Circuit), unknown(Name) |
-	show_compound;
-
-    Argument = _Name(FcpChannel, _Circuit), unknown(FcpChannel) |
-	show_compound;
-
-    Argument = _Name(_FcpChannel, Circuit), unknown(Circuit) |
-	show_compound;
-
-    Argument = _Name(_FcpChannel, Circuit), Circuit =\= {_, _} |
-	show_compound;
-
     otherwise |
 	show_compound.
 
-show_channel_argument(Name, FcpChannel, Which, Depth, Sender, Display,
+show_channel_argument(Name, PsiChannel, Which, Depth, Sender, Display,
 				Left, Right) :-
 
-    true :
-      Name = _,
-      write_channel(inspect(Status, []), FcpChannel) |
-	channel_argument;
+    read_vector(PSI_CHANNEL_REFS, PsiChannel, Refs),
+    Refs > 0 :
+      Name = _ |
+	inspect_channel(PsiChannel, Result),
+	channel_argument + (Status = [Result]);
 
     otherwise :
-      FcpChannel = _,
+      PsiChannel = _,
       Which = _,
       Depth = _,
       Sender = _,
@@ -619,7 +599,11 @@ show_goal(Goal, Options, PiFcp, Left, Right) :-
 
     tuple(Goal), Goal =\= (_#_),
     arg(1, Goal, Name), string(Name),
-    arity(Goal, Index) :
+    arity(Goal, Index),
+    make_tuple(Index, Tuple),
+    arg(1, Tuple, N) :
+      N = Name,
+      PiFcp = Tuple,
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
@@ -729,27 +713,7 @@ goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
 	self;
 
     Index > 1, arg(Index, Goal, Argument),
-    Argument = Name(_FcpChannel, _Circuit), unknown(Name),
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Argument),
-    Argument = _Name(FcpChannel, _Circuit), unknown(FcpChannel),
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Argument),
-    Argument = _Name(_FcpChannel, Circuit), unknown(Circuit),
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Argument),
-    Argument = _Name(_FcpChannel, Circuit), Circuit =\= {_, _},
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Argument),
-    Argument = Id(FcpChannel, {_L, _R}), string(Id), channel(FcpChannel),
+    vector(Argument), arity(Argument, CHANNEL_SIZE),
     make_tuple(Index, Tuple),
     arg(1, Goal, Name),
     arg(1, Tuple, N) :

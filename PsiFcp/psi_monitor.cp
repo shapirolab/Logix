@@ -3,6 +3,7 @@
 -export([get_global_channels/1, global_channels/1, global_channels/2,
 	 new_channel/3,
 	 options/2, reset/0, scheduler/1]).
+-include(psi_constants).
 
 RAN =>  4.					/* uniform 0..1 variate */
 LN  =>  9.					/* natural logarithm */
@@ -11,22 +12,35 @@ REALTIME => 12.
 
 MAXTIME => 99999999999999999999999999999999999999999999999999999999999.0.
 
-DEBUG(Note) => write_channel(debug_note(Note), NotesChannel).
+DEBUG(Note) => write_channel(debug_note(Note), Scheduler).
 
-%STOPPED => DEBUG((ChannelName:stopped!)).
-STOPPED => ChannelName = _, NotesChannel = _.
+%STOPPED => DEBUG(stopped(Reply)).
+STOPPED => Reply = _.
 
+/*
+** Arguments of PSIOFFSETS correspond to the C-executable (pcicomm.c)
+** sub-functions, Close, Transmit, Step.
+**
+** To test the C-executable, change an argument to PsiOffset, - e.g. 
+** 
+** PSIOFFSETS => {unbound, unbound, PsiOffset}
+**
+** to allow the monitor to call the C step function.
+*/
+
+PSIOFFSETS => {unbound, unbound, unbound}.
 
 serve(In) + (Options = []) :-
 
     In =?= [] :
-      Options = _ |
-	true;
+      Options = _;
 
-    In =\= [] |
+    In =\= [] :
+      PsiOffset = _ |
 	server(In, Options, Scheduler),
 	processor#link(lookup(math, Offset), Ok),
-	start_scheduling(Scheduler, Offset, Ok).
+	processor#link(lookup(psicomm, PsiOffset), _Ok),
+	start_scheduling(Scheduler, Offset, PSIOFFSETS, Ok).
 
 server(In, Options, Scheduler) + (Globals = [{0, _, -1}, {[], _, -1}]) :-
 
@@ -62,7 +76,16 @@ server(In, Options, Scheduler) + (Globals = [{0, _, -1}, {[], _, -1}]) :-
       write_channel(debug(Debug), Scheduler) |
 	self;
 
+    In ? psifunctions(List) :
+      write_channel(psifunctions(List), Scheduler) |
+	self;
+
     In ? scheduler(Scheduler^) |
+	self;
+
+    In ? status(Status) :
+      Status = Status'?,
+      write_channel(status(Status'), Scheduler) |
 	self;
 
     In ? Other,
@@ -87,16 +110,20 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
     Last @< Name,
     we(NewChannel),
     Globals ? Global, Global = Name(PsiChannel, BaseRate),
-    PsiChannel = Id(Channel, {Left, Right}) :
+    vector(PsiChannel),
+    read_vector(PSI_CHANNEL_REFS, PsiChannel, References),
+    References++ :
       Last = _,
-      NewChannel = Id(Channel, {Middle, Right}),
-      NewGlobals ! Name(Id(Channel, {Left, Middle}), BaseRate),
+      NewChannel = PsiChannel,
+      store_vector(PSI_CHANNEL_REFS, References', PsiChannel),
+      NewGlobals ! Name(PsiChannel, BaseRate),
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate),
-    Globals ? Name(_PsiChannel, OtherBaseRate),
-    BaseRate =\= OtherBaseRate |
+    Globals ? Entry, Entry = Name(_PsiChannel, OtherBaseRate),
+    BaseRate =\= OtherBaseRate :
+      NewGlobals ! Entry |
 	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
@@ -146,1043 +173,6 @@ copy_global(Globals, List, Ends) :-
       List = [],
       Ends = Globals.
 
-
-start_scheduling(Scheduler, Offset, Ok) :-
-
-    Ok =?= true,
-    info(REALTIME, Start_real_time),
-    convert_to_real(0, Zero),
-    convert_to_real(MAXTIME, MaxTime) :
-      make_channel(Scheduler, Schedule),
-      execute(Offset, {RAN, 0, Uniform}),
-      execute(Offset, {LN, Uniform, NegativeExponential}),
-      execute(Offset, {RAN, 0, Uniform'}) |
-	processor#Waiter?,
-	scheduling(Schedule, Offset, NegativeExponential, Uniform', Waiter,
-				PutCommand, PutCommand?,
-				Scheduler, _Recording, _Debug,
-				Zero, false, _Wakeup, _Halt,
-				MaxTime, Start_real_time);
-
-    Ok =\= true :
-      Scheduler = _,
-      Offset = _ |
-	fail(math_offset(Ok)).
-
-/*
-** scheduling monitors the stream generated using the scheduler channel.
-**
-** It recognises:
-**
-**    cutoff(Time)
-**    input(Schedule?, Schedule')
-**    new_channel(Creator, Channel, BaseRate)
-**    pause(Continue)
-**    record(Record?)
-**    end_record(Record'?)
-**    start(Token)
-**    done(Token1, Token2)
-**
-** and the debugging aids:
-**
-**    debug(Debug?)
-**
-** Processing:
-**
-** Maintain time  Now  and a short-circuit psi-channel command list.
-**
-** Whenever the system becomes idle and the short-cicuit produces a non-
-** zero weighted sum, use the short-circuit to select a channel which will
-** complete a communication.
-**
-** Record:
-**
-**   Changes to  Now .
-**   Selected processes .
-*/
-
-scheduling(Schedule, Offset, NegativeExponential, Uniform, Waiter,
-		PutCommand, GetCommand,
-		Scheduler, Record, Debug,
-		Now, Waiting, Wakeup, Halt,
-		Cutoff, Start_real_time) :-
-
-    Schedule =?= [] :
-      Cutoff = _,
-      GetCommand = _,
-      NegativeExponential = _,
-      Now = _,
-      Offset = _,
-      Scheduler = _,
-      Start_real_time = _,
-      Uniform = _,
-      Waiting = _,
-      Wakeup = _,
-      PutCommand = [],
-      Halt = halt,
-      Waiter = [],
-      Record = [],
-      Debug = [];
-
-    /* Set the time limit - maximum value for Now */
-    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
-    info(REALTIME, Start_real_time') :
-      Cutoff = _,
-      Start_real_time = _ |
-	continue_waiting;
-
-    /* Splice input filter. */
-    Schedule ? input(Schedule'', Schedule'^) |
-	self;
-
-    /* Create a new channel. */
-    Schedule ? New , New = new_channel(Creator, Channel, BaseRate) |
-	new_channel(Creator, Channel, BaseRate, Halt, stop,
-			Scheduler, PutCommand'?, PutCommand),
-	continue_waiting;
-
-    /* Pause processing until Continue is set. */
-    Schedule ? pause(Continue) |
-	pause_scheduling(Continue,
-			 Schedule', Schedule'',
-			 GetCommand, GetCommand',
-			 Waiting, Waiting',
-			 Wakeup, Wakeup',
-			 Start_real_time, Start_real_time'),
-	self;
-
-    /* Return the current head of the recording stream. */
-    Schedule ? record(Stream) :
-      Stream = Record? |
-	self;
-
-    /* Close the recording stream, and start a new one. */
-    Schedule ? end_record(Stream),
-    convert_to_real("0.0", Now') :
-      Now = _,
-      Record = [],
-      Stream = Record'? |
-	self;
-
-    /* Record the start of a communication process. */
-    Schedule ? Start, Start =?= start(Token, _) :
-      Record ! start(Token),
-      Debug ! Start |
-	continue_waiting;
-    Schedule ? Start, Start =?= start(_Token) :
-      Record ! Start,
-      Debug ! Start |
-	continue_waiting;
-
-    /* Record the end of an instantaneous communication. */
-    Schedule ? Terminate, Terminate = done(Token1, Token2) :
-      Record ! end(Token1),
-      Record' ! end(Token2),
-      Debug ! Terminate |
-	self;
-
-/***************************** Testing sum/select ****************************/
-
-    Schedule ? step :
-      PutCommand ! sum(0) |
-	self;
-
-    /* Bad news if this happens */
-    GetCommand ? Select, Select = select(_, _) :
-      Debug ! ((pi_monitor:Select)) |
-	fail(scheduling-Select),
-	self;
-
-/*************************** End Testing sum/select **************************/
-
-    GetCommand ? sum(S),
-    number(S), S =< 0 :
-      Debug ! idle(Now) |
-	self;
-
-    GetCommand ? sum(S),
-    number(S), S > 0,
-    Now -= NegativeExponential/S,
-    Residue := Uniform*S :
-      Wakeup = _,
-      PutCommand ! select(Residue, Wakeup'),
-      Debug ! now(Now'),
-      Record ! Now',
-      execute(Offset, {RAN, 0, Uniform'}),
-      execute(Offset, {LN, Uniform', NegativeExponential'}),
-      execute(Offset, {RAN, 0, Uniform''}) |
-	self;
-
-    Wakeup = done :
-      Waiting = _,
-      Waiting' = false,
-      PutCommand ! sum(0) |
-	self + (Wakeup = select);
-
-    Wakeup =?= done(Sent, Received) :
-      Waiting = _,
-      Waiter ! machine(idle_wait(Wakeup'), _Ok),
-      Waiting' = true,
-      Record ! end(Sent),
-      Record' ! end(Received),
-      Debug ! Wakeup |
-	self;
-
-    Wakeup =?= retry(_) :
-      Wakeup' = done,
-      Debug ! Wakeup |
-	self;
-
-/**************************** Debugging code ********************************/
-
-    Schedule ? debug(Stream) :
-      Stream = Debug? |
-	self;
-
-    Schedule ? debug_note(Note) :
-      Debug ! Note |
-	self;
-
-    Schedule ? end_debug :
-      Debug = [],
-      Debug' = _ |
-	self;
-
-    Schedule ? Other,
-    otherwise |
-	fail(Other),
-	self;
-
-/***************************************************************************/
-
-    Now >= Cutoff,
-    info(REALTIME, End_real_time),
-    Real_time := End_real_time - Start_real_time  :
-      GetCommand = _,
-      NegativeExponential = _,
-      Offset = _,
-      Schedule = _,
-      Scheduler = _,
-      Uniform = _,
-      Waiting = _,
-      Wakeup = _,
-      Waiter = [machine(idle_wait(Done), _Ok)],
-      Record = [],
-      Debug = [] |
-	computation#display((done @ Now:
-		seconds = Real_time)),
-	wait_done.
-
-  wait_done(Done, Halt, PutCommand) :-
-
-    known(Done) :
-      Halt = halt,
-      PutCommand = [] |
-	self#reset.
-
-continue_waiting(Schedule, Offset, NegativeExponential, Uniform, Waiter,
-		PutCommand, GetCommand,
-		Scheduler, Record, Debug,
-		Now, Waiting, Wakeup, Halt,
-		Cutoff, Start_real_time) :-
-
-    Waiting =?= true |
-	scheduling;
-
-    Waiting =\= true :
-      Wakeup = _,
-      Waiter ! machine(idle_wait(Wakeup'), _Ok),
-      Waiting' = true |
-	scheduling;
-
-    /* check for paused. */
-    unknown(Waiting) |
-	scheduling.
-
-
-pause_scheduling(Continue,
-		 Schedule, ResetSchedule,
-		 GetCommand, ResetGetCommand,
-		 Waiting, ResetWaiting,
-		 Wakeup, ResetWakeup,
-		 Start_real_time, Reset_real_time) :-
-
-    info(REALTIME, Pause_real_time),
-    Biased_real_time := Start_real_time + Pause_real_time :
-      SavedInput = SaveInput? |
-	pause_continue.
-
-  pause_continue(Continue,
-		 Schedule, ResetSchedule,
-		 GetCommand, ResetGetCommand,
-		 Waiting, ResetWaiting,
-		 Wakeup, ResetWakeup,
-		 Biased_real_time, Reset_real_time,
-		 SavedInput, SaveInput) :-
-
-    Schedule ? Input :
-      SaveInput ! Input |
-	self;
-
-    Continue =?= resume,
-    info(REALTIME, Resume_real_time),
-    Reset_real_time^ := Biased_real_time - Resume_real_time :
-      ResetSchedule = SavedInput,
-      SaveInput = Schedule,
-      ResetGetCommand = GetCommand,
-      ResetWaiting = Waiting,
-      Wakeup = ResetWakeup.
-
-
-new_channel(Creator, Channel, BaseRate, Halt, Terminator,
-		NotesChannel, CommandIn, CommandOut) :-
-
-    we(Channel) :
-      make_channel(InputChannel, Input),
-      Channel = Creator(InputChannel, {Stop, Terminator}) |
-	prototype_or_instantaneous + (ChannelName = Creator);
-
-    otherwise :
-      Halt = _,
-      Terminator = _,
-      DEBUG(failed_new(Creator, Channel, BaseRate)),
-      CommandOut = CommandIn |
-	fail(new(Creator, Channel, BaseRate)).
-  
-  prototype_or_instantaneous(ChannelName, Input, InputChannel, BaseRate, Halt,
-			NotesChannel, CommandIn, CommandOut, Stop) :-
-
-    BaseRate = test :
-      Halt = _,
-      DEBUG((ChannelName: test)) |
-	test_channel + (Weight = 0);
-
-    BaseRate =?= infinite :
-      CommandOut = CommandIn |
-	instantaneous_channel;
-
-    BaseRate =< 0 :
-      Stop = _,
-      CommandOut = CommandIn,
-      DEBUG((ChannelName: sink)) |
-	sink_channel + (Count = 0);
-
-    BaseRate > 0,
-    BaseRate' := real(BaseRate) :
-      Halt = _ |
-	channel_type;
-
-    otherwise :
-      Halt = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel) |
-	fail(("invalid base rate" : ChannelName - BaseRate));
-
-    /* wait for first message */
-    unknown(BaseRate),
-    Input ? inspect(Head, Tail) :
-      Head ! indeterminate(ChannelName(unknown), []),
-      Head' = Tail |
-	self;
-
-    Stop =?= stop :
-      BaseRate = _,
-      ChannelName = _,
-      Halt = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel);
-
-    unknown(BaseRate),
-    CommandIn ? Command :
-      CommandOut ! Command |
-	self;
-
-    CommandIn =?= [] :
-      BaseRate = _,
-      ChannelName = _,
-      Halt = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      CommandOut = [],
-      close_channel(InputChannel).
-
-  channel_type(ChannelName, Input, InputChannel, BaseRate,
-		NotesChannel, CommandIn, CommandOut, Stop) :-
-
-    /* wait for first message */
-    unknown(Input),
-    CommandIn ? Command :
-      CommandOut ! Command |
-	self;
-
-    CommandIn =?= [] :
-      BaseRate = _,
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      CommandOut = [],
-      close_channel(InputChannel);
-
-    Input =?= [Dimer | _],
-    arg(1, Dimer, dimer) |
-	dimerized_channel;
-
-    Input =?= [Send | _],
-    arg(1, Send, send),
-    BaseRate' := real(BaseRate) |
-	bimolecular_channel;
-
-    Input =?= [Receive | _],
-    arg(1, Receive, receive),
-    BaseRate' := real(BaseRate) |
-	bimolecular_channel;
-
-    Input ? inspect(Head, Tail) :
-      Head ! indeterminate(ChannelName(BaseRate), []),
-      Head' = Tail |
-	self;
-
-    Stop =?= stop :
-      BaseRate = _,
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel).
-
-
-sink_channel(ChannelName, Input, InputChannel, NotesChannel,
-			Halt, Stop, Count) :-
-
-    Input ? Request, tuple(Request), arity(Request) =:= 6,
-    arg(1, Request, Functor), string(Functor),
-    Count++ |
-	self;
-
-    Input ? Request, Request =?= withdraw(_, _),
-    Count-- |
-	self;
-
-    Input ? inspect(Head, Tail) :
-      Head ! test(ChannelName(Count), []),
-      Head' = Tail |
-	self;
-
-    Input ? Other,
-    otherwise :
-      DEBUG((ChannelName:unknown - Other)) |
-	self;
-
-    Input =?= [] :
-      ChannelName = _,
-      Count = _,
-      Halt = _,
-      Stop = _,
-      NotesChannel = _,
-      close_channel(InputChannel);
-
-    Halt = halt :
-      ChannelName = _,
-      Count = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _ ,
-      close_channel(InputChannel);
-
-    unknown(Input),
-    Stop =?= stop :
-      ChannelName = _,
-      Count = _,
-      Halt = _,
-      NotesChannel = _,
-      close_channel(InputChannel).
-	
-
-test_channel(ChannelName, Input, InputChannel,
-	NotesChannel, CommandIn, CommandOut, Stop, Weight) :-
-
-    Input ? Request, tuple(Request), arity(Request) =:= 6,
-    arg(1, Request, Functor), string(Functor),
-    arg(5, Request, N), integer(N),
-    Weight += N :
-      DEBUG((ChannelName:request = Request)) |
-	self;
-
-    Input ? Request, Request =?= withdraw(_, N),
-    Weight -= N :
-      DEBUG((ChannelName:request = Request)) |
-	self;
-
-    Input ? inspect(Head, Tail) :
-      Head ! test(ChannelName(Weight), []),
-      Head' = Tail |
-	self;
-
-    Input ? Other,
-    otherwise :
-      DEBUG((ChannelName:unknown - Other)) |
-	self;
-
-    Input =?= [] :
-      Stop = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      DEBUG((ChannelName:closed - Weight));
-
-    unknown(Input),
-    Stop =?= stop :
-      Input = _,
-      Weight = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      DEBUG((ChannelName:stopped!));
-
-    CommandIn ? Command :
-      CommandOut ! Command,
-      DEBUG((ChannelName:command = Command)) |
-	self;
-
-    CommandIn = [] :
-      ChannelName = _,
-      Input = _,
-      InputChannel = _,
-      NotesChannel = _,
-      Stop = _,
-      Weight = _,
-      CommandOut = [].
-
-
-dimerized_channel(ChannelName, Input, InputChannel, BaseRate,
-		NotesChannel, CommandIn, CommandOut, Stop) :-    
-	dimerized + (Requests = AddRequests?, Weight = 0, Blocked = false).
-dimerized(ChannelName, Input, InputChannel, BaseRate,
-	  NotesChannel, CommandIn, CommandOut, Stop,
-	  Requests, AddRequests, Weight, Blocked) :-
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*(Weight*(Weight-1))/2 :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' < 0 |
-	get_active_request(Requests, Requests', Request),
-	dimerized_transmit + (Requests1 = AddRequests1?);
-
-    CommandIn = [] :
-      ChannelName = _,
-      BaseRate = _,
-      Stop = _,
-      Input = _,
-      NotesChannel = _,
-      Requests = _,
-      AddRequests = _,
-      Weight = _,
-      Blocked = _,
-      close_channel(InputChannel),
-      CommandOut = CommandIn;
-
-    Input ? Request, Request =?= dimer(_, _, _, Multiplier, _),
-    Weight += Multiplier :
-      Blocked = _,
-      Blocked' = false,
-      AddRequests ! Request |
-	self;
-
-    Input ? withdraw(dimer, N),
-    Weight -= N |
-	self;
-
-    Input ? inspect(Head, Tail),
-    RateWeight := BaseRate*(Weight*(Weight-1))/2 :
-      Head ! dimerized(ChannelName(RateWeight), Content?),
-      Head' = Tail |
-	copy_requests(Requests, Content, []),
-	self;
-
-    Input ? Request, arg(1, Request, send) |
-	fail(("send on dimerized channel" : ChannelName - Request)),
-	self;
-
-    Input ? Request, arg(1, Request, receive) |
-	fail(("receive on dimerized channel" : ChannelName - Request)),
-	self;
-
-    Input ? Other,
-    otherwise |
-	fail(("unrecognized request" : ChannelName - Other)),
-	self;
-
-    Input = [] :
-      BaseRate = _,
-      Stop = _,
-      InputChannel = _,
-      Weight = _,
-      Blocked = _,
-      CommandOut = CommandIn,
-      AddRequests = [],
-      DEBUG((ChannelName:closed(Requests)));
-
-    unknown(Input),
-    Stop =?= stop :
-      BaseRate = _,
-      Weight = _,
-      Blocked = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      AddRequests = [],
-      DEBUG((ChannelName:stopped(Requests))).
-
-  dimerized_transmit(ChannelName, Input, InputChannel, BaseRate,
-		NotesChannel, CommandIn, CommandOut, Stop,
-		Requests, AddRequests, Weight, Blocked,
-		Requests1, AddRequests1, Request, Selected) :-
-
-    /* Maybe we should randomize the choice of send/receive. */
-    Requests ? _(ReceiveId, ReceiveMessage, {_SendTag, ReceiveTag},
-			ReceiveMultiplier, ReceiveReply),
-    we(ReceiveReply),
-    Request =?= _(SendId, SendMessage, {SendTag, _ReceiveTag},
-			SendMultiplier, SendReply),
-    we(SendReply),
-    Weight -= ReceiveMultiplier + SendMultiplier :
-      AddRequests1 = Requests'?,
-      ReceiveMessage = SendMessage,
-      ReceiveReply = ReceiveTag,
-      SendReply = SendTag,
-      Selected = done(SendId, ReceiveId) |
-	dimerized + (Requests = Requests1);
-
-    /* Both have the same Reply - unlikely, but possible. */
-    Requests ? Request1, Request1 =?= _(_, _, _, _, Reply1),
-    we(Reply1),
-    Request = _(_, _, _, _, Reply2),
-    we(Reply2),
-    Reply1 =?= Reply2 :
-      AddRequests1 ! Request1 |
-	self;
-
-    /* Discard withdrawn requests. */ 
-    Requests ? _(_, _, _, _, Reply),
-    not_we(Reply) |
-	self;
-
-    /* Request already withdrawn. */
-    Request =?= _(_, _,  _, _, Reply), not_we(Reply) :
-      AddRequests1 = Requests,
-      Selected = retry(ChannelName) |
-	dimerized + (Requests = Requests1);
-
-    /* All requests from the same process instance. */
-    Request =\= [],
-    unknown(Requests) :
-      Blocked = _,
-      AddRequests = _,
-      Selected = retry(ChannelName),
-      Blocked' = true |
-	dimerized +
-		(Requests = [Request | Requests1], AddRequests = AddRequests1);
-
-    /* Never found an active request in the first place. */
-    Request =?= [],
-    unknown(Requests) :
-      Requests' = Requests1,
-      AddRequests1 = Requests,
-      Selected = retry(ChannelName) |
-	self.
-
-	
-bimolecular_channel(ChannelName, Input, InputChannel, BaseRate,
-		NotesChannel, CommandIn, CommandOut, Stop) :-    
-	bimolecular + (Sends = AddSends?, Receives = AddReceives?,
-		SendWeight = 0, ReceiveWeight = 0, Blocked = false).
-bimolecular(ChannelName, Input, InputChannel, BaseRate,
-	    NotesChannel, CommandIn, CommandOut, Stop,
-	    Sends, AddSends, SendWeight,
-	    Receives, AddReceives, ReceiveWeight, Blocked) :-
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*SendWeight*ReceiveWeight :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked = false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' < 0 |
-	get_active_request(Sends, Sends', Send),
-	bimolecular_send + (Receives1 = AddReceives1?);
-
-    CommandIn = [] :
-      AddReceives = _,
-      AddSends = _,
-      BaseRate = _,
-      Blocked = _,
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Receives = _,
-      ReceiveWeight = _,
-      Sends = _,
-      SendWeight = _,
-      Stop = _,
-      close_channel(InputChannel),
-      CommandOut = CommandIn;
-
-    Input ? Request, Request =?= send(_, _, _, Multiplier, _),
-    SendWeight += Multiplier :
-      Blocked = _,
-      Blocked' = false,
-      AddSends ! Request |
-	self;
-
-    Input ? Request, Request =?= receive(_, _, _, Multiplier, _),
-    ReceiveWeight += Multiplier :
-      Blocked = _,
-      Blocked' = false,
-      AddReceives ! Request |
-	self;
-
-    Input ? withdraw(send, N),
-    SendWeight -= N |
-	self;
-
-    Input ? withdraw(receive, N),
-    ReceiveWeight -= N |
-	self;
-
-    Input ? inspect(Head, Tail),
-    RateWeight := BaseRate*SendWeight*ReceiveWeight :
-      Head ! bimolecular(ChannelName(RateWeight), Content?),
-      Head' = Tail |
-	copy_requests(Sends, Content, Content'?),
-	copy_requests(Receives, Content', []),
-	self;
-
-    Input ? Other,
-    otherwise |
-	fail(("unrecognized request" : ChannelName - Other)),
-	self;
-
-    Input = [] :
-      BaseRate = _,
-      Blocked = _,
-      InputChannel = _,
-      ReceiveWeight = _,
-      SendWeight = _,
-      Stop = _,
-      CommandOut = CommandIn,
-      AddSends = Receives,
-      AddReceives = [],
-      DEBUG((ChannelName:closed(Sends)));
-
-    unknown(Input),
-    Stop =?= stop :
-      BaseRate = _,
-      Blocked = _,
-      ReceiveWeight = _,
-      SendWeight = _,
-      CommandOut = CommandIn,
-      close_channel(InputChannel),
-      AddSends = Receives,
-      AddReceives = [],
-      DEBUG((ChannelName:stopped(Sends))).
-
-
-bimolecular_send(ChannelName, Input, InputChannel, BaseRate,
-		 NotesChannel, CommandIn, CommandOut, Stop,
-		 Sends, AddSends, SendWeight,
-		 Receives, AddReceives, ReceiveWeight, Blocked,
-		 Receives1, AddReceives1, Send, Selected) :-
-
-    Receives ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Receives ? _(Id1, Ms1, Tag1, ReceiveMultiplier, Reply1), we(Reply1),
-    Send =?=  _(Id2, Ms2, Tag2, SendMultiplier, Reply2), we(Reply2),
-    SendWeight -= SendMultiplier,
-    ReceiveWeight -= ReceiveMultiplier :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      Selected = done(Id1, Id2),
-      AddReceives1 = Receives'? |
-	bimolecular + (Receives = Receives1);
-
-    /* This shouldn't happen. */
-    Send =?= _(_, _, _, _, Reply), not_we(Reply) :
-      AddReceives1 = Receives,
-      Selected = retry(ChannelName) |
-	bimolecular + (Receives = Receives1);
-
-    /* This shouldn't happen either. */
-    Send =?= _(_, _, _, _, Reply), we(Reply),
-    unknown(Receives),
-    unknown(Receives1) :
-      AddReceives1 = _,
-      Blocked = _,
-      Selected = retry(ChannelName),
-      Blocked' = true |
-	bimolecular + (Sends = [Send | Sends]);
-
-    Send =?= _(_, _, _, _, Reply), we(Reply),
-    unknown(Receives),
-    known(Receives1) :
-      AddReceives = _ |
-	get_active_request(Receives1, Receives', Receive),
-	bimolecular_receive +
-		(Sends1 = [Send | AddSends1?], AddReceives = AddReceives1);
-
-    /* This Receive has the same Reply as the Send.
-       Maybe some other receive will do the trick. */
-    Receives ? Receive, Receive = _(_, _, _, _, Reply),
-    Send =?= _(_, _, _, _, Reply) :
-      AddReceives1 ! Receive |
-	self;
-
-    /* Never found an active send in the first place. */
-    Send =?= [] :
-      AddReceives1 = Receives?,
-      Selected = retry(ChannelName) |
-	bimolecular + (Receives = Receives1).
-
-
-bimolecular_receive(ChannelName, Input, InputChannel, BaseRate,
-		    NotesChannel, CommandIn, CommandOut, Stop,
-		    Sends, AddSends, SendWeight,
-		    Receives, AddReceives, ReceiveWeight, Blocked,
-		    Sends1, AddSends1, Receive, Selected) :-
-
-    Sends ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Sends ? _(Id1, Ms1, Tag1, SendMultiplier, Reply1), we(Reply1),
-    Receive =?=  _(Id2, Ms2, Tag2, ReceiveMultiplier, Reply2), we(Reply2),
-    SendWeight -= SendMultiplier,
-    ReceiveWeight -= ReceiveMultiplier :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      Selected = done(Id1, Id2),
-      AddSends1 = Sends'? |
-	bimolecular + (Sends = Sends1);
-
-    /* This shouldn't happen. */
-    Receive =?= _(_, _, _, _, Reply), not_we(Reply) :
-      AddSends1 = Sends,
-      Selected = retry(ChannelName) |
-	bimolecular + (Sends = Sends1);
-
-    Receive =?= _(_, _, _, _, Reply), we(Reply),
-    unknown(Sends) :
-      AddSends = _,
-      Blocked = _,
-      Selected = retry(ChannelName),
-      Blocked' = true |
-	bimolecular + (Sends = Sends1, AddSends = AddSends1,
-			Receives = [Receive | Receives]);
-
-    /* This Send has the same Reply as the Receive - mixed communication. */
-    Sends ? Send, Send = _(_, _, _, _, Reply),
-    Receive =?= _(_, _, _, _, Reply) :
-      AddSends1 ! Send |
-	self;
-
-    /* Never found an active receive in the first place. */
-    Receive =?= [] :
-      AddSends1 = Sends,
-      Selected = retry(ChannelName) |
-	bimolecular + (Sends = Sends1).
-
-
-
-instantaneous_channel(ChannelName, Input, InputChannel, NotesChannel,
-					Halt, Stop) :-
-	instantaneous + (Receives = AddReceives?, Sends = AddSends?).
-
-instantaneous(ChannelName, Input, InputChannel,	NotesChannel,
-				Halt, Stop,
-		Receives, AddReceives, Sends, AddSends) :-
-
-    Input ? Send, arg(1, Send, send) |
-	instantaneous_send + (Receives1 = AddReceives1?);
-
-    Input ? Receive, arg(1, Receive, receive) |
-	instantaneous_receive + (Sends1 = AddSends1?);
-
-    Input ? Request, arg(1, Request, dimer) |
-	fail(("dimerized operation on instantaneous channel" : ChannelName)),
-	self;
-
-    /* Ignore withdraw requests. */
-    Input ? withdraw(_, _) |
-	self;
-
-    Input ? inspect(Head, Tail) :
-      Head ! instantaneous(ChannelName(infinite), Content?),
-      Head' = Tail |
-	copy_requests(Sends, Content, Content'?),
-	copy_requests(Receives, Content', []),
-	self;
-
-    Input ? Other,
-    otherwise |
-	fail(("unrecognized request" : ChannelName - Other)),
-	self;
-
-    Input = [] :
-      ChannelName = _,
-      InputChannel = _,
-      NotesChannel = _,
-      Halt = _,
-      Stop = _,
-      Receives = _,
-      AddReceives = _,
-      Sends = _,
-      AddSends = _;
-
-    unknown(Input),
-    Stop =?= stop :
-      Halt = _,
-      AddSends = Receives,
-      AddReceives = [],
-      close_channel(InputChannel),
-      DEBUG((ChannelName:stopped(Sends)));
-
-    Halt = halt :
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Stop = _,
-      Receives = _,
-      AddReceives = _,
-      Sends = _,
-      AddSends = _,
-      close_channel(InputChannel).
-
-
-instantaneous_receive(ChannelName, Input, InputChannel, NotesChannel,
-					Halt, Stop,
-	Receives, AddReceives, Sends, AddSends, Receive, Sends1, AddSends1) :-
-
-    Sends ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Sends ? _(Id1, Ms1, Tag1, _, Reply1), we(Reply1),
-    Receive =?=  _(Id2, Ms2, Tag2, _, Reply2), we(Reply2) :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      write_channel(done(Id1, Id2), NotesChannel),
-      Sends'' = Sends1,
-      AddSends1 = Sends'? |
-	instantaneous;
-
-    /* This shouldn't happen. */
-    Receive = _(_, _, _, _, Reply), not_we(Reply) :
-      Sends' = Sends1,
-      AddSends1 = Sends |
-	instantaneous;
-
-    /* This shouldn't happen either. */
-    Receive = _(_, _, _, _, Reply), we(Reply),
-    unknown(Sends) :
-      Sends' = Sends1,
-      AddSends1 = Sends |
-	instantaneous + (Receives = [Receive | Receives]);
-
-    /* This Send has the same Reply as the Receive - mixed communication. */
-    Sends ? Send, Send = _(_, _, _, _, Reply),
-    Receive =?= _(_, _, _, _, Reply) :
-      AddSends1 ! Send |
-	self.
-
-
-
-instantaneous_send(Send, ChannelName, Input, InputChannel, NotesChannel,
-				Halt, Stop,
-	Receives, AddReceives, Sends, AddSends, Receives1, AddReceives1) :-
-
-    Receives ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Receives ? _(Id1, Ms1, Tag1, _, Reply1), we(Reply1),
-    Send =?=  _(Id2, Ms2, Tag2, _, Reply2), we(Reply2) :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      write_channel(done(Id1, Id2), NotesChannel),
-      Receives'' = Receives1,
-      AddReceives1 = Receives'? |
-	instantaneous;
-
-    /* This shouldn't happen. */
-    Send =?= _(_, _, _, _, Reply), not_we(Reply) :
-      Receives' = Receives1,
-      AddReceives1 = Receives |
-	instantaneous;
-
-    /* This shouldn't happen either. */
-    Send =?= _(_, _, _, _, Reply), we(Reply),
-    unknown(Receives) :
-      Receives' = Receives1,
-      AddReceives1 = Receives |
-	instantaneous + (Sends = [Send | Sends]);
-
-    /* This Receive has the same Reply as the Send - mixed communication. */
-    Receives ? Receive, Receive = _(_, _, _, _, Reply),
-    Send =?= _(_, _, _, _, Reply) :
-      AddReceives1 ! Receive |
-	self.
-
-
 /***************************** Utilities ************************************/
 
 copy_requests(Requests, Head, Tail) :-
@@ -1209,3 +199,1084 @@ get_active_request(Requests, NextRequests, Request) :-
     unknown(Requests) :
       NextRequests = Requests,
       Request = [].
+
+/***************************** Scheduling ***********************************/ 
+
+start_scheduling(Scheduler, Offset, PsiOffsets, Ok) :-
+
+    Ok =?= true,
+    info(REALTIME, Start_real_time),
+    convert_to_real(0, Zero),
+    convert_to_real(MAXTIME, MaxTime) :
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential}),
+      execute(Offset, {RAN, 0, Uniform'}),
+      make_channel(Scheduler, Schedule) |
+	make_channel_anchor(based, BasedAnchor),
+	make_channel_anchor(instantaneous, InstantaneousAnchor),
+	processor#Waiter?,
+	scheduling(Schedule, Offset, PsiOffsets, Waiter,
+				NegativeExponential, Uniform',
+				BasedAnchor, InstantaneousAnchor,
+				Scheduler, _Recording, _Debug,
+				Zero, false, _Wakeup,
+				MaxTime, Start_real_time);
+
+    Ok =\= true :
+      Scheduler = _,
+      Offset = _,
+      PsiOffsets = _ |
+	fail(math_offset(Ok)).
+
+
+make_channel_anchor(Name, Anchor) :-
+
+    convert_to_real(0, Zero) :
+      make_vector(CHANNEL_SIZE, Anchor, _),
+      store_vector(PSI_BLOCKED, FALSE, Anchor),
+      store_vector(PSI_CHANNEL_TYPE, PSI_CHANNEL_ANCHOR, Anchor),
+      store_vector(PSI_CHANNEL_RATE, Zero, Anchor),
+      store_vector(PSI_CHANNEL_REFS, 1, Anchor),
+      store_vector(PSI_SEND_ANCHOR, SendAnchor, Anchor),
+       make_channel(NextS, _),
+       make_channel(PrevS, _),
+       SendAnchor = {PSI_MESSAGE_ANCHOR, "", [], 0, 0, [], NextS, PrevS},
+       store_vector(1, SendAnchor, NextS),
+       store_vector(1, SendAnchor, PrevS),
+      store_vector(PSI_SEND_WEIGHT, 0, Anchor),
+      store_vector(PSI_RECEIVE_ANCHOR, ReceiveAnchor, Anchor),
+       make_channel(NextR, _),
+       make_channel(PrevR, _),
+       ReceiveAnchor = {PSI_MESSAGE_ANCHOR, "", [], 0, 0, [], NextR, PrevR},
+       store_vector(1, ReceiveAnchor, NextR),
+       store_vector(1, ReceiveAnchor, PrevR),
+      store_vector(PSI_RECEIVE_WEIGHT, 0, Anchor),
+      store_vector(PSI_NEXT_CHANNEL, Anchor, Anchor),
+      store_vector(PSI_PREVIOUS_CHANNEL, Anchor, Anchor),
+      store_vector(PSI_CHANNEL_NAME, Name, Anchor).
+
+/*
+** scheduling monitors the stream generated using the scheduler channel.
+**
+** It recognises:
+**
+**    cutoff(Time)
+**    input(Schedule?^, Schedule')
+**    new_channel(ChannelName, Channel, BaseRate)
+**    pause(Continue)
+**    record(Record?^)
+**    end_record(Record'?^)
+**    start(String)					% Old Methods
+**    start(String, OpList, Value, Chosen)		% New Methods
+**    status(List^)
+**    step(Continue)					% New Methods
+**
+** and the debugging aids:
+**
+**    debug(Debug?^)
+**    end_debug
+**
+** Processing:
+**
+** Maintain time  Now
+**
+** Whenever the system becomes idle, execute  PsiOffset
+** to select a transmission to complete.
+**
+** Record:
+**
+**   Changes to  Now .
+**   Selected processes .
+*/
+
+scheduling(Schedule, Offset, PsiOffsets, Waiter,
+		NegativeExponential, Uniform,
+		BasedAnchor, InstantaneousAnchor,
+		Scheduler, Record, Debug,
+		Now, Waiting, Wakeup,
+		Cutoff, Start_real_time) :-
+
+    Schedule =?= [] :
+      Cutoff = _,
+      BasedAnchor = _,
+      InstantaneousAnchor = _,
+      NegativeExponential = _,
+      Now = _,
+      Offset = _,
+      PsiOffsets = _,
+      Scheduler = _,
+      Start_real_time = _,
+      Uniform = _,
+      Waiting = _,
+      Wakeup = _,
+      Waiter = [],
+      Record = [],
+      Debug = [];
+
+    /* Set the time limit - maximum value for Now */
+    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
+    info(REALTIME, Start_real_time') :
+      Cutoff = _,
+      Start_real_time = _ |
+	continue_waiting + (Reply = true);
+
+    /* Close channels - i.e. decrement counts and release when unreferenced. */
+    Schedule ? close(Channels),
+    arg(PSI_CLOSE, PsiOffsets, PsiOffset),
+    PsiOffset =?= unbound :
+      STOPPED |
+	execute(Offset, close(Channels, Reply)),
+	self;
+
+    Schedule ? close(Channels),
+    arg(PSI_CLOSE, PsiOffsets, PsiOffset),
+    PsiOffset =\= unbound :
+      execute(PsiOffset, {PSI_CLOSE, Channels, Reply}),
+      STOPPED |
+	self;
+
+    /* Splice input filter. */
+    Schedule ? input(Schedule'', Schedule'^) |
+	self;
+
+    /* Create a new channel. */
+    Schedule ? New , New = new_channel(ChannelName, Channel, BaseRate) |
+	new_channel,
+	continue_waiting;
+
+    /* Return the current head of the recording stream. */
+    Schedule ? record(Stream) :
+      Stream = Record? |
+	self;
+
+    /* Close the recording stream, and start a new one. */
+    Schedule ? end_record(Stream),
+    convert_to_real("0.0", Now') :
+      Now = _,
+      Record = [],
+      Stream = Record'? |
+	self;
+
+    /* Start a transmission process. */
+    Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    arg(PSI_TRANSMIT, PsiOffsets, PsiOffset),
+    PsiOffset =?= unbound :
+      Record ! start(PId),
+      Debug ! start(PId) |
+	execute(Offset, transmit(PId, OpList, Value, Chosen, Reply)),
+	continue_waiting;
+
+    Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    arg(PSI_TRANSMIT, PsiOffsets, PsiOffset),
+    PsiOffset =\= unbound :
+      execute(PsiOffset, {PSI_TRANSMIT, PId, OpList, Value, Chosen, Reply}),
+      Record ! start(PId),
+      Debug ! start(PId) |
+	continue_waiting;
+
+/**************************** Debugging code ********************************/
+
+    Schedule ? debug(Stream) :
+      Stream = Debug? |
+	self;
+
+    Schedule ? debug_note(Note) :
+      Debug ! Note |
+	self;
+
+    Schedule ? end_debug :
+      Debug = [],
+      Debug' = _ |
+	self;
+
+    Schedule ? psifunctions(List),
+    make_tuple(3, PsiOffsets'),
+    arg(PSI_CLOSE, PsiOffsets', Close),
+    arg(PSI_TRANSMIT, PsiOffsets', Transmit),
+    arg(PSI_STEP, PsiOffsets', Step) :
+      PsiOffsets = _,
+      Close = Close'?,
+      Transmit = Transmit'?,
+      Step = Step'? |
+	processor#link(lookup(psicomm, PsiOffset), _Ok),
+	psifunctions,
+	self;
+
+/**************************** Debugger aids *********************************/
+
+    /* Pause processing until Continue is set. */
+    Schedule ? pause(Continue),
+    unknown(Wakeup) |
+	pause_scheduling(Continue,
+			 Schedule', Schedule'',
+			 Waiting, Waiting',
+			 Wakeup, Wakeup',
+			 Start_real_time, Start_real_time'),
+	self;
+
+    Schedule ? status(Status) :
+      Status = [anchors([BasedAnchor, InstantaneousAnchor]),
+		cutoff(Cutoff), debug(Debug?),
+		now(Now), record(Record?), waiting(Waiting)] |
+	self;		
+
+    /* Step and resume */
+    Schedule ? step,
+    unknown(Wakeup) :
+      Schedule'' = [pause(resume) | Schedule'],
+      Wakeup' = done |
+	self;
+
+    /* Step and pause processing until Continue is set. */
+    Schedule ? step(Continue),
+    unknown(Wakeup) :
+      Schedule'' = [pause(Continue) | Schedule'],
+      Wakeup' = done |
+	self;
+
+/***************************************************************************/
+
+    Schedule ? Other,
+    otherwise,
+    unknown(Wakeup) |
+	fail("unrecognized request" - Other),
+	self;
+
+    Wakeup = done,
+    arg(PSI_STEP, PsiOffsets, PsiOffset),
+    PsiOffset =?= unbound :
+      Waiting = _,
+      Record ! Now,
+      Waiting' = false |
+	sum_weights(BasedAnchor, 0, Total),
+	total_weight1(Offset, BasedAnchor, Now, Total, Wakeup', Now',
+			Uniform, NegativeExponential,
+			Uniform', NegativeExponential'),
+	self;
+
+    Wakeup = done,
+    arg(PSI_STEP, PsiOffsets, PsiOffset),
+    PsiOffset =\= unbound :
+      Waiting = _,
+      Record ! Now,
+      execute(PsiOffset, {PSI_STEP, Now, BasedAnchor, Now', Wakeup'}),
+      Waiting' = false |
+	self;
+
+    Wakeup =?= true(PId1, CId1, PId2, CId2) :
+      Waiting = _,
+      Wakeup' = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true,
+      Record ! end(PId1(CId1)),
+      Record' ! end(PId2(CId2)),
+      Debug ! done(PId1(CId1), PId2(CId2)) |
+	self;
+
+    Wakeup =?= true :
+      Waiting = _,
+      Wakeup' = _,
+      Waiting' = false,
+      Idle = idle(Now),
+      Debug ! Idle |
+	self;
+
+    Now >= Cutoff,
+    info(REALTIME, End_real_time),
+    Real_time := End_real_time - Start_real_time  :
+      BasedAnchor = _,
+      InstantaneousAnchor = _,
+      NegativeExponential = _,
+      Offset = _,
+      PsiOffsets = _,
+      Schedule = _,
+      Scheduler = _,
+      Uniform = _,
+      Waiting = _,
+      Wakeup = _,
+      Waiter = [machine(idle_wait(Done), _Ok)],
+      Record = [],
+      Debug = [] |
+	computation#display((done @ Now:
+		seconds = Real_time)),
+	wait_done.
+
+  wait_done(Done) :-
+
+    known(Done) |
+	self#reset.
+
+continue_waiting(Schedule, Offset, PsiOffsets, Waiter,
+		NegativeExponential, Uniform,
+		BasedAnchor, InstantaneousAnchor,
+		Scheduler, Record, Debug,
+		Now, Waiting, Wakeup,
+		Cutoff, Start_real_time, Reply) :-
+
+    Waiting =?= true, Reply =?= true |
+	scheduling;
+
+    Waiting =\= true, Reply =?= true :
+      Wakeup = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
+      Waiting' = true |
+	scheduling;
+
+    Reply =?= true(PId1, CId1, PId2, CId2) :
+      Record ! end(PId1(CId1)),
+      Record' ! end(PId2(CId2)),
+      Debug ! done(PId1(CId1), PId2(CId2)) |
+	scheduling;
+
+    Reply =\= true, Reply =\= true(_, _, _, _) :
+      Debug ! Reply |
+	fail(Reply),
+	scheduling;
+
+    /* check for paused. */
+    unknown(Waiting) :
+      Reply = _ |
+	scheduling.
+
+
+pause_scheduling(Continue,
+		 Schedule, ResetSchedule,
+		 Waiting, ResetWaiting,
+		 Wakeup, ResetWakeup,
+		 Start_real_time, Reset_real_time) :-
+
+    info(REALTIME, Pause_real_time),
+    Biased_real_time := Start_real_time + Pause_real_time :
+      SavedInput = SaveInput? |
+	pause_continue.
+
+  pause_continue(Continue,
+		 Schedule, ResetSchedule,
+		 Waiting, ResetWaiting,
+		 Wakeup, ResetWakeup,
+		 Biased_real_time, Reset_real_time,
+		 SavedInput, SaveInput) :-
+
+    Schedule ? Input,
+    Input =?= status(_) :
+      ResetSchedule ! Input |
+	self;
+
+    Schedule ? Input,
+    Input =\= status(_),
+    unknown(Continue) :
+      SaveInput ! Input |
+	self;
+
+    Schedule =?= [],
+    unknown(Continue) :
+      SavedInput = _,
+      SavedInput' = [],
+      Continue' = resume |
+	self;
+
+    Continue = step(Continue') :
+      SaveInput ! pause(Continue'),
+      Continue'' = resume |
+	self;
+
+    Continue =?= resume,
+    info(REALTIME, Resume_real_time),
+    Reset_real_time^ := Biased_real_time - Resume_real_time :
+      ResetSchedule = SavedInput,
+      SaveInput = Schedule,
+      ResetWaiting = Waiting,
+      Wakeup = ResetWakeup.
+
+
+psifunctions(List, PsiOffset, Close, Transmit, Step) :-
+
+    List ? C,
+    nth_char(1, C, Char),
+    Char =:= ascii('c') :
+      Close = PsiOffset? |
+	self;
+
+    List ? T,
+    nth_char(1, T, Char),
+    Char =:= ascii('t') :
+      Transmit = PsiOffset? |
+	self;
+
+    List ? S,
+    nth_char(1, S, Char),
+    Char =:= ascii('s') :
+      Step = PsiOffset? |
+	self;
+
+    List ? Other,
+    otherwise |
+	fail(not_a_function(Other)),
+	self;
+
+    List =\= [_|_], List =\= [] :
+      List' = [List] |
+	self;
+
+    List =?= [] :
+      PsiOffset = _ |
+	unify_without_failure(unbound, Close),
+	unify_without_failure(unbound, Transmit),
+	unify_without_failure(unbound, Step).
+
+
+new_channel(ChannelName, Channel, BaseRate, Scheduler, Reply,
+		 BasedAnchor, InstantaneousAnchor) :-
+
+    convert_to_real(0, Zero),
+    we(Channel) :
+      make_vector(CHANNEL_SIZE, Channel, _),
+      store_vector(PSI_BLOCKED, FALSE, Channel),
+      store_vector(PSI_CHANNEL_TYPE, PSI_UNKNOWN, Channel),
+      store_vector(PSI_CHANNEL_RATE, Zero, Channel),
+      store_vector(PSI_CHANNEL_REFS, 1, Channel),
+      store_vector(PSI_SEND_ANCHOR, SendAnchor, Channel),
+       make_vector(2, LinksS, _),
+       SendAnchor = {PSI_MESSAGE_ANCHOR, "", [], 0, 0, 0, [], LinksS},
+       store_vector(PSI_NEXT_MS, SendAnchor, LinksS),
+       store_vector(PSI_PREVIOUS_MS, SendAnchor, LinksS),
+      store_vector(PSI_SEND_WEIGHT, 0, Channel),
+      store_vector(PSI_RECEIVE_ANCHOR, ReceiveAnchor, Channel),
+       make_vector(2, LinksR, _),
+       ReceiveAnchor = {PSI_MESSAGE_ANCHOR, "", [], 0, 0, 0, [], LinksR},
+       store_vector(PSI_NEXT_MS, ReceiveAnchor, LinksR),
+       store_vector(PSI_PREVIOUS_MS, ReceiveAnchor, LinksR),
+      store_vector(PSI_RECEIVE_WEIGHT, 0, Channel),
+      store_vector(PSI_NEXT_CHANNEL, Channel, Channel),
+      store_vector(PSI_PREVIOUS_CHANNEL, Channel, Channel),
+      store_vector(PSI_CHANNEL_NAME, ChannelName, Channel) |
+	based_or_instantaneous;
+
+    otherwise :
+      BasedAnchor = _,
+      InstantaneousAnchor = _,
+      Scheduler = _,
+      Reply = error(failed_new(ChannelName, Channel, BaseRate)).
+  
+  based_or_instantaneous(ChannelName, Channel, BaseRate, Scheduler,
+			 Reply, BasedAnchor, InstantaneousAnchor) :-
+
+    BaseRate =?= infinite :
+      BasedAnchor = _,
+      store_vector(PSI_CHANNEL_TYPE, PSI_INSTANTANEOUS, Channel),
+      Reply = true,
+      DEBUG((ChannelName: instantaneous)) |
+	queue_channel(Channel, InstantaneousAnchor);
+
+    BaseRate =< 0 :
+      BasedAnchor = _,
+      InstantaneousAnchor = _,
+      store_vector(PSI_CHANNEL_TYPE, PSI_SINK, Channel),
+      Reply = true,
+      DEBUG((ChannelName: sink));
+
+    BaseRate > 0,
+    convert_to_real(BaseRate, BaseRate') :
+      InstantaneousAnchor = _,
+      store_vector(PSI_CHANNEL_RATE, BaseRate', Channel),
+      Reply = true,
+      DEBUG((ChannelName: based_channel)) |
+	queue_channel(Channel, BasedAnchor);
+
+    otherwise :
+      BasedAnchor = _,
+      Channel = _,
+      InstantaneousAnchor = _,
+      Scheduler = _,
+      store_vector(PSI_CHANNEL_TYPE, PSI_SINK, Channel),
+      Reply = "invalid base rate"(ChannelName - BaseRate).
+
+
+queue_channel(Channel, Anchor) :-
+
+    read_vector(PSI_PREVIOUS_CHANNEL, Anchor, OldLast) :
+      store_vector(PSI_PREVIOUS_CHANNEL, OldLast, Channel),
+      store_vector(PSI_NEXT_CHANNEL, Anchor, Channel),
+      store_vector(PSI_NEXT_CHANNEL, Channel, OldLast),
+      store_vector(PSI_PREVIOUS_CHANNEL, Channel, Anchor).
+
+/************************* execute - testing *********************************/
+
+execute(Offset, Arguments) :-
+
+    Arguments = transmit(PId, OpList, Value, Chosen, Reply) :
+      Offset = _,
+      Common = {PId, Messages, Value, Chosen},
+      Messages = AddMessages? |
+	transmit_test,
+	transmit ;
+
+    Arguments = step(Now, Anchor, NewNow, Reply) |
+	sum_weights(Anchor, 0, Total),
+	total_weight;
+
+    Arguments = close(Channels, Reply),
+    tuple(Channels),
+    N := arity(Channels) :
+      Offset = _ |
+	close_channels(Channels, N, Reply).
+
+
+/************************** close procedures *********************************/
+
+close_channels(Channels, N, Reply) :-
+
+    N > 0,
+    arg(N, Channels, Channel),
+    N--,
+    vector(Channel),
+    read_vector(PSI_CHANNEL_REFS, Channel, Refs),
+    Refs--,
+    Refs' > 0 :
+      store_vector(PSI_CHANNEL_REFS, Refs', Channel) |
+	self;
+
+    N > 0,
+    arg(N, Channels, Channel),
+    N--,
+    vector(Channel),
+    read_vector(PSI_CHANNEL_REFS, Channel, Refs),
+    Refs--,
+    Refs' =< 0,
+    read_vector(PSI_CHANNEL_NAME, Channel, Name),
+    read_vector(PSI_NEXT_CHANNEL, Channel, Next),
+    read_vector(PSI_PREVIOUS_CHANNEL, Channel, Previous) :
+      store_vector(PSI_CHANNEL_REFS, 0, Channel),
+      store_vector(PSI_NEXT_CHANNEL, Next, Previous),
+      store_vector(PSI_PREVIOUS_CHANNEL, Previous, Next),
+      store_vector(PSI_NEXT_CHANNEL, Channel, Channel),
+      store_vector(PSI_PREVIOUS_CHANNEL, Channel, Channel),
+      Reply ! Name |
+	self;
+
+    N =< 0 :
+      Channels  = _,
+      Reply = [];
+
+    otherwise :
+      Reply = close_failed(N, Channels).
+
+
+/************************ transmit procedures ********************************/
+
+transmit_test(OpList, Common, Ok) :-
+
+    OpList ? Operation,
+    Operation = {MessageType, _CId, Channel , Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_INSTANTANEOUS,
+    MessageType =?= PSI_SEND,
+    read_vector(PSI_RECEIVE_ANCHOR, Channel, Anchor) |
+	do_instantaneous_transmit + (MTX = PSI_RECEIVE_TAG, Message = Anchor);
+
+    OpList ? Operation,
+    Operation = {MessageType, _CId, Channel , Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_INSTANTANEOUS,
+    MessageType =?= PSI_RECEIVE,
+    read_vector(PSI_SEND_ANCHOR, Channel, Anchor) |
+	do_instantaneous_transmit + (MTX = PSI_SEND_TAG, Message = Anchor);
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_BIMOLECULAR,
+    MessageType =?= PSI_SEND :
+      store_vector(PSI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_BIMOLECULAR,
+    MessageType =?= PSI_RECEIVE :
+      store_vector(PSI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel , Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_HOMODIMERIZED,
+    MessageType =?= PSI_DIMER :
+      store_vector(PSI_BLOCKED, FALSE, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_UNKNOWN,
+    MessageType =?= PSI_SEND :
+      store_vector(PSI_CHANNEL_TYPE, PSI_BIMOLECULAR, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_UNKNOWN,
+    MessageType =?= PSI_RECEIVE :
+      store_vector(PSI_CHANNEL_TYPE, PSI_BIMOLECULAR, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {MessageType, _CId, Channel, Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_UNKNOWN,
+    MessageType =?= PSI_DIMER :
+      store_vector(PSI_CHANNEL_TYPE, PSI_HOMODIMERIZED, Channel) |
+	self;
+
+    OpList ? Operation,
+    Operation =?= {_MessageType, _CId, Channel, Multiplier, _Tags},
+    vector(Channel), arity(Channel, CHANNEL_SIZE),
+    integer(Multiplier), Multiplier > 0,
+    read_vector(PSI_CHANNEL_TYPE, Channel, ChannelType),
+    ChannelType =?= PSI_SINK |
+	self;
+
+    OpList =?= [] :
+      Common = _,
+      Ok = true;
+
+    otherwise :
+      Common = _,
+      Ok = invalid_transmission - OpList.
+
+
+transmit(OpList, Reply, Common, Messages, AddMessages, Ok) :-
+
+    Ok =?= true,
+    OpList ? Operation,
+    Operation =?= {MessageType, CId, Channel, Multiplier, Tags},
+    read_vector(PSI_CHANNEL_TYPE, Channel, Type),
+    Type =\= PSI_SINK :
+      AddMessages ! Message? |
+	queue_message,
+	self;
+
+    Ok =?= true,
+    OpList ? Operation,
+    Operation =?= {_MessageType, _CId, Channel, _Multiplier, _Tags},
+    read_vector(PSI_CHANNEL_TYPE, Channel, Type),
+    Type =?= PSI_SINK |
+	self;
+
+    Ok =?= true,
+    OpList =?= [] :
+      Common = _,
+      Messages = _,
+      AddMessages = [],
+      Reply = true;      
+
+    otherwise :
+      Common = _,
+      Messages = _,
+      OpList = _,
+      Reply = Ok,
+      AddMessages = [].
+
+
+do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
+					Ok) :-
+
+    arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(PSI_NEXT_MS, MessageLinks, Message'),
+    Message' =\= Anchor,
+    arg(PSI_COMMON, Message', CommonQ),
+    arg(PSI_OP_CHOSEN, CommonQ, Chosen), not_we(Chosen) |
+	self;
+
+    arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(PSI_NEXT_MS, MessageLinks, Message'),
+    Message' =\= Anchor,
+    Message' =?= {_, CIdQ, _, _, _, _, CommonQ, _},
+    arg(MTX, Message', MessageTag),
+    CommonQ = {PIdQ, MsList, ValueQ, ChosenQ},
+    Common = {PIdT, _MsList, ValueT, ChosenT},
+    Operation =?= {_, CIdT, _, _, OperationTag} :
+      Anchor = _,
+      OpList = _,
+      ValueQ = ValueT,
+      ChosenQ = MessageTag,
+      ChosenT = OperationTag,
+      Ok = true(PIdQ, CIdQ, PIdT, CIdT) |
+	discount(MsList);
+
+    % This can happen (to the monitor). 
+    Common = {_, _, _, Chosen}, not_we(Chosen) :
+      Anchor = _,
+      Operation = _,
+      Message = _,
+      MTX = _ |
+	transmit_test;
+
+  % Test for end of list
+    arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(PSI_NEXT_MS, MessageLinks, Message'),
+    Message' =?= Anchor :
+      Operation = _,
+      MTX = _ |
+	transmit_test;
+
+    % This Message has the same Chosen as the Operation - mixed communication. 
+    arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(PSI_NEXT_MS, MessageLinks, Message'),
+    Message' =?= {_, _, _, _, _, _, CommonQ, _},
+    CommonQ = {_, _, _, Chosen},
+    Common = {_, _, _, Chosen} |
+	self.
+
+
+/*************************** step procedures *********************************/
+
+sum_weights(Channel, Sum, Total) :-
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_CHANNEL_ANCHOR :
+      Total = Sum;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_BIMOLECULAR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_SEND_WEIGHT, Channel', SendWeight),
+    read_vector(PSI_RECEIVE_WEIGHT, Channel', ReceiveWeight),
+    Sum += Rate*SendWeight*ReceiveWeight |
+	self;    
+
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_HOMODIMERIZED,
+    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_NEXT_MS, FirstLink, Message),
+    arg(PSI_MESSAGE_LINKS, Message, DimerLink),
+    read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
+    arg(PSI_MS_TYPE, DimerMs, MsType),
+    MsType =\= PSI_MESSAGE_ANCHOR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_DIMER_WEIGHT, Channel', DimerWeight),
+    Sum += Rate*DimerWeight*(DimerWeight-1)/2 |
+	self;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    otherwise |
+	self.
+
+
+total_weight(Offset, Anchor, Now, Total, Reply, NewNow) :-
+
+    Total =< 0 :
+      Anchor = _,
+      Offset = _,
+      NewNow = Now,
+      Reply = true;
+
+    Total > 0 :
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NegativeExponential}),
+      execute(Offset, {RAN, 0, Uniform'}) |
+	Residue := Uniform'*Total,
+	select_channel + (Channel = Anchor),
+	NewNow := Now - NegativeExponential/Total.
+
+total_weight1(Offset, Anchor, Now, Total, Reply, NewNow, U, NE, NU, NNE) :-
+
+    Total =< 0 :
+      Anchor = _,
+      Offset = _,
+      NewNow = Now,
+      NU = U,
+      NNE = NE,
+      Reply = true;
+
+    Total > 0,
+    Residue := U*Total,
+    Now' := Now - NE/Total :
+      NewNow = Now',
+      execute(Offset, {RAN, 0, Uniform}),
+      execute(Offset, {LN, Uniform, NNE}),
+      execute(Offset, {RAN, 0, NU}) |
+	select_channel + (Channel = Anchor).
+
+select_channel(Residue, Channel, Reply) :-
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_BIMOLECULAR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_SEND_WEIGHT, Channel', SendWeight),
+    SendWeight > 0,
+    read_vector(PSI_RECEIVE_WEIGHT, Channel', ReceiveWeight),
+    ReceiveWeight > 0,
+    Residue -= Rate*SendWeight*ReceiveWeight,
+    Residue' =< 0 |
+	do_bimolecular_transmit;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_BIMOLECULAR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_SEND_WEIGHT, Channel', SendWeight),
+    SendWeight > 0,
+    read_vector(PSI_RECEIVE_WEIGHT, Channel', ReceiveWeight),
+    ReceiveWeight > 0,
+    Residue -= Rate*SendWeight*ReceiveWeight,
+    Residue' > 0 |
+	self;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_HOMODIMERIZED,
+    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_NEXT_MS, FirstLink, Message),
+    arg(PSI_MESSAGE_LINKS, Message, DimerLink),
+    read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
+    arg(PSI_MS_TYPE, DimerMs, MsType),
+    MsType =\= PSI_MESSAGE_ANCHOR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_DIMER_WEIGHT, Channel', DimerWeight),
+    Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
+    Residue' =< 0 |
+	do_homodimerized_transmit;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(PSI_BLOCKED, Channel', Blocked),
+    Blocked =?= FALSE,
+    read_vector(PSI_CHANNEL_TYPE, Channel', Type),
+    Type =?= PSI_HOMODIMERIZED,
+    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_NEXT_MS, FirstLink, Message),
+    arg(PSI_MESSAGE_LINKS, Message, DimerLink),
+    read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
+    arg(PSI_MS_TYPE, DimerMs, MsType),
+    MsType =\= PSI_MESSAGE_ANCHOR,
+    read_vector(PSI_CHANNEL_RATE, Channel', Rate),
+    read_vector(PSI_DIMER_WEIGHT, Channel', DimerWeight),
+    Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
+    Residue' > 0 |
+	self;
+
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
+    otherwise |
+	self.
+
+/****** based transmit - complete a transmission for a pair of messages ******/
+
+do_bimolecular_transmit(Channel, Reply) :-
+
+    read_vector(PSI_SEND_ANCHOR, Channel, SendAnchor),
+    arg(PSI_MESSAGE_LINKS, SendAnchor, SendLinks),
+    read_vector(PSI_NEXT_MS, SendLinks, Send),
+    read_vector(PSI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
+    arg(PSI_MESSAGE_LINKS, ReceiveAnchor, ReceiveLinks),
+    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive) |
+	do_bimolecular_send(Channel, Reply, Send, Receive).
+
+do_bimolecular_send(Channel, Reply, Send, Receive) :-
+
+    Send =?= {PSI_SEND, SendCId, _, _, SendTag, _, SendCommon, _},
+    Receive =?= {PSI_RECEIVE, ReceiveCId, _, _, _,
+					ReceiveTag, ReceiveCommon, _},
+    SendCommon =?= {SendPId, SendList, SendValue, SendChosen},
+    ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen} :
+      Channel = _,
+      SendChosen = SendTag,
+      ReceiveChosen = ReceiveTag,
+      ReceiveValue = SendValue?,
+      Reply = true(SendPId, SendCId, ReceivePId, ReceiveCId) |
+	discount(SendList),
+	discount(ReceiveList);
+
+    Send =?= {PSI_SEND, _, _, _, _, _, SendCommon, SendLinks},
+    Receive =?= {PSI_RECEIVE, _, _, _, _, _, ReceiveCommon, _},
+    SendCommon =?= {_, _, _, Chosen},
+    ReceiveCommon =?= {_, _, _, Chosen},
+    read_vector(PSI_NEXT_MS, SendLinks, Send') |
+	self;
+
+    Send =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, SendLinks},
+    Receive =?= {PSI_RECEIVE, _, _, _, _, _, _, ReceiveLinks},
+    read_vector(PSI_NEXT_MS, SendLinks, Send'),
+    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive') |
+	self;
+
+    Receive =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, _} :
+      Send = _,
+      store_vector(PSI_BLOCKED, TRUE, Channel),
+      Reply = done.
+
+
+do_homodimerized_transmit(Channel, Reply) :-
+
+    read_vector(PSI_DIMER_ANCHOR, Channel, SendAnchor),
+    arg(PSI_MESSAGE_LINKS, SendAnchor, SendLinks),
+    read_vector(PSI_NEXT_MS, SendLinks, Send),
+    read_vector(PSI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
+    arg(PSI_MESSAGE_LINKS, ReceiveAnchor, ReceiveLinks),
+    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive) |
+	do_homodimerized_send(Channel, Reply, Send, Receive).
+
+do_homodimerized_send(Channel, Reply, Send, Receive) :-
+
+    Send =?= {PSI_SEND, SendCId, _, _, SendTag, _, SendCommon, _},
+    Receive =?= {PSI_RECEIVE, ReceiveCId, _, _, _,
+					ReceiveTag, ReceiveCommon, _},
+    SendCommon =?= {SendPId, SendList, SendValue, SendChosen},
+    ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen} :
+      Channel = _,
+      SendChosen = SendTag,
+      ReceiveChosen = ReceiveTag,
+      ReceiveValue = SendValue?,
+      Reply = true(SendPId, SendCId, ReceivePId, ReceiveCId) |
+	discount(SendList),
+	discount(ReceiveList);
+
+    Send =?= {PSI_SEND, _, _, _, _, _, SendCommon, SendLinks},
+    Receive =?= {PSI_RECEIVE, _, _, _, _, _, ReceiveCommon, _},
+    SendCommon =?= {_, _, _, Chosen},
+    ReceiveCommon =?= {_, _, _, Chosen},
+    read_vector(PSI_NEXT_MS, SendLinks, Send') |
+	self;
+
+    Send =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, SendLinks},
+    Receive =?= {PSI_RECEIVE, _, _, _, _, _, _, ReceiveLinks},
+    read_vector(PSI_NEXT_MS, SendLinks, Send'),
+    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive') |
+	self;
+
+    Receive =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, _} :
+      Send = _,
+      store_vector(PSI_BLOCKED, TRUE, Channel),
+      Reply = done.
+
+
+/***************************** Utilities ************************************/
+
+discount(MsList) :-
+
+    MsList ? Message,
+    Message = {MessageType, _, Channel, Multiplier, _, _, _, Links},
+    read_vector(PSI_NEXT_MS, Links, NextMessage),
+    arg(PSI_MESSAGE_LINKS, NextMessage, NextLinks),
+    read_vector(PSI_PREVIOUS_MS, Links, PreviousMessage),
+    arg(PSI_MESSAGE_LINKS, PreviousMessage, PreviousLinks),
+    MessageType = PSI_SEND,
+    read_vector(PSI_SEND_WEIGHT, Channel, Weight),
+    Weight -= Multiplier :
+      store_vector(PSI_SEND_WEIGHT, Weight', Channel),
+      store_vector(PSI_NEXT_MS, NextMessage, PreviousLinks),
+      store_vector(PSI_PREVIOUS_MS, PreviousMessage, NextLinks) |
+	self;
+
+    MsList ? Message,
+    Message = {MessageType, _, Channel, Multiplier, _, _, _, Links},
+    read_vector(PSI_NEXT_MS, Links, NextMessage),
+    arg(PSI_MESSAGE_LINKS, NextMessage, NextLinks),
+    read_vector(PSI_PREVIOUS_MS, Links, PreviousMessage),
+    arg(PSI_MESSAGE_LINKS, PreviousMessage, PreviousLinks),
+    MessageType =?= PSI_RECEIVE,
+    read_vector(PSI_RECEIVE_WEIGHT, Channel, Weight),
+    Weight -= Multiplier :
+      store_vector(PSI_RECEIVE_WEIGHT, Weight', Channel),
+      store_vector(PSI_NEXT_MS, NextMessage, PreviousLinks),
+      store_vector(PSI_PREVIOUS_MS, PreviousMessage, NextLinks) |
+	self;
+
+    MsList ? Message,
+    Message =?= {MessageType, _, Channel, Multiplier, _, _, _, Links},
+    read_vector(PSI_NEXT_MS, Links, NextMessage),
+    arg(PSI_MESSAGE_LINKS, NextMessage, NextLinks),
+    read_vector(PSI_PREVIOUS_MS, Links, PreviousMessage),
+    arg(PSI_MESSAGE_LINKS, PreviousMessage, PreviousLinks),
+    MessageType =?= PSI_DIMER,
+    read_vector(PSI_DIMER_WEIGHT, Channel, Weight),
+    Weight -= Multiplier :
+      store_vector(PSI_DIMER_WEIGHT, Weight', Channel),
+      store_vector(PSI_NEXT_MS, NextMessage, PreviousLinks),
+      store_vector(PSI_PREVIOUS_MS, PreviousMessage, NextLinks) |
+	self;
+
+    MsList ? Other,
+    otherwise |
+show#stuff(item, Other),
+show#stuff(end, MsList'),
+arg(3, Other, Channel),
+show#stuff(channel, Channel),
+	self;
+
+    MsList =?= [] |
+	true.
+
+
+queue_message(MessageType, CId, Channel, Multiplier, Tags,
+			Common, Message) :-
+
+    MessageType =?= PSI_SEND,
+    read_vector(PSI_SEND_ANCHOR, Channel, Anchor),
+    read_vector(PSI_SEND_WEIGHT, Channel, Weight),
+    Weight += Multiplier :
+      store_vector(PSI_SEND_WEIGHT, Weight', Channel),
+      Message = {MessageType, CId, Channel, Multiplier,
+			Tags, 0, Common, Links?} |
+	queue_to_anchor;
+
+    MessageType =?= PSI_RECEIVE,
+    read_vector(PSI_RECEIVE_ANCHOR, Channel, Anchor),
+    read_vector(PSI_RECEIVE_WEIGHT, Channel, Weight),
+    Weight += Multiplier :
+      store_vector(PSI_RECEIVE_WEIGHT, Weight', Channel),
+      Message = {MessageType, CId, Channel, Multiplier,
+			0, Tags, Common, Links?} |
+	queue_to_anchor;
+
+    MessageType =?= PSI_DIMER,
+    read_vector(PSI_DIMER_ANCHOR, Channel, Anchor),
+    Tags = {SendTag, ReceiveTag},
+    read_vector(PSI_DIMER_WEIGHT, Channel, Weight),
+    Weight += Multiplier :
+      store_vector(PSI_DIMER_WEIGHT, Weight', Channel),
+      Message = {MessageType, CId, Channel, Multiplier,
+			SendTag, ReceiveTag, Common, Links?} |
+	queue_to_anchor.
+
+queue_to_anchor(Message, Anchor, Links) :-
+
+    arg(PSI_MESSAGE_LINKS, Anchor, AnchorLinks),
+    read_vector(PSI_PREVIOUS_MS, AnchorLinks, PreviousMessage),
+    arg(PSI_MESSAGE_LINKS, PreviousMessage, PreviousLinks) :
+      make_vector(2, Links, _),
+      store_vector(PSI_PREVIOUS_MS, PreviousMessage, Links),
+      store_vector(PSI_NEXT_MS, Anchor, Links),
+      store_vector(PSI_NEXT_MS, Message, PreviousLinks),
+      store_vector(PSI_PREVIOUS_MS, Message, AnchorLinks).

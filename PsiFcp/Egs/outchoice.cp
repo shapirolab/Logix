@@ -1,7 +1,6 @@
 -language([evaluate, compound, colon]).
 -export([testa/3, testb/3, "Choose"/2]).
-
-BASERATE => infinite.
+-include(psi_constants).
 
 /*
 ** PiFcp
@@ -25,36 +24,31 @@ BASERATE => infinite.
       write_channel(new_channel("Choose.d", "_var"(d), BASERATE), Scheduler) |
         "Choose.".
 
-  "Choose."("_var"(a), "_var"(b), "_var"(c), "_var"(d)) :-
-    "_var"(a) = _(VA, _),
-    "_var"(b) = _(VB, _) :
-      /* Offer the messages. */
-      write_channel(send("Choose"(a), {"_var"(c)}, 1, 1, Chosen), VA),
-      write_channel(send("Choose"(b), {"_var"(d)}, 2, 1, Chosen), VB) |
-        "Choose.send".
+  "Choose."("_var"(a), "_var"(b), "_var"(c), "_var"(d), Scheduler) :-
+    vector("_var"(a)),
+    vector("_var"(b)) :
+      /* Offer the sends. */
+      write_channel(start("Choose", [{PSI_SEND, a, "_var"(a), 1, 1},
+				     {PSI_SEND, b, "_var"(b), 1, 2}],
+						Value, Chosen), Scheduler) |
+        "Choose.comm".
 
-  "Choose.send"("_var"(a), "_var"(b), "_var"(c), "_var"(d), Chosen) :-
+  "Choose.comm"("_var"(a), "_var"(b), "_var"(c), "_var"(d), Scheduler,
+				Chosen, Value) :-
 
     /* Commit to the one which is read. */
-    Chosen = 1,
-    "_var"(a) = _(_, {LA, RA}),
-    "_var"(b) = _(VB, {LB, RB}),
-    "_var"(d) = _(_, {LD, RD}) :
-      write_channel(withdraw(send, 1), VB),
-      LA = RA,
-      LB = RB,
-      LD = RD ;
-    Chosen = 2,
-    "_var"(a) = _(VA, {LA, RA}),
-    "_var"(b) = _(_, {LB, RB}),
-    "_var"(c) = _(_, {LC, RC}) :
-      write_channel(withdraw(send, 1), VA),
-      LA = RA,
-      LB = RB,
-      LC = RC.
+    Chosen = 1 :
+      Value = {"_var"(c)},
+      write_channel(close({"_var"(a), "_var"(b), "_var"(d)}), Scheduler);
+
+    Chosen = 2 :
+      Value = {"_var"(d)},
+      write_channel(close({"_var"(a), "_var"(b), "_var"(c)}), Scheduler).
 
 
 /****  Code for testing the generated program ****/
+
+BASERATE => infinite.
 
 testa(A, B, Ms) :-
 	make_channels_and_go,

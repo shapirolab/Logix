@@ -1,4 +1,4 @@
-The repeat process can run a quantified set of Pi Calculus (pifcp)
+The repeat process can run a quantified set of Pi Calculus (psifcp)
 processes.
 
     repeat#run(<quantified process set>)
@@ -6,20 +6,20 @@ processes.
 where:
 
     <quantified process set> ::=
-        <process set>
-        <repetition> * <process set>
+	<external call>
+        (<process set>)
+        <repetition> * (<process set>)
 
     <process set> ::=
-        <external_call>
-        [multiple process set>
-
-    <multiple process set> ::=
         <quantified process set>
-        <multiple process set>, <quantified process set>
+        <process set> , <quantified process set>
 
     <repetition> ::= <integer>
 
+A negative <repetition> is treated as zero.
+
 (See BNF for the definition of <external_call>.)
+
 
 The repeat macro can run the processes, and it can also measure
 and record their behavior.

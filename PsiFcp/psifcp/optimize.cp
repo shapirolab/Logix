@@ -325,7 +325,12 @@ remove_unused(LHS, Uses, NewLHS) + (Index = 2, Outdex = 1) :-
 	self;
 
     Uses = [],
-    otherwise :
+    Variable =\= `"Scheduler." :
       NewLHS = _,
       Variable = _,
-      NewOutdex = Outdex.
+      NewOutdex = Outdex;
+
+    Uses = [],
+    Variable =?= `"Scheduler." |
+	NewOutdex := Outdex + 1,
+	arg(NewOutdex, NewLHS, Variable).
