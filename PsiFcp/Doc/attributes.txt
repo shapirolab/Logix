@@ -7,26 +7,12 @@ or
 
 A required attribute for Stochastic Pi Calculus modules is:
 
-    -language([psifcp,compound,colon]).
+    -language(psifcp).
 
 The names in the list specify transformations to be applied to the
 module as part of compilation.  The transformation, psifcp, transforms
 modules written in Stochastic Pi Calculus into modules in the
 compound dialect of LOGIX.
-
-
-An optional attribute is:
-
-    -export(<process name>).
-or
-    -export([<process name list>]).
-
-The export attribute specifies which processes may be called by RPC
-(Remote Process Call).  If omitted, all first level processes are
-callable.
-
-Each process name must be quoted.  See the modules in Examples/boolean
-and in Examples/circadian.
 
 
 An optional attribute is:
@@ -58,8 +44,41 @@ An optional attribute is:
 The content of the named module is inserted following the attributes.
 This is useful primarily for including definitions of named values.
 See the modules in Examples/circadian, some of which include module
-rates.  Note that the definitions are implemented by the transformation
-evaluate, which is specified in the language attribute of those modules,
-i.e.
+rates.
 
-    -language([evaluate,psifcp,compound,colon]).
+
+Psi attributes (see BNF <psi_attributes>)are specified after the Logix
+attributes.  All Psi attributes are optional.
+
+
+The attribute:
+
+    export(<process_name_list>).
+
+specifies that the named first-level processes may be called externally.
+
+
+The attribute:
+
+    global(<communicator_list>).
+
+specifies that the named channels are shared by name between all processes
+in a Psi session.  See Documentation/global.txt.
+
+
+The attribute:
+
+    baserate(<base_rate>).
+
+specifies a positive integer rate which is used for all bimolecular and
+homodimerized channels in the module which do not declare a rate
+explicitly.
+
+
+The attribute:
+
+    weighter(<weighter_specification>).
+
+specifies a default weight computation which is used for all bimolecular and
+homodimerized channels in the module which do not declare a computation
+explicitly.  See Documentation/weighter.txt for details.

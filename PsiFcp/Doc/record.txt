@@ -17,8 +17,8 @@ Examples:
 
    starts the process  MODULE  in program module  hysteresis  and
    terminates the run after 100 time units have elapsed.  To 
-   terminate the run prematurely, enter <control>C to kill the
-   logix system.
+   terminate the run prematurely, suspend the Logix computation
+   or enter  <control>C  to kill the Logix system.
 
 2. record(hysteresis#"MODULE", fff, 100)
 
@@ -46,10 +46,10 @@ array columns is also produced.  For example:
   fff.table  and  fff.names
 
 Column one of the .table file is incremented approximately by 1 between
-rows (lines).  To change the increment to another positive integer, N,
+rows (lines).  To change the increment to another positive number, N,
 add the argument N to the call to tally - e.g.
 
-  % psi2t fff 7
+  % psi2t fff 0.1
 
 To combine columns sums add terms of the form:
 

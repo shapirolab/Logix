@@ -9,6 +9,7 @@ BNF for PiFcp
 <psi_attribute>        ::= <export_declaration>
                            <global_declaration>
                            <base_rate_declaration>
+                           <weighter_declaration>
 
 <export_declaration>   ::= export(<process_name_list>)
 
@@ -16,8 +17,18 @@ BNF for PiFcp
 
 <baserate_declaration> ::= baserate(<base_rate>)
 
+<weighter_declaration> ::= weighter(<weighter_specification>)
+
 <process_name_list>    ::= <process_name>
                            <process_name> , <process_name_list>
+
+<weighter_specification> ::=
+                           <weighter>
+                           <weighter>(<weighter_parameter_list>)
+
+<weighter_parameter_list> ::=
+                           <real number>
+                           <weighter_parameter_list> , <real number>
 
 <communicator_list>    ::= <communicator_declaration>
                            <communicator_declaration> , <communicator_list>
@@ -25,6 +36,7 @@ BNF for PiFcp
 <communicator_declaration> ::=
                            <communicator>
                            <communicator>(<base_rate>)
+                           <communicator>(<base_rate> , <weighter>)
 
 <base_rate>            ::= <number>
                            infinite
@@ -151,7 +163,25 @@ Primitives:
 
 
 A <communicator> is an alpha-numeric string, beginning with a lower-case
-alphabetic character; the string which may contain underscore (_) characters.
+alphabetic character; the string may contain underscore (_)
+characters.
+
+
+A <base_rate> is a real number, which is a factor in the stochastic weighting
+of a <communicator>.  When the <base_rate> of a <communicator> is 0, the
+channel acts as a sink - all messages on that channel are discarded.
+
+
+A <weighter> is an alpha-numeric string, beginning with a lower-case
+alphabetic character; the string may contain underscore (_)
+characters.
+
+A <weighter> may be specified by a logix variable for a new channel,
+but not for the default nor for a global channel. (Not yet implemented).
+
+Any <weighter_parameter_list> element may be specified by a logix
+variable for a new channel, but not for the default nor for a global
+channel.  (Not yet implemented).
 
 
 A <process_name> is an alpha-numeric string, beginning with an upper case
@@ -166,7 +196,7 @@ a <message> or within a <logix_guard>, a <logix_ask_guard> or a <logix_goal>.
 
 WARNING:  when the single underscore character <logix_variable> appears in a
 <message>, it should not appear in place of a <communicator>, unless the
-corresponding <communicator> is defined by a <global_declaration>.
+corresponding sent <communicator> is defined by a <global_declaration>.
 
 
 A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
@@ -235,8 +265,6 @@ e.g.
 The library <logix_goal>s psi_send/3, psi_receive/3, psi_send/4, psi_receive/4
 may be used as well, where the third argument is a multiplier (default 1), and
 the fourth argument is an identifier (default sender or receiver).
-
-Channel typing has been omitted.  
 
 
 The additive definition of <left_hand_side> is syntactic sugar - e.g.

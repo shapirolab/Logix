@@ -5,7 +5,7 @@ in which they are referenced.
 
 The declaration has the form:
 
-    global([<stochastic_channel_list>]).
+    global(<stochastic_channel_list>).
 
 See Documentation/BNF.
 
