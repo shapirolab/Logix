@@ -8,7 +8,7 @@ my $BIB_VERSION = "CS-TR-v2.1";
 my $MAX_BIB_LINE = 79;
 my $BIB_AUTHORITY = "ncstrl.weizmann_il";  # default prefix
 my $Output_Entry = "";                     # Month day, Year
-my $Output_Date = "January 1, 1999";       # ???
+my $This_Year = "";
 my $InputFile = "abstracts.tex";
 my $HtmlFile = "textohtml.html";
 my $DummyFile = "/tmp/textohtml.dummy";
@@ -22,6 +22,7 @@ my @Abstracts;
 my $Authors;
 my @Authors;
 my $Title;
+my $Date;
 my $Lines;
 my $Filtered;
 
@@ -159,7 +160,7 @@ sub read_abstracts
       $lines = $_;
     }
     else {
-      $lines .= ($_ ne "") ? "\n$_" : "\\par";
+      $lines .= ($_ ne "") ? "\n$_" : "\n\\par";
     }
   }
   @Abstracts = split /\\offset\{\d+pt\}/, $lines;
@@ -255,8 +256,50 @@ sub extract_authors
 
 sub extract_title
 {
+  $Date = "";
   ($Title, $Lines) = split /$END_OF_HEADING/, $Lines, 2;
+  my ($front, $title, $rest) = split /\~\~/, $Title, 3;
+  chomp $title;
+  chomp $rest;
+  if ($front) {
+    $Title = $front;
+    if ($title) {
+      $Date = $rest ? "$title~~$rest" : $title;
+    }
+    else {
+      $Date = $rest;
+    }
+  }
+  else {
+    $Date = $rest;
+    $Title = $title;
+  }
   $Lines =~ s/^\s*(\S.*)$/$1/;
+}
+
+
+sub   check_date
+{
+  if ($Date =~ /^\s*(\w+)\s*$/) {
+    $Date = "$1 $This_Year";
+  }
+  elsif ($Date =~ /^\s*(\w+)\W+(\d+)\s*$/) {
+    my $month = $1;
+    my $value = $2;
+    if ($value < 90) {
+      $Date = "$month $value, $This_Year";
+    }
+    else {
+      $value += 1900 if $value < 1900;
+      $Date = "$month $value";
+    }
+  }
+  elsif ($Date =~ /^\s*(\w+)\W+(\d+)\W+(\d+)\s*$/) {
+    $Date = "$1 $2, $3";
+  }
+  else {
+    $Date = "January $This_Year";
+  }
 }
 
 
@@ -302,22 +345,23 @@ $Output_Entry = $MONTHS[$mon] . " $mday, " . ($year +1900);
 read_abstracts();
 while (scalar @Abstracts) {
   my ($year, $index) = split /-/, next_abstract();
-  my $real_year = $year < 80 ? 2000+$year : ($year <= 99 ? 1900+$year : $year);
-  $Output_Date = "January 1, $real_year";
+  $This_Year = $year < 80 ? 2000+$year : ($year <= 99 ? 1900+$year : $year);
 
   undef @Authors;
   extract_authors();
 
   extract_title();
 
-  my $docname = compute_docname($real_year, $year, $index);
+  check_date();
+
+  my $docname = compute_docname($This_Year, $year, $index);
   mkdir "$Dir_Path/$docname", 7*64 + 7*8 +5;
   open(BIB, "> $Dir_Path/$docname/$docname.bib") or
     die "Can't open $Dir_Path/$docname/$docname.bib - $!\n";
   format_output("BIB-VERSION", $BIB_VERSION);
   format_output("ID", "$BIB_AUTHORITY//$docname");
   format_output("ENTRY", $Output_Entry);
-  format_output("DATE", $Output_Date);
+  format_output("DATE", $Date);
   foreach $author (@Authors) {
     format_output("AUTHOR", $author);
   }
