@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/26 07:14:35 $
+		       	$Date: 2000/10/12 09:10:46 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -21,11 +21,6 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 ** Transform/5
 **
 ** Transform psifcp module to compound Fcp.
-**
-** This module should be integrated with the transform application,
-** which should recognize psifcp alone and translate it to:
-**
-**    [evaluate,psifcp,compound,colon]
 **
 ** Input:
 **
@@ -45,12 +40,12 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Compound = Terms? |
 
 	/* Get Exported list. */
-	filter_attributes(Attributes1, Attributes1', Exported, Level),
+	filter_attributes(Attributes1, Attributes1', Exported),
 	Attributes2 = [export(Exports?) | Attributes1'?],
 	topsifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
-  filter_attributes(In, Out, Exported, Level) :-
+  filter_attributes(In, Out, Exported) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
@@ -64,16 +59,6 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Exported = Es |
 	self;
 
-    In ? optimize :
-      Out ! optimize,
-      Level = 1 |
-	self;
-
-    In ? optimize(I) :
-      Out ! optimize,
-      Level = I |
-	self;
-
     In ? Other,
     otherwise :
       Out ! Other |
@@ -81,61 +66,71 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 
     In =?= [] :
       Out = [] |
-	unify_without_failure(Level, 2),
-	unify_without_failure(Exported, all).
+	unify_without_failure(Exported, []).
 
 
-program(Source, Exported, Level, Exports, Terms, Errors) :-
+program(Source, Exported, Exports, Terms, Errors) :-
 	filter_psifcp_attributes(Source, Exported, Controls,
 				_ModuleType, Source', Errors, Errors'?),
 	servers#serve_empty_scope(Scope?, Controls?, Exports,
 				  NextTerms, Optimize, Errors'),
 	process_definitions+(Processes = [], NextScope = []),
 	optimize#initialize(Optimize?, Exports?, Accessible),
-	optimize_terms(Level, Terms''?, Accessible, Terms'),
+	optimize#procedures(Terms''?, Accessible, [], Terms'),
 	spc#stochasticize(Terms'?, Terms).
 
-  optimize_terms(Level, In, Table, Out) :-
 
-    integer(Level), Level > 0 |
-	optimize#procedures(Level, In, Table, [], Out);
-
-    otherwise :
-      Level = _,
-      Table = [],
-      Out = In.
-
-
-/* Extract Global channel declarations and Stochastic base rates. */
+/* Extract Global channel declarations and Stochastic base rate. */
 filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
 			Errors, NextErrors) +
-	(GlobalDescriptors = [], TypeRate = _ModuleType(_Rate)) :-
+	(GlobalDescriptors = [], TypeRate = _ModuleType(_Rate),
+	 PsiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
 	psifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
-				TypeRate, TypeRate', Errors, Errors'),
+		TypeRate, TypeRate', AddExports, AddExports', Errors, Errors'),
 	self;
 
     Source ? Tuple, Tuple =\= (_ :- _) |
 	psifcp_attribute(Tuple, GlobalDescriptors, GlobalDescriptors',
-				TypeRate, TypeRate', Errors, Errors'),
+		TypeRate, TypeRate', AddExports, AddExports', Errors, Errors'),
 	self;
 
     otherwise :
+      AddExports = [],
       NextSource = Source,
       Errors = NextErrors |
+	choose_exports(Exported, PsiExports, Exported'),
 	complete_psifcp_attributes.
 
   psifcp_attribute(Attribute, OldDescriptors, NewDescriptors,
-			TypeRate1, TypeRate, Errors, Errors') :-
+	TypeRate1, TypeRate, Exports, NextExports, Errors, Errors') :-
 
+    /* obsolescent - allow for global(list) */
     Attribute = global(Gs) :
-      TypeRate = TypeRate1 |
+      Exports = NextExports,
+      TypeRate1 = TypeRate |
 	validate_globals(Gs, TypeRate, OldDescriptors, NewDescriptors,
 				Errors, Errors');
+
+    tuple(Attribute), arity(Attribute) > 2,
+    arg(1, Attribute, global) :
+      Exports = NextExports,
+      TypeRate1 = TypeRate |
+	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
+	validate_globals(Gs?, TypeRate, OldDescriptors, NewDescriptors,
+				Errors, Errors');
+
+    tuple(Attribute), arity(Attribute) >= 2,
+    arg(1, Attribute, export) :
+      NewDescriptors = OldDescriptors,
+      TypeRate1 = TypeRate |
+	utils#tuple_to_dlist(Attribute, [_ | Es], []),
+	validate_exports(Es?, Exports, NextExports, Errors, Errors');
   
     Attribute = baserate(Rate) :
       NewDescriptors = OldDescriptors,
+      Exports = NextExports,
       TypeRate3 = stochastic(_Rate),
       TypeRate = TypeRate3 |
 	validate_base(Rate, TypeRate1, TypeRate2, Errors, Errors'),
@@ -144,13 +139,27 @@ filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
     /* skip fcp attributes - testing */
     Attribute = -_ :
       Errors' = Errors,
+      Exports = NextExports,
       NewDescriptors = OldDescriptors,
       TypeRate = TypeRate1;
 
     otherwise :
       NewDescriptors = OldDescriptors,
       TypeRate = TypeRate1,
+      Exports = NextExports,
       Errors ! invalid_psifcp_attribute(Attribute).
+
+  choose_exports(FcpExports, PsiExports, Exports) :-
+
+    FcpExports =?= [], PsiExports =?= [] :
+      Exports = all;
+
+    FcpExports =?= all :
+      PsiExports = _,
+      Exports = all;
+
+    otherwise |
+	utilities#concatenate_lists([FcpExports, PsiExports], Exports).
 
   complete_psifcp_attributes(Exported, TypeRate, ModuleType, GlobalDescriptors,
 					Controls) :-
@@ -186,17 +195,34 @@ filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
     GlobalDescriptors =?= [] :
       GlobalNames = [].
 
+  validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
+
+    New ? `String,
+    nth_char(1, String, C), ascii('A') =< C, C =< ascii('Z') :
+      Exports ! String |
+	self;
+
+    New ? Other,
+    otherwise :
+      Errors ! invalid_export(Other) |
+	self;
+
+    New =?= [] :
+      Exports = NextExports,
+      Errors = NextErrors.
+
+
   validate_globals(GlobalDescriptors, TypeRate, Old, New, Errors, NextErrors) +
 			(Head = Tail?, Tail) :-
 
-    GlobalDescriptors ? String,
-    string(String), String =\= "", String =\= "_",
+    GlobalDescriptors ? String, string(String),
+    nth_char(1, String, C), ascii(a) =< C, C =< ascii(z),
     TypeRate =?= _Type(Rate) :
       Tail ! String(Rate) |
 	self;
 
-    GlobalDescriptors ? String(Rate),
-    string(String), String =\= "", String =\= "_" :
+    GlobalDescriptors ? String(Rate), string(String),
+    nth_char(1, String, C), ascii(a) =< C, C =< ascii(z) :
       Global = String(_Rate),
       Tail ! Global |
 	validate_base(Rate, TypeRate, Global, Errors, Errors'),
