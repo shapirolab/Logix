@@ -91,13 +91,12 @@ while ($line = <RECORD>) {
   print TEMP "$type$item\n";
 }
 if ($type ne "00") {
-  print TEMP "00" . substr($nexttime + 0.0000001, 0, 7);
+  print TEMP "00" . substr($nexttime + 0.0000001, 0, 7) . "\n";
 }
 
 close TEMP or die "Can't close temporary $temp output\n";
 
 print NAMES "   time";
-
 my $process;
 my $counter = 1;
 my @Processes = sort(keys(%Processes));
