@@ -6,6 +6,7 @@ my %Processes = ();
 
 my $item;
 my $type = 0;
+my $rescale = 0;
 my %Subs = ();
 
 sub normalize {
@@ -30,6 +31,9 @@ my $substitute;
 while ($substitute = shift(@ARGV)) {
   if ($substitute > 0) {
     $PERIOD = $substitute;
+  }
+  elsif ($substitute < 0) {
+    $rescale = -$substitute;
   }
   else {
     $substitute =~ s/\s+//;
@@ -131,7 +135,7 @@ while ($line = <TEMP>) {
     $Columns[$Processes{$j}] += $k;
   }
   else {
-    $Columns[0] = $j;
+    $Columns[0] = $rescale ? $j/$rescale : $j;
     while ($k < $counter) {
       print TABLE $Columns[$k++], "   ";
     }
