@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/27 07:56:33 $
+		       	$Date: 2000/02/28 10:08:21 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -203,10 +203,12 @@ program(Source, Controls, Delay, Exports, Terms, Errors) :-
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
     Source ? (PiLHS :- RHSS) :
-      Scope ! process(PiLHS, Status, ProcessScope) |
+      Scope ! process(PiLHS, NewChannelList, ProcessScope),
+      ProcessScope ! lhss(OuterLHS, InnerLHS) |
 	process_definitions(Processes, [], Nested, Nested'?,
-				ProcessScope, ProcessScope'?),
-	process(Status?, RHSS, ProcessScope', Process, Nested'),
+				ProcessScope', ProcessScope''?),
+	process(RHSS, OuterLHS, InnerLHS, NewChannelList, ProcessScope'',
+			Process, Nested'),
 	nested_procedures(Process, Nested?, Terms, Terms'?),
 	self;
 
@@ -222,65 +224,63 @@ process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
 /************************* Process Transformations ***************************/
 
-process(Status, RHSS, Scope, Process, Nested) :-
+process(RHSS, OuterLHS, InnerLHS, NewChannelList, Scope, Process, Nested) :-
 
-    Status = nil :
+    OuterLHS =?= [] :
       RHSS = _,
+      InnerLHS = _,
+      NewChannelList = _,
       Scope = [],
       Process = [],
       Nested = [];
 
-    Status = double :
-      Scope ! lhss(OuterLHS, InnerLHS),    
+    OuterLHS =\= [],
+    NewChannelList =\= [] :
       Nested ! outer(Atom?, Initializer?, []),
-      Status' = initialized |
-	piutils#tuple_to_atom(OuterLHS?, Atom),
-	Index := arity(OuterLHS) + 1,
-	arg(1, OuterLHS, Name),
-	initialize_channels(Index, InnerLHS, Name, Initializer),
+      NewChannelList' = [] |
+	piutils#tuple_to_atom(OuterLHS, Atom),
+	arg(1, InnerLHS, Name),
+	initialize_channels(Name, NewChannelList, Initializer),
 	self;
 
-    Status =\= nil, Status =\= double, /* single or initialized */
+    OuterLHS =\= [],
+    NewChannelList =?= [],
     RHSS =\= (_|_), RHSS =\= (_;_)  :
-      Scope = [lhss(_OuterLHS, InnerLHS), code(no_guard, [], []) | Scope'?],
+      Scope ! code(no_guard, [], []),
       Process = no_guard(Atom?, RHSS'?, []) |
 	piutils#tuple_to_atom(InnerLHS?, Atom),
 	transform_body(RHSS, RHSS', Nested, [], Scope', []);
 
-    Status =\= nil, Status =\= double, /* single or initialized */
     otherwise :
-      Scope ! lhss(_OuterLHS, InnerLHS),
+      OuterLHS = _,
+      NewChannelList = _,
       Process = _Type(Atom?, RHSS'?, _Action) |
 	piutils#tuple_to_atom(InnerLHS?, Atom),
-	guarded_clauses(RHSS, RHSS', Process, Nested, Scope').
+	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
-  initialize_channels(Index, Tuple, Name, Initializer) +
+  initialize_channels(Name, NewChannelList, Initializer) +
 			(MakeAll = More?, More) :-
 
-    Index < arity(Tuple),
-    arg(Index, Tuple, `Channel),
-    Index++ :
+    NewChannelList ? ChannelName(Receive, Send), list(NewChannelList') :
       More = (MakeChannel?, NameChannel?, More'?) |
 	make_and_name_channel,
 	self;
 
-    Index =:= arity(Tuple),
-    arg(Index, Tuple, `Channel),
-    arg(1, Tuple, PName) :
+    NewChannelList = [ChannelName(Receive, Send)] :
       More = (MakeChannel?, NameChannel?),
-      Initializer = (true : MakeAll | PName) |
+      Initializer = (true : MakeAll | Name) |
 	make_and_name_channel.
 
-  make_and_name_channel(Name, Channel, MakeChannel, NameChannel) :-
+  make_and_name_channel(Name, ChannelName, Receive, Send, 
+			MakeChannel, NameChannel) :-
 
-    string_to_dlist(".", DotName, Dt),
-    string_to_dlist(Channel, Suffix, []),
+    string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      MakeChannel = make_channel(`pinch(Channel), `pimss(Channel)),
-      NameChannel = (`Channel = ChannelId?(?pinch(Channel), ?pimss(Channel),
-			0, 0)),
-      Dt = Suffix,
-      PS = DotName |
+      MakeChannel = make_channel(`pinch(ChannelName), `pimss(ChannelName)),
+      NameChannel = (`ChannelName =
+			ChannelId?(?pinch(ChannelName), ?pimss(ChannelName),
+						Receive, Send)),
+      PS = Suffix |
 	list_to_string(PH, ChannelId).
 
 

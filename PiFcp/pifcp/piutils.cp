@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/23 11:47:49 $
+		       	$Date: 2000/02/28 10:08:21 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,7 +15,8 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -language(compound).
 -export([concatenate_lists/2, make_lhs_tuple/3,
-	 make_predicate_list/3, names_to_channel_list/2,
+	 make_predicate_list/3, untuple_predicate_list/3,
+	 names_to_channel_list/2,
 	 remove_duplicate_strings/3, sort_out_duplicates/3,
 	 subtract_list/3, tuple_to_atom/2, update_process_mode/3,
 	 verify_channel/7]).
@@ -82,6 +83,7 @@ concatenate_lists(Lists, Out) :-
     Lists =?= [] :
       Out = [].
 
+
 subtract_list(List1, List2, List3) :-
 
     List2 ? Item |
@@ -92,18 +94,20 @@ subtract_list(List1, List2, List3) :-
       List3 = List1.
 
 
-remove_item(Item, List1, List2) :-
+remove_item(Item, ListIn, ListOut) :-
 
-    List1 =?= [] :
-      Item = _,
-      List2 = [];
-
-    List1 ? Item |
+    ListIn ? I,
+    Item =?= I |
 	self;
 
-    List1 ? Other, Other =\= Item :
-      List2 ! Other |
-	self.
+    ListIn ? I,
+    Item =\= I :
+      ListOut ! I |
+	self;
+
+    ListIn =?= [] :
+      Item = _,
+      ListOut = [].
 
 
 remove_duplicate_strings(List1, List2, Reply) :-
@@ -128,7 +132,7 @@ remove_duplicate_strings(List1, List2, Reply) :-
     List1 ? Item,
     Item =\= "_" :
       List2 ! Item |
-	delete_duplicate_items(Item, List1', List1''),
+	remove_item(Item, List1', List1''),
 	self;
 
     List1 ? Item,
@@ -139,66 +143,6 @@ remove_duplicate_strings(List1, List2, Reply) :-
     List1 = [] :
       List2 = [].
 
-  delete_duplicate_items(Item, ListIn, ListOut) :-
-
-    ListIn ? I,
-    Item =?= I |
-	self;
-
-    ListIn ? I,
-    Item =\= I :
-      ListOut ! I |
-	self;
-
-    ListIn =?= [] :
-      Item = _,
-      ListOut = [].
-
-/*
-check_for_duplicates(List1, List2, ErrorCode, Errors, NextErrors) :-
-
-    List1 ? Item,
-    Item =\= "_" :
-      List2 ! Item |
-	search_for_duplicate(Item, List1', List1'',
-			ErrorCode, Errors, Errors'?),
-	self;
-
-    List1 ? Item,
-    Item =?= "_" :
-      List2 ! Item |
-	self;
-
-    List1 = [] :
-      List2 = [],
-      ErrorCode = _,
-      Errors = NextErrors.
-
-  search_for_duplicate(Item, ListIn, ListOut,
-		ErrorCode, Errors, NextErrors) :-
-
-    ListIn ? I,
-    Item =?= I,
-    ErrorCode =?= {Name, Code} :
-      Errors ! (Name: Code(Item)) |
-	self;
-
-    ListIn ? I,
-    Item =?= I,
-    ErrorCode =?= "" |
-	self;
-
-    ListIn ? I,
-    Item =\= I :
-      ListOut ! I |
-	self;
-
-    ListIn =?= [] :
-      Item = _,
-      ErrorCode = _,
-      Errors = NextErrors,
-      ListOut = [].
-*/
 
 make_lhs_tuple(Name, ChannelNames, Tuple) :-
 
@@ -211,6 +155,17 @@ make_lhs_tuple(Name, ChannelNames, Tuple) :-
 	make_tuple(N'?, Tuple),
 	arg(1, Tuple, Name),
 	fill_tuple(Variables, Tuple, 2, Tuple).
+
+
+untuple_predicate_list(Operator, Predicates, List) :-
+
+    Predicates =?= {Operator, Predicate, Predicates'} :
+      List ! Predicate |
+	self;
+
+    otherwise :
+      Operator = _,
+      List = [Predicates].
 
 
 make_predicate_list(Operator, List, Predicates) :-
@@ -241,8 +196,10 @@ make_predicate_list(Operator, List, Predicates) :-
 sort_out_duplicates(InLists, Out, Reply) :-
 
 	concatenate_lists(InLists, List),
-	ordered_merger(Merger, Reply, []),
-	utils#binary_sort_merge(List, Out, Merger).    
+	ordered_merger(Merger, Duplicates, []),
+	utils#binary_sort_merge(List, Out, Merger),
+	/* Remove duplicate "duplicates" */
+	utils#binary_sort_merge(Duplicates, Reply).
 
 ordered_merger(In, Left, Right) :-
     In ? ordered_merge(In1, In2, Out) |

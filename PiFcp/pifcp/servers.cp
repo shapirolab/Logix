@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/27 07:56:34 $
+		       	$Date: 2000/02/28 10:08:22 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -79,11 +79,11 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(PiLHS, Status, ProcessScope),
+    In ? process(PiLHS, NewChannelList, ProcessScope),
     Controls = {Exported, GlobalDescriptors, GlobalNames, Means} |
-	make_process_scope(PiLHS, Means, ProcessScope, [], In'', In'?,
+	make_process_scope(PiLHS, Means, ProcessScope, [],
+				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
-	compute_status,
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
 	create_entry(GlobalDescriptors, GlobalNames, Export?,
@@ -349,13 +349,13 @@ serve_process_scope(In, ProcessDefinition, Means,
 	list_to_string(DL, Id),
 	self;
 
-    In ? process(PiLHS, Status, ProcessScope),
+    In ? process(PiLHS, NewChannelList, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _OuterLHS, _InnerLHS,
 					_CodeTuple} |
 	piutils#concatenate_lists([Locals, ChannelNames], GlobalNames),
 	make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
+				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
-	compute_status,
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
@@ -515,7 +515,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
       NextOut = [].
 
 /*
-** make_process_scope/10
+** make_process_scope/11
 **
 ** Analyze PiLHS, producing a ProcessDefinition and a process scope server,
 ** serve_process_scope.
@@ -543,20 +543,22 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
+make_process_scope(PiLHS, Means, ProcessScope, GlobalNames, NewChannelList1,
 	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
       ProcessDefinition =?= {Name?, Arity?, ChannelNames?,
 				OuterLHS?, InnerLHS?, _CodeTuple} |
-	parse_lhs(PiLHS, Name, Arity, ParamList, ChannelList,
+	parse_lhs(PiLHS, Means, Name, Arity,
+			ParamList, ChannelList, NewChannelList,
 				Errors, Errors'?),
 	diagnose_duplicates(ParamList?, ParamList1,
 			Name?, duplicate_parameter,
 				Errors', Errors''?),
-	diagnose_duplicates(ChannelList?, ChannelList1,
-			Name?, duplicate_channel,
+	piutils#sort_out_duplicates([ChannelList?], ChannelList1, DChs),
+	check_duplicates_reply(DChs?, Name?, duplicate_channel,
 				Errors'', Errors'''?),
+	piutils#sort_out_duplicates([NewChannelList?], NewChannelList1, _),
 	piutils#concatenate_lists([ParamList1?, ChannelList1?], LocalList),
 	diagnose_duplicates(LocalList?, LocalList1,
 			Name?, channel_duplicates_parameter,
@@ -579,22 +581,6 @@ make_process_scope(PiLHS, Means, ProcessScope, GlobalNames,
       C1 = _ |
 	piutils#subtract_list(L2, P, C2).
 	
-
-compute_status(NewDefinition, Status) :-
-
-    NewDefinition =?= {_Name, _Arity, _ChannelNames, OuterLHS, _InnerLHS,
-					_CodeTuple},
-    OuterLHS =?= [] :
-      Status = nil;    
-
-    NewDefinition =?= {_Name, _Arity, _ChannelNames, OuterLHS, InnerLHS,
-					_CodeTuple},
-    OuterLHS =\= [], OuterLHS =?= InnerLHS :
-      Status = single;
-
-    otherwise :
-      NewDefinition = _,
-      Status = double.
 
 export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
 
@@ -665,61 +651,97 @@ add_process_definition(ProcessDefinition, Progeny, NewProgeny) :-
       NewProgeny = Progeny.
 
 
-parse_lhs(PiLHS, Name, Arity, ParamList, ChannelList, Errors, NextErrors) :-
+parse_lhs(PiLHS, Means, Name, Arity, ParamList, ChannelList, NewChannelList,
+		Errors, NextErrors) :-
 
     PiLHS =?= `Functor, string(Functor), Functor =\= "" :
+      Means = _,
       Name = Functor, Arity = 0,
       ParamList = [],
       Errors = NextErrors |
-	unify_without_failure(ChannelList, []);
+	unify_without_failure(ChannelList, []),
+	unify_without_failure(NewChannelList, []);
 
     PiLHS = PiLHS' + Channels,
     writable(ChannelList) :
-      ChannelList' = ChannelList? |
-	extract_channel_list(Channels, ChannelList, Errors, Errors'),
+      ChannelList' = ChannelList?,
+      NewChannelList' = NewChannelList? |
+	piutils#untuple_predicate_list(',', Channels, Channels'),
+	extract_channel_list(Channels', Means, ChannelList, NewChannelList,
+					Errors, Errors'),
 	self;
 
     arg(1, PiLHS, `Functor), string(Functor), Functor =\= "",
     arity(PiLHS, A), A-- :
+      Means = _,
       Name = Functor,
       Arity = A' |
 	extract_arglist(PiLHS, ParamList, Errors, NextErrors),
-	unify_without_failure(ChannelList, []);
+	unify_without_failure(ChannelList, []),
+	unify_without_failure(NewChannelList, []);
 
     otherwise :
       Errors ! improperly_formed_left_hand_side(PiLHS),
       PiLHS' = `"_" |
 	self.
 
-extract_channel_list(Channels, ChannelList, Errors, NextErrors) :-
+extract_channel_list(Channels, Means, ChannelList, NewChannelList,
+			Errors, NextErrors) :-
 
-    string(Channels), Channels =\= "_", Channels =\= "" :
-      ChannelList = [Channels],
-      Errors = NextErrors;
-
-    Channels = `ChannelName,
-    string(Channels), Channels =\= "_", Channels =\= "" :
-      ChannelList = [ChannelName],
-      Errors = NextErrors;
-
-    Channels = (ChannelName, Channels'),
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "" :
-      ChannelList ! ChannelName |
+    Channels ? ChannelName,
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    Means = _Delay(Receive, Send) :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Receive, Send) |
 	self;
 
-    Channels = (`ChannelName, Channels'),
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "" :
-      ChannelList ! ChannelName |
+    Channels ? `ChannelName,
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    Means = _Delay(Receive, Send) :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Receive, Send) |
 	self;
 
-    Channels = (NotChannel, Channels'),
+    Channels ? ChannelName(Both),
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    integer(Both), Both >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Both, Both) |
+	self;
+
+    Channels ? ChannelName(Both),
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    integer(Both), Both >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Both, Both) |
+	self;
+
+    Channels ? ChannelName(Receive, Send),
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    integer(Receive), Receive >= 0,
+    integer(Send), Send >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Receive, Send) |
+	self;
+
+    Channels ? `ChannelName(Receive, Send),
+    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    integer(Receive), Receive >= 0,
+    integer(Send), Send >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(Receive, Send) |
+	self;
+
+    Channels ? Other,  
     otherwise :
-      Errors ! invalid_channel_in_channel_list(NotChannel) |
+      Errors ! invalid_item_in_new_channel_list(Other) |
 	self;
 
-    otherwise :
-      Errors = [invalid_channel_in_channel_list(Channels) | NextErrors],
-      ChannelList = [].
+    Channels =?= [] :
+      Means = _,
+      ChannelList = [],
+      NewChannelList = [],
+      Errors = NextErrors.
 
 
 extract_arglist(PiLHS, ParamList, Errors, NextErrors) + 
@@ -1025,7 +1047,8 @@ diagnose_duplicates(List1, List2, Name, Diagnostic, Errors, NextErrors) :-
 	piutils#remove_duplicate_strings(List1, List2, Reply),
 	check_duplicates_reply.
 
-  check_duplicates_reply(Reply, Name, Diagnostic, Errors, NextErrors) :-
+
+check_duplicates_reply(Reply, Name, Diagnostic, Errors, NextErrors) :-
 
     Reply ? Duplicate :
       Errors ! (Name - Diagnostic(Duplicate)) |
