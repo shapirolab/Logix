@@ -72,3 +72,6 @@ The <comment> field has one of the following texts:
                               and returned to the normal Gang class ("gn").
                               If it is a Time-shared process, its nice value
                               depends on how it was sent to coventry.
+
+    *low priority user*       The process belongs to a low-priority user, and
+                              has been relegated to a poor batch priority.

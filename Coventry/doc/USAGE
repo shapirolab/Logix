@@ -2,15 +2,26 @@ Coventry is a daemon which monitors and re-nices processes in the
 TS (time-sharing) queue, so as to provide fair scheduling and more
 efficient use of the processors.
 
-It monitors the queue periodically, relegating processes which are
-using too much processor time to less favorable nice classes.  When
-more than one such "greedy" process is being executed by the same
-user, at most one may execute in each nice class - the others are 
-sent to "coventry" (the least favorable class).
+It monitors the Time-sharing class (TS) queue and the Gang procsses
+class (GN) queue periodically, relegating processes which are using
+too much processor time to less favorable nice classes.
+
+When more than one such "greedy" process is being executed by the
+same user, within TS, at most one may execute in each nice class -
+the others are  sent to "coventry" (the least favorable class).
+
+Processes in GN, which don't have fixed priority, are reassigned to
+the best batch priority (128).  There they are scheduled round-robin
+by the SGI scheduler.
 
 Certain users and processes are exempt from this scheduling.  These
 are listed in the coventryd daemon, declared as PERL hashes, %users
 and %commands.
+
+Certain users are recognized as low priority users - currently by
+the word "Collaborator" beginning the fifth field of the gcos item
+of a user password entry (pwent).  These users are driven to a poor
+batch priority in their scheduling class (154).
 
 The script coventry may be used to start and stop coventryd.
 
@@ -51,4 +62,5 @@ debugging.
 Coventry may be freely started and stopped.  When stopped, any process
 which is in "coventry" is returned to the last class/priority which it
 occupied prior to being sent to "coventry".  You may stop coventryd 
-with any of the signals INT, QUIT, TERM (2, 3, 15).
+with any of the signals INT, QUIT, TERM (2, 3, 15).  Processes belong-
+ing to low priority users remain with poor batch priority.

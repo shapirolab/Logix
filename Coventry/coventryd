@@ -25,7 +25,6 @@ $THRESHHOLD    = 60;          # Minimum elapsed seconds before changing nice.
 $GREED_BOUND   =  5;          # Minimum used time between iterations before
                               # changing nice.
 $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
-
 # see sys/schedctl.h            SGI only
 $NDPLOMAX      = 128;         # Best low Non-deteriorating priority
 $NDPLOMIN      = 254;         # Worst "   "   " " "  "  "    "  "
@@ -36,6 +35,9 @@ $NDPRI_DEFAULT = $NDPLOMAX
 $NDPRI_OFFSET  = $NDPRI_DEFAULT - $NICE_DEFAULT;
 $NDPRI_OFFSET + $NICE_COVENTRY <= $NDPLOMIN or
     die "Inconsistentcy between nice range and ndpri range."; 
+
+$LOW_PRIORITY  = 
+    - ($NICE_COVENTRY + 100); # Negative offset from $NDLOMIN
 
 # Default exclusion hashes.
 
@@ -78,8 +80,13 @@ undef(@coventry);             # A list of processes - normally sorted.
 undef(%previous_processes);   # A hash of processes, indexed by Process Id.
 undef(%current_processes);    # A hash of processes, indexed by Process Id.
 undef(%freed_processes);      # A hash of processes, indexed by user(nice).
+undef(%low_priority_users);   # A hash of Collaborators (and others?).
+
 
 if ($debug) {# debug
+
+$| = 1; # flush output after every print.
+
 #$NICE_INCR     = 0;
 #$NICE_RADIX    = 1;
 #$MONITOR_DELAY = 10;
@@ -126,6 +133,8 @@ if ($debug) {# debug
 
     exit 0 if query_processes($query);
 
+%low_priority_users = get_low_priority_users();
+
 $SIG{"INT"} = "clean_up";
 $SIG{"QUIT"} = "clean_up";
 $SIG{"TERM"} = "clean_up";
@@ -164,17 +173,20 @@ while (not $stop) {
 
 sub clean_up
 {
-    my $process;
-    my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
-
+    if ($#coventry >= 0) {
+	my $process;
+	my $user, $nice, $seconds, $pid, $pgid, $class, $comm;
 if ($debug) {# debug
-		 print "Cleaning up coventry!\n";
+  print "Cleaning up coventry!\n";
 }# endebug
-    foreach $process (@coventry) {
-	($user, $unnice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
-	
-	setnice($process,
-		($class eq "gb" || $class eq "gn") ? 0 : $nice);
+	foreach $process (@coventry) {
+	    ($user, $nice, $seconds, $pid, $pgid, $class, $comm) =
+		@{$process};
+	    if (!defined($low_priority_class{$user})) {
+		setnice($process,
+			($class eq "gb" || $class eq "gn") ? 0 : $nice);
+	    }
+	}
 if ($debug) {# debug
   print_refed_process("returned to society", $process);
 }# endebug
@@ -187,7 +199,8 @@ if ($debug) {# debug
 # parse_process extracts interesting parameters from a process status line
 # produced by ps.  The status line is in $_ on entry.
 #
-# Return 1 if the process is not excluded by one of the exclusion hashes.
+# Return the process if it is not excluded by one of the exclusion hashes.
+# Return undef otherwise.
 #
 # Note: This subroutine should be modified as necessary per platform.
 #       It works fine on SGI and Solaris System V platforms.
@@ -213,7 +226,7 @@ sub parse_process
 	return undef;
     }
     if ($nice !~ /\s*\d\d\s*/) {
-	$nice = getpriority($PRIO_PROCESS, $pid) +$NICE_OFF;
+	$nice = getpriority($PRIO_PROCESS, $pid) + $NICE_OFF;
 	print "$user($class) - $comm($pid), has nice = $nice\n";
     }
 
@@ -264,11 +277,20 @@ sub setnice #(process, nice)
 
     ($user, $unnice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
 
-    if ($class eq "ts") {
+    if ($nice < 0) {
+	my $reply, $result;
+	$result = setpriority($PRIO_PROCESS, $pid, $NICE_MAX), "\n";
+if ($debug) {# temp
+  print_refed_process("*low priority user*", $process);
+}
+	$nice += $NDPLOMIN;
+	$reply = `$AUXILIARY_DIR/setndpri $nice $pid`;
+	return $reply;
+    }
+    elsif ($class eq "ts") {
 	return setpriority($PRIO_PROCESS, $pid, $nice-$NICE_OFF);
     }
-    else {
-      # $class eq "gn" || $class eq "gb"
+    elsif ($class eq "gn" || $class eq "gb") {
 	$nice += $NDPRI_OFFSET if $nice;
 	return `$AUXILIARY_DIR/setndpri $nice $pid`;
     }
@@ -321,6 +343,37 @@ sub query_processes #(query)
     }
     return 0;
 }
+
+
+# get_low_priority_users gets a hash of Collaborators, indexed by user name.
+#
+# Each value of the hash is a ref to a list returned by getpwent.
+
+sub get_low_priority_users
+{
+    my %reply;
+    my @entry;
+    my $user, $passwd, $uid, $gid, $quota, $comment, $gcos, $dir, $shell;
+    my $fullname, $office, $workphone, $homephone, $status, $code;
+
+    setpwent();
+    while (1) {
+	@entry = getpwent();
+	last if !defined($entry[0]);
+	($user, $passwd, $uid, $gid, $quota, $comment, $gcos, $dir, $shell)
+	    = @entry;
+	($fullname, $office, $workphone, $homephone, $status, $code) =
+	    split(",", $gcos);
+	if ($status =~ /Collaborator.*/) {
+	    my $process =
+		[$user,$passwd,$uid,$gid,$quota,$comment,$gcos,$dir,$shell];
+	    $reply{$uid} = $process;      # needed due to glitch in SGI.
+	    $reply{$user} = $process;
+	}
+    }
+    return %reply;
+}
+
 
 # Development and debugging aids
 
@@ -449,11 +502,13 @@ sub send_to_coventry
 	($user, $nice, $seconds, $pid, $pgid, $class, $comm) = @{$process};
 	if ($BAN_GANGS && ($class eq "gn" || $class eq "gb")) {
 	    push @pids, $pid;
-	    push @coventry, $process;
+	    if (!defined($low_priority_users{$user})) {
+		push @coventry, $process;
 if ($debug) {# debug
   print_refed_process("banned gang process", $process);
 }# endebug
-	    next;
+		next;
+	    }
 	}
 	$previous = $previous_processes{$pid};
 	if (defined($previous)) {
@@ -468,7 +523,10 @@ if ($debug) {# debug
 		$freedid = "$user($nice)";
 		$process =
 		    [$user, $nice, $seconds, $pid, $pgid, $class, $comm];
-		if (defined($freed_processes{$freedid}) || $bound) {
+		if (defined($low_priority_users{$user})) {
+		    push @pids, $pid; # let's just lose it!
+		}
+		elsif (defined($freed_processes{$freedid}) || $bound) {
 		    push @pids, $pid;
 		    push @coventry, $process;
 if ($debug) {# debug
@@ -498,7 +556,8 @@ if ($debug) {# debug
     }
     foreach $pid (@pids) {
 	$process = delete $current_processes{$pid};
-        setnice($process, $NICE_COVENTRY);
+        setnice($process, $NICE_COVENTRY +
+		$LOW_PRIORITY*(defined($low_priority_users{$process->[0]})));
     }
     @coventry = sort(sortrefs @coventry);
 }
