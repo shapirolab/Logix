@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:57:59 $
+		       	$Date: 2004/05/31 07:05:02 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -107,15 +107,14 @@ expand(Command, Cs) :-
 		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
 		"",
-		"        options for sp*, pdb and ptree:",
-		" none/note/active   - type of messages displayed",
-		" sender/no_sender   - show name of message sender",
-		"        additional options for ptree:",
-		" prefix/execute     - order of tree display",
-		"       format options for record and trace",
-		"           short/process/creator/full",
-		"       format options for channel display",
-		"             short/base/creator/full"
+		"        name options for channel display",
+		"             short/base/creator/full",
+		"        annotation options for channel display:",
+                "             none/active/note",
+		"        additional option for ptree:",
+		"           process replaces base above",
+                "           goal order:",
+		"             prefix/execute"
 		
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
