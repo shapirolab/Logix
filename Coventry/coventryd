@@ -34,19 +34,6 @@ $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 	  60001  => 1,
 );
 
-%queues = (
-	   bg => 1,
-	   BG => 1,
-	   bt => 1,
-	   BT => 1,
-	   dl => 1,
-	   DL => 1,
-	   os => 1,
-	   OS => 1,
-	   rt => 1,
-	   RT => 1,
-);
-
 # Maximum length of a command name is 30 characters (see below).
 %commands = (
 	     csh  => 1,
@@ -73,12 +60,13 @@ $stop   = 0;
 
 undef(@coventry);             # A list of processes - normally sorted.
 
-undef(%society);              # A hash of processes, indexed by Process Id.
+undef(%previous_processes);   # A hash of processes, indexed by Process Id.
 undef(%current_processes);    # A hash of processes, indexed by Process Id.
+undef(%freed_processes);      # A hash of processes, indexed by user(nice).
 
 if ($debug) {# debug
-$NICE_INCR      = 0;
-$NICE_RADIX    =  1;
+#$NICE_INCR     = 0;
+#$NICE_RADIX    = 1;
 #$MONITOR_DELAY = 5;
 #$GREED_BOUND   = 0;
 #$THRESHHOLD    = 0;
@@ -133,8 +121,9 @@ while (not $stop) {
 
     # 5.
 
-    undef(%society);
-    %society = %current_processes;
+    undef(%previous_processes);
+    %previous_processes = %current_processes;
+    undef(%freed_processes);
 
     sleep($MONITOR_DELAY);
 }
@@ -178,12 +167,14 @@ sub parse_process
 
     ($user, $pid, $nice, $class, $time, $comm) = split;
 
-    if ($users{$user} or $commands{$comm} or $queues{$class} ) {
+    if ($users{$user} or $commands{$comm} or 
+	($class ne "TS" and $class ne "ts")) {
 	return 0;
     }
 
     if ($nice !~ /\s*\d\d\s*/) {
 	$nice = getpriority($PRIO_PROCESS, $pid) +$NICE_OFF;
+	print "$user($class) - $comm($pid), has nice = $nice\n";
     }
 
     $seconds = 0;
@@ -238,8 +229,8 @@ sub setnice #(processid, nice)
 
 sub query_processes #(query)
 {
-    my $minmins, $minsecs;
-    my $user, $nice, $seconds, $comm, $pid, $mins, $secs;
+    my $minmins, $minsecs, $mins, $secs;
+    my $comm, $nice, $pid, $seconds, $user;
     my $title;
     my @display_processes;
 
@@ -395,34 +386,56 @@ elsif ($debug) {# debug
 
 sub send_to_coventry
 {
-    my $banned_processes, $nice, $pid, $process, $previous, $seconds, $used;
+    my $nice, $pid, $seconds, $user;
+    my $changed, $previous, $process, $used;
+    my $freedid, $niced;
     my @pids;
 
     foreach $process (values(%current_processes)) {
 	$pid = $process->[3];
-	$previous = $society{$pid};
+	$previous = $previous_processes{$pid};
 	if ($previous) {
+	    $user = $process->[0];
 	    $nice = $process->[1];
+	    $pid = $process->[3];
 	    $seconds = $previous->[2];
 	    $used = $process->[2] - $seconds;
 
 	    if ($nice == $NICE_COVENTRY or
-		(($nice+=NICE_INCR) == $previous->[1] and
-		 $used >= $GREED_BOUND and
-		 $seconds >= 
-		     $THRESHHOLD*(NICE_RADIX**($nice - $NICE_DEFAULT
-					       - $NICE_INCR)))) {
-
-		push @pids, $pid;
-		push @coventry,
-		    [$process->[0], $nice, $process->[2], $pid, $process->[4]];
+		($nice == $previous->[1] and
+		 $used >= $GREED_BOUND)) {
+		$changed = $seconds >= 
+		    $THRESHHOLD*($NICE_RADIX**($nice - $NICE_DEFAULT));
+		$nice += $NICE_INCR if $changed;
+		$freedid = "$user($nice)";
+		$process =
+		    [$process->[0], $nice, $process->[2],
+		     $pid, $process->[4]];
+		$previous = $freed_processes{$freedid};
+		if ($previous) {
+		    push @pids, $pid;
+		    push @coventry, $process;
+if ($debug) {# debug
+  print_refed_process($changed ? "changed to coventry"
+		               : "banned from society", $process);
+}# endebug
+		}
+		else {
+		    # Leave it in society - no other greedy process with
+		    # this nice user.
+		    $freed_processes{$freedid} = $process;
+		    if ($changed) {
+			setnice($pid, $nice);
+if ($debug) {# debug
+  print_refed_process("adjusted in society", $process);
+}# endebug
+		    }
+		}
+		    
 	    }
 	}
     }
     foreach $pid (@pids) {
-#if ($debug) {# debug
-  print_refed_process("banned from society", $current_processes{$pid});
-#}# endebug
 	delete $current_processes{$pid};
         setnice($pid, $NICE_COVENTRY);
     }
@@ -431,51 +444,37 @@ sub send_to_coventry
 
 # free_from_coventry restores processes from coventry to current society,
 # for each of which there is no other current process, belonging to the
-# same user, which has the same nice value.
+# same user, which was just freed from coventry and has the same nice value.
 
 sub free_from_coventry
 {
-    my $banned, $social;
+    my $banned, $freedid, $social, $user;
 
     my @banned_processes = @coventry; # coventry is sorted.
-    my @social_processes = sort(sortrefs values(%current_processes));
 
     undef(@coventry);
     while ($#banned_processes >= 0) {
+	$user = $banned->[0];
+	$nice = $banned->[1];
+	$freedid = "$user($nice)";
 	$banned = shift(@banned_processes);
-	if ($banned->[1] == $NICE_COVENTRY) {
-	    # This process has been permanently relegated! 
+	if ($freed_processes{$freedid} or $banned->[1] == $NICE_COVENTRY) {
+	    # A process of this user with the same nice value has already
+	    # been freed, or this process has been permanently relegated! 
 	    push(@coventry, $banned);
+if ($debug) {# debug
+  print_refed_process("confined in coventry", $banned);
+}# endebug
 	}
 	else {
-	    $social = shift(@social_processes);
-	    if (not defined($social->[0]) or
-		$banned->[0] lt $social->[0] or
-		($banned->[0] eq $social->[0] and
-		 $NICE_INCR and
-		 $banned->[1] < $social->[1])) {
-		# No instance of this user with the same nice value.
+	    $pid = $banned->[3];
+	    $current_processes{$pid} = $banned;
+	    setnice($pid, $banned->[1]);
+	    $freed_processes{$freedid} = $banned;
 if ($debug) {# debug
   print_refed_process("freed from coventry", $banned);
 }# endebug
-		$pid = $banned->[3];
-		$current_processes{$pid} = $banned;
-		setnice($pid, $banned->[1]);
-		unshift(@social_processes, $banned);
-	    }
-	    elsif (defined($social->[0]) and
-			   ($banned->[0] gt $social->[0] or
-			    $banned->[1] > $social->[1])) {
-		# Keep looking for this user with the same nice value.
-		unshift(@banned_processes, $banned);
-	    }
-	    else {
-		# This user is in current processes with the same nice value.
-		push(@coventry, $banned);
-		if (defined($social->[0])) {
-		    unshift(@social_processes, $social);
-		}
-	    }
-	}
+        }
     }
 }
+
