@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/22 12:56:39 $
+		       	$Date: 2001/12/03 07:36:53 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -93,11 +93,14 @@ expand(Command, Cs) :-
 		" spr / spr(No)      - Psi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Psi execution tree",
-		" record(GS, F, L)   - run Goals, record File until Limit.",
-		" record(GS, F, L, S)- run Goals, record File until Limit -",
-		"                      scaled by Scale.",
+		" record(GS, F, L)   - run Goals, record to File until Limit.",
+		" record(GS,F,L,S,O) - run Goals, record to File until Limit,",
+		"                      scaled by Scale, with format Option.",
 		" run(GS)            - run Goals.",
 		" run(GS, L)         - run Goals until Limit.",
+		" trace(GS, F, L)    - run Goals, trace to File until Limit.",
+		" trace(GS,F,L,S,O)  - run Goals, trace to File until Limit,",
+		"                      scaled by Scale, with format Option.",
 		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
@@ -106,7 +109,12 @@ expand(Command, Cs) :-
 		" none/active        - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
 		"        additional options for ptree:",
-		" prefix/execute     - order of tree display"
+		" prefix/execute     - order of tree display",
+		"       format options for record and trace",
+		"           short/process/creator/full",
+		"       format options for channel display",
+		"             short/base/creator/full"
+		
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
 
@@ -208,6 +216,10 @@ expand(Command, Cs) :-
       Cs = [psi_record#run(repeat#run(Goals), File, Limit, Scale)
 	   | Commands]\Commands;
 
+    Command = record(Goals, File, Limit, Scale, Format) :
+      Cs = [psi_record#run(repeat#run(Goals), File, Limit, Scale, Format)
+	   | Commands]\Commands;
+
     Command = run(Goals) :
       Cs = [repeat#run(Goals)
 	   | Commands]\Commands;
@@ -216,16 +228,28 @@ expand(Command, Cs) :-
       Cs = [psi_record#run(Goal, Limit)
 	   | Commands]\Commands;
 
+    Command = trace(Goals, File, Limit) :
+      Cs = [psi_trace#run(repeat#run(Goals), File, Limit)
+	   | Commands]\Commands;
+
+    Command = trace(Goals, File, Limit, Scale) :
+      Cs = [psi_trace#run(repeat#run(Goals), File, Limit, Scale)
+	   | Commands]\Commands;
+
+    Command = trace(Goals, File, Limit, Scale, Format) :
+      Cs = [psi_trace#run(repeat#run(Goals), File, Limit, Scale, Format)
+	   | Commands]\Commands;
+
     Command = vtree(Context, Conjunction, Tree) :
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree) 
 	   | Commands]\Commands;
 
-    Command = weighter(Weighter) :
-      Cs = [to_context([psi_utils # weighter(Weighter)])
-	   | Commands]\Commands;
-
     Command = vtree(Context, Conjunction, Tree, Depth) :
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree, Depth) 
+	   | Commands]\Commands;
+
+    Command = weighter(Weighter) :
+      Cs = [to_context([psi_utils # weighter(Weighter)])
 	   | Commands]\Commands;
 
     Command = '^' :
