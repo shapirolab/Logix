@@ -1,0 +1,51 @@
+When a <logix_variable> appears in the <public_declaration>, its value
+is shared with the variable of the same name declared in the user
+interface of the Logix system.  Thus the variables X,Y declared in the
+user interface:
+
+  @X = 777
+  @Y = michaelis
+
+share the values 777,"michaelis" with the <logix_variable>s X,Y declared
+in the <public_declaration> of a <program>:
+
+  public(X,Y).
+
+Such a "public" variable is an implicit argument of every process in the
+program.
+
+It may be used in place of:
+
+     <base_rate> in the <default_baserate_declaration> or in any
+     <channel_declaration>;
+
+     <weighter> in any <channel_declaration>;
+
+     <weighter_parameter> in any <weighter_parameter_list>.
+
+The value of the public variable should agree in type and constraint
+with the replaced argument.
+
+See BNF.txt for the full syntax and constraints.
+
+Examples:
+
+1. @X = 1.4
+
+  baserate(X).
+  public(X, a).
+
+  A + b :: a ! {b} , b ? [] , 0 .
+
+2. @X = 1.4
+   @Y = michaelis
+   @Z = 7
+
+   public(a, X, Y, Z).
+
+   A ::= {Z > 0} , << b(X, Y(Z)) . a ! {b} , {Z--} , A >> ;
+         {Z = 0} , 0 .
+
+  Note that in this example, the first instance of A declares and
+  sends the local channel b with "michaelis" argument 7, while
+  subsequent iterations use the computed values of Z.
