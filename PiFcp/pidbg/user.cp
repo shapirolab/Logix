@@ -4,9 +4,9 @@ User interface of algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber
 
 Last update by          $Author: bill $
-			$Date: 2000/01/25 13:43:46 $
+			$Date: 2000/01/31 12:57:58 $
 Currently locked by     $Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PiFcp/pidbg/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -22,6 +22,8 @@ Command ::= pre(Signals,Goal_In,Debug_Info,NewDebug_Info,Id,Done) ;
 Commands::= [Command].
 Time	::= Any.
 Goal	::= Tuple ; String.
+PiOption::= Integer ; String.
+PiOptions ::= PiOption ; [PiOption].
 Channel_or_Error::= Channel ; invalid_module.
 Goal_In	::= {Goal, Channel_or_Error}.
 Goal_Rec::= {Goal, Open_Context, Execute_Info}.
@@ -31,8 +33,8 @@ Module	::= String ; {`"#", String, Module}.
 Circuit	::= Any - Any.
 Depth	::= Integer.
 Termination_Info::= {Debug_Info, Debug_Info, Done}.
-Debug_Info	::= {Breaks, Depth, ExecOrInterp, Channels}.
-ExecOrInterp ::= execute; interpret.
+Debug_Info	::= {Breaks, Depth, Execute_or_Interpret, Channels}.
+Execute_or_Interpret ::= execute; interpret.
 Channel	::= Vector.
 Channels::= {IO, User, Pi}.
 IO	::= Channel.
@@ -80,6 +82,7 @@ Current	::= Index.
 %              break(Predicate/Arity,Mode,Location) ;
 %              remove(Predicate/Arity,Mode,Location).
 %TTY_IO	::= display(Goal,[Any]); ask([Any],[Any]\[Any],[Any]).
+%Pi_Io  ::= options(PiOptions) ; " goal "(Goal, Goal).
 
 /***********************************************************************/
 procedure monitor(Commands).
@@ -88,7 +91,7 @@ monitor(Commands) :-
 		true;
 
 	Commands?Command,
-	Command = pre(Signals, Goal_In,	Debug_Info, NewDebug_Info, Id, Done) |
+	Command = pre(Signals,Goal_In,Debug_Info, NewDebug_Info, Id, Done) |
 		pre(Signals, Goal_In, Debug_Info, NewDebug_Info, Id, Done),
 		monitor;
 
@@ -100,7 +103,8 @@ monitor(Commands) :-
 		monitor.
 
 /***********************************************************************/
-procedure post(Signals, Execute_Info, Goal_In,Debug_Info,NewDebug_Info, Done). 
+procedure post(Signals, Execute_Info, Goal_In, Debug_Info, NewDebug_Info,
+		Done). 
 
 post(Signals, Execute_Info, Goal_In, Debug_Info, NewDebug_Info, Done) :-
 	Execute_Info = {_Body, 'Abort', _Time} :
@@ -112,39 +116,39 @@ post(Signals, Execute_Info, Goal_In, Debug_Info, NewDebug_Info, Done) :-
 	Execute_Info = {_Body, _Id, Time},
 	number(Time),
 	Goal_In    = {Goal,_OpenContext},
-	Debug_Info = {Breaks, _Depth, _ExecOrInterp, _Channels} |
+	Debug_Info = {Breaks, _Depth, _Execute_or_Interpret, _Channels} |
 		break(post,Goal,Breaks,Answer,_Index),
-		ask(Signals, Answer, post, Goal,
-			Debug_Info, NewDebug_Info, Execute_Info, Done);
+		ask(Signals, Answer, post, Goal, Debug_Info, NewDebug_Info,
+			Execute_Info, Done);
 
 
 	Execute_Info = {Body, _Id, Time},
 	Time = failed(Clause,RealTime), integer(RealTime) :
 	    Goal_In = _,
 	    Body = true |
-		ask(Signals, query, post, failed(Clause),
-			Debug_Info, NewDebug_Info, Execute_Info, Done). 
+		ask(Signals, query, post, failed(Clause), Debug_Info,
+			NewDebug_Info, Execute_Info, Done). 
 
 /***********************************************************************/
-procedure pre(Signals, Goal_In,	Debug_Info, NewDebug_Info, Id, Done).
+procedure pre(Signals, Goal_In, Debug_Info, NewDebug_Info, Id, Done).
 
 pre(Signals, Goal_In, Debug_Info, NewDebug_Info, Id, Done) :-
 	Goal_In = {Goal, invalid_module} :
 	    Execute_Info = {'?', Id, _Time} |
-		ask(Signals, query, pre, Goal,
-			Debug_Info, NewDebug_Info, Execute_Info, Done);
+		ask(Signals, query, pre, Goal, Debug_Info, NewDebug_Info,
+			 Execute_Info, Done);
 
 	Goal_In = {Goal,_OpenContext},
-	Debug_Info = {Breaks, _Depth, _ExecOrInterp, _Channels} :
+	Debug_Info = {Breaks, _Depth, _Execute_or_Interpret, _Channels} :
 	    Execute_Info = {'?', Id, _Time} |
 		break(pre,Goal,Breaks,Answer,_Index),
-		ask(Signals, Answer, pre, Goal,
-			Debug_Info, NewDebug_Info, Execute_Info, Done).
+		ask(Signals, Answer, pre, Goal, Debug_Info, NewDebug_Info,
+			 Execute_Info, Done).
 		
 
 /***********************************************************************/
-procedure ask(Signals, Answer, Location, Goal,
-		Debug_Info, NewDebug_Info, Execute_Info, Done).
+procedure ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
+		Execute_Info, Done).
 ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
     Execute_Info, Done):-
 	Answer = dont_ask :
@@ -269,8 +273,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[Break], arg(1,Break,break),
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks', Depth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks', Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		breaks#add(Break,Breaks,Breaks',query-_Query,Error_Msg),
 		send_message(Error_Msg, Print_Requests, Print_Requests'),
@@ -279,8 +283,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[break],
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks', Depth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks', Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		breaks#add(break,Breaks,Breaks',query-_Query,Error_Msg),
 		send_message(Error_Msg, Print_Requests, Print_Requests'),
@@ -290,8 +294,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 	Directive?[remove],
 	Goal_Info = {Goal, Location, _Execute_Info},
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks', Depth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks', Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		break(Location,Goal,Breaks,_Answer,Index),
 		remove(Index, Breaks,Breaks',Error_Msg),
@@ -300,8 +304,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[Remove], arg(1,Remove,remove),
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks', Depth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks', Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		breaks#check_and_remove(Remove,Breaks,Breaks',q-_Q,Error_Msg),
 		send_message(Error_Msg, Print_Requests, Print_Requests'),
@@ -312,8 +316,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 	Goal_Info = {_Goal, _Location, Execute_Info},
 	Execute_Info = {Body, _ID, _Time},
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks', Depth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks', Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		breaks#derive(Body,L,M,Breaks,Breaks',query-_Query, Error_Msg),
 		send_message(Error_Msg, Print_Requests, Print_Requests'),
@@ -322,7 +326,7 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[list_breaks],
 	Termination_Info = {Debug_Info, _NewDebug_Info, _Done},
-	Debug_Info = {Breaks, _Depth, _ExecOrInterp, _Channels} :
+	Debug_Info = {Breaks, _Depth, _Execute_or_Interpret, _Channels} :
 	    Print_Requests = [display_stream(Printable_Breaks,
 	  			[prefix(breakpoint)]),
 				continue | Print_Requests'] |
@@ -332,8 +336,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[clear],
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {_Breaks, Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {[], Depth, ExecOrInterp, Channels},
+	Debug_Info = {_Breaks, Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {[], Depth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		send_message([], Print_Requests, Print_Requests'),
 		read(Signals, Directive', Print_Requests', Goal_Info,
@@ -350,8 +354,8 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive?[depth(NewDepth)],
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {Breaks, _Depth, ExecOrInterp, Channels} :
-	    Debug_Info' = {Breaks, NewDepth, ExecOrInterp, Channels},
+	Debug_Info = {Breaks, _Depth, Execute_or_Interpret, Channels} :
+	    Debug_Info' = {Breaks, NewDepth, Execute_or_Interpret, Channels},
 	    Termination_Info' = {Debug_Info', NewDebug_Info, Done} |
 		send_message([], Print_Requests, Print_Requests'),
 		read(Signals, Directive', Print_Requests', Goal_Info,
@@ -367,7 +371,7 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 
 	Directive = [ [execute] | _Directive'],
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info = {_Breaks, _Depth, _ExecOrInterp, Channels} :
+	Debug_Info = {_Breaks, _Depth, _Execute_or_Interpret, Channels} :
 	    Signals = _, Goal_Info = _,
 	    Done = done,
             Print_Requests = [],
@@ -386,11 +390,11 @@ answer(Signals,Directive,Print_Requests,Goal_Info,Termination_Info) :-
 		read(Signals, Directive', Print_Requests', Goal_Info,
 			Termination_Info);
 
-	Directive?[options(Options)],
+	Directive?[options(PiOptions)],
 	Termination_Info = {Debug_Info, _NewDebug_Info, _Done},
-	Debug_Info = {_Breaks, _Depth, _ExecOrInterp, Channels},
+	Debug_Info = {_Breaks, _Depth, _Execute_or_Interpret, Channels},
 	Channels = {_IO, _User, Pi} |
-		write(options(Options), Pi),
+		write(options(PiOptions), Pi),
 		send_message([], Print_Requests, Print_Requests'),
 		read(Signals, Directive', Print_Requests', Goal_Info,
 			Termination_Info);
@@ -413,11 +417,11 @@ setup_trace(Loc, Print_Req, Termination_Info) :-
 
 	otherwise,
 	Termination_Info = {Debug_Info, NewDebug_Info, Done},
-	Debug_Info	 = {_Breaks, Depth, ExecOrInterp, Channels} :
+	Debug_Info	 = {_Breaks, Depth, Execute_or_Interpret, Channels} :
 	    Done	 = done,
 	    Print_Req	 = [],
 	    Breaks'	 = [{Loc, all/all, print}],
-	    NewDebug_Info= {Breaks', Depth, ExecOrInterp, Channels} |
+	    NewDebug_Info= {Breaks', Depth, Execute_or_Interpret, Channels} |
 		true.
 
 /***********************************************************************/
@@ -569,7 +573,7 @@ abortio(What) :-
 	    PiGoal = Goal |
 		true;
 
-	What = options(_Options) |
+	What = options(_PiOptions) |
 		true.
 
 /***********************************************************************/
