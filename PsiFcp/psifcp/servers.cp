@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/12 10:44:05 $
+		       	$Date: 2000/11/22 12:50:12 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -222,7 +222,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     arg(Index, Tuple, `ChannelName),
     GlobalDescriptors ? ChannelName(BaseRate, Weighter),
     Index++ :
-      Tail ! ChannelName(`ChannelName, BaseRate, Weighter) |
+      Tail ! ChannelName(`ChannelName, Weighter, BaseRate) |
 	self;
 
     otherwise,
