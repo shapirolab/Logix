@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/27 09:22:41 $
+		       	$Date: 2002/09/06 05:10:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -946,7 +946,8 @@ format_channels(Kind, Channels, Out, Out1) :-
       FormattedChannel = Name(SendRequests!) - Refs;
 
     otherwise :
-      FormattedChannel = Name(SendRequests, ReceiveRequests) - Refs.
+      QM = "?",
+      FormattedChannel = Name(SendRequests!, QM(ReceiveRequests)) - Refs.
 
   format_channel_h(Channel, Kind, DimerWeight, Name, Refs,
 				FormattedChannel) :-
@@ -978,7 +979,8 @@ format_channels(Kind, Channels, Out, Out1) :-
     Kind =?= CHAR_d,
     read_vector(SPI_SEND_ANCHOR, Channel, DimerAnchor) :
       DimerWeight = _,
-      FormattedChannel = Name(DimerRequests) - Refs |
+      QM = "?",
+      FormattedChannel = Name(QM(DimerRequests!)) - Refs |
 	count_requests(DimerAnchor, DimerRequests).
 
 
