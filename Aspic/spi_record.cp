@@ -416,7 +416,7 @@ filter_full(Stream, Events, Out, Scale) :-
 	self,
 	list_to_string([CHAR_MINUS | CP], String);
 
-    Stream ? end(Name(self(exit ChannelName), Action, expel CreatedId)),
+    Stream ? end(Name(self(exit ChannelName), Action, exit CreatedId)),
     string_to_dlist(CreatedId, CI, [CHAR_EOL]),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(" expel ", CEXPEL, CN),
