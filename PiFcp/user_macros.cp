@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/20 06:54:05 $
+		       	$Date: 2000/01/23 11:46:36 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -46,13 +46,21 @@ expand(Command, Cs) :-
     Command = pc(N) :
       Cs = [to_context(pi_utils # make_channel(N))| Commands]\Commands;
 
+    Command = pdb(Service) :
+      Command' = pdb(Service, []) |
+	expand;
+
+    Command = pdb(Service, Options) :
+      Cs = [pidbg#interpret(Name?, Service , Options)|Commands]\Commands |
+	parse_rpc(Service, Name);
+
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
 		" d(It)              - debug(It) (Goal or RPC)",
 		" i(File)            - input file",
 		" pc(C)              - make pifcp channel C",
+		" pdb(RPC)           - debug(RPC)",
 		" ph                 - get this list",
-%		" pl / pl(Module)     - lint a Module",
 		" pr(C,M)            - receive M from pifcp channel C",
 		" ps(M,C)            - send M on pifcp channel C",
 		" re / re(No)        - resume computation No",
@@ -67,7 +75,7 @@ expand(Command, Cs) :-
 		" - Goal             - call Current#Goal",
 		" {String}           - invoke UNIX shell sh with String",
                 "",
-                "           options for sp* and ptree:",
+                "           options for sp*, pdb and ptree:",
 		" Integer            - depth of channel display",
 		" none/active/all    - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
@@ -378,3 +386,12 @@ close(Out) :-
 
     true :
       close_channel(Out) .
+
+parse_rpc(RPC, Name) :-
+
+    RPC =?= Module # _ :
+      Name = Module;
+
+    otherwise :
+      RPC = _,
+      Name = "?".
