@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/06 08:42:13 $
+		       	$Date: 2000/04/16 08:04:01 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -35,11 +35,14 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 ** Output:
 **
 **   Attributes2 - Attributes1 augmented by exported Fcp procedures.
-**   Terms       - Compound Fcp code.
+**   Compound    - Compound Fcp code.
 **   Errors      - Diagnostics in the form:  Name - comment(ARgument)
 */
 
-transform(Attributes1, Source, Attributes2, Terms, Errors) :-
+transform(Attributes1, Source, Attributes2, Compound, Errors) :-
+
+    true :
+      Compound = Terms? |
 
 	/* Get Exported list. */
 	filter_attributes(Attributes1, Attributes1', Exported),
@@ -294,30 +297,29 @@ process(RHSS, OuterLHS, InnerLHS, NewChannelList, Scope, Process, Nested) :-
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
   initialize_channels(Name, NewChannelList, Initializer) +
-			(Body = Name, MakeAll = More?, More) :-
+			(Body = Name, MakeList = Make?, Make) :-
 
-    NewChannelList ? Descriptor, list(NewChannelList') :
-      More = (MakeChannel?, NameChannel?, More'?) |
-	make_and_name_channel(Name, Body, Descriptor,
-			Body',MakeChannel, NameChannel),
+    NewChannelList ? Descriptor |
+	make_and_name_channel(Name, Body, Descriptor, Body', Make, Make'),
 	self;
 
-    NewChannelList = [Descriptor] :
-      More = (MakeChannel?, NameChannel?),
-      Initializer = (true : MakeAll | Body'?) |
-	make_and_name_channel(Name, Body, Descriptor,
-			Body', MakeChannel, NameChannel).
+    NewChannelList = [] :
+      Name = _,
+      Make = [],
+      Initializer = (true : Tell? | Body) |
+	piutils#make_predicate_list(',', MakeList?, Tell).
 
-  make_and_name_channel(Name, Body, Descriptor, NewBody,
-			MakeChannel, NameChannel) :-
+  make_and_name_channel(Name, Body, Descriptor, NewBody, Make, NextMake) :-
 
     Descriptor = ChannelName(Receive, Send),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      MakeChannel = make_channel(`pinch(ChannelName), `pimss(ChannelName)),
-      NameChannel = (`ChannelName =
-			ChannelId?(?pinch(ChannelName), ?pimss(ChannelName),
-						Receive'?, Send'?)),
+      Make = [make_vector(2, `pivec(ChannelName), `pimss(ChannelName)),
+	      `pimss(ChannelName) = {`pieos(ChannelName), `"_"},
+	      store_vector(2, `pieos(ChannelName), `pivec(ChannelName)),
+              `ChannelName =
+			ChannelId?(`pivec(ChannelName), {Receive'?, Send'?}) |
+	      NextMake],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	piutils#real_mean_kluge(Receive, Body, Receive', Body'),
@@ -344,7 +346,7 @@ nested_procedures(Process, Nested, Terms, NextTerms) :-
 
 guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 		(Mode = none, SendId = _, Index = 0,
-	NextRHSS, RHSS = NextRHSS?, NextSends = [], FinalMode = _) :-
+	NextRHSS, RHSS = NextRHSS?, NextPrepares = [], FinalMode = _) :-
 
     RHS1 =?= (_ | _),
     Index++ :
@@ -373,112 +375,134 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       NextRHSS = [],
       Nested = [] |
 	make_right_hand_side + (Index = 1),
-	make_rhs2 + (SendProcedure = _, NextScope = []).
+	make_rhs2 + (PrepareProcedure = _, NextScope = []).
 
-  code_reply(Process, FinalMode, SendProcedure, Scope) :-
+  code_reply(Process, FinalMode, PrepareProcedure, Scope) :-
 
     FinalMode =?= cdr :
       Process = cdr(_Atom, ProcessRHS, []),
-      SendProcedure = _,
+      PrepareProcedure = _,
       Scope = [code(cdr, [], ProcessRHS)];
 
-    FinalMode =?= receive :
-      Process = receive(_Atom, ProcessRHS, []),
-      SendProcedure = _,
-      Scope = [code(receive, [], ProcessRHS)];
-
-    SendProcedure =?= (_ :- SendRHS) :
-      Process = FinalMode(_Atom, ProcessRHS, SendProcedure),
-      Scope = [code(FinalMode, ProcessRHS, SendRHS)];
+    PrepareProcedure =?= (_ :- PrepareRHS) :
+      Process = FinalMode(_Atom, ProcessRHS, PrepareProcedure),
+      Scope = [code(FinalMode, ProcessRHS, PrepareRHS)];
 
     otherwise :
-      SendProcedure = _,
+      PrepareProcedure = _,
       Process = FinalMode(_Atom, _RHSS, []),
       Scope = [code(FinalMode, [], [])].
 
-  make_rhs2(Mode, SendId, ClauseList, Sends, RHS2,
-	SendProcedure, Scope, NextScope) :-
+  make_rhs2(Mode, SendId, ClauseList, Prepares, RHS2,
+		PrepareProcedure, Scope, NextScope) :-
+
+    Mode =?= receive :
+      SendId = "_",
+      RHS2 = (PrepareGuards? | Communicator?),
+      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
+      Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
+	arg(1, OuterLHS, PName),
+	make_communication_name(PName, ".receive", Communicator),
+	piutils#make_predicate_list(';', ClauseList, FcpClauses),
+	prepares_to_guards(Prepares, PrepareGuards, Streams),
+	make_communication_atom + (ChoiceVars = Streams);
 
     Mode =?= send :
       SendId = "_",
-      RHS2 = (Writes | SendChoices),
-      SendProcedure = (ChoiceAtom? :- FcpClauses?),
+      RHS2 = (PrepareGuards? | Communicator?),
+      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
-	make_choice_name(PName, ".send", SendChoices),
+	make_communication_name(PName, ".send", Communicator),
 	piutils#make_predicate_list(';', ClauseList, FcpClauses),
-	sends_to_writes(Sends, Writes),
-	make_choice_atom+(Name = SendChoices, ChoiceVars = [`pifcp(chosen)]);
+	prepares_to_guards(Prepares, PrepareGuards, _Streams),
+	make_communication_atom + (ChoiceVars = [`pifcp(chosen)]);
 
     Mode =?= mixed :
       SendId = pifcp(sendid),
-      RHS2 = (Writes | pi_monitor#unique_sender(PName?, `SendId),
-			MixedChoices),
-      SendProcedure = (ChoiceAtom? :- FcpClauses?),
+      RHS2 = (PrepareGuards? | pi_monitor#unique_sender(PName?, `SendId),
+			Communicator),
+      PrepareProcedure = (CommunicationAtom? :- FcpClauses?),
       Scope = [lhss(OuterLHS, InnerLHS) | NextScope] |
 	arg(1, OuterLHS, PName),
-	make_choice_name(PName?, ".mixed", MixedChoices),
+	make_communication_name(PName?, ".mixed", Communicator),
 	piutils#make_predicate_list(';', ClauseList, FcpClauses),
-	sends_to_writes(Sends, Writes),
-	make_choice_atom+(Name = MixedChoices,
-			ChoiceVars = [`pifcp(chosen), `SendId]);
+	prepares_to_guards(Prepares, PrepareGuards, Streams),
+	make_communication_atom +
+		(ChoiceVars = [`pifcp(chosen),`SendId | Streams?]);
 
-    /* receive, compared, logix, none */
-    Mode =\= send, Mode =\= mixed, Mode =\= compare, Mode =\= conflict :
+    /* compared, logix, none */
+    Mode =\= receive, Mode =\= send, Mode =\= mixed,
+	Mode =\= compare, Mode =\= conflict :
+      Prepares = _,
       SendId = "_",
-      Sends = [],
       RHS2 = FcpClauses?,
-      SendProcedure = [],
+      PrepareProcedure = [],
       Scope = NextScope |
 	piutils#make_predicate_list(';', ClauseList, FcpClauses);
 
     Mode =?= compare :
+      Prepares = _,
       SendId = "_",
-      Sends = [],
       RHS2 = FcpClauses?,
-      SendProcedure = [],
+      PrepareProcedure = [],
       Scope = [error("missing_otherwise") | NextScope] |
 	piutils#make_predicate_list(';', ClauseList, FcpClauses);
 
     Mode =?= conflict :
+      Prepares = _,
       SendId = "_",
       ClauseList = _,
       RHS2 = true,
-      SendProcedure = [],
-      Scope = [error("conflicting_guards") | NextScope] |
-	unify_without_failure(Sends, []).
+      PrepareProcedure = [],
+      Scope = [error("conflicting_guards") | NextScope].
       
 
-  sends_to_writes(Sends, Writes) +
-	(NextAsk, Asks = NextAsk?, NextTell, Tells = NextTell) :-
+  prepares_to_guards(Prepares, PrepareGuards, Streams) +
+	(NextAsk, Asks = NextAsk?, NextTell, Tells = NextTell,
+	 NextRead, Reads = NextRead?) :-
 
-    Sends ? {Ask, Tell}, Sends' =\= [] :
-      NextAsk = (Ask, NextAsk'?),
-      NextTell = (Tell, NextTell'?) |
+    Prepares ? {Ask, Tell} :
+      NextAsk ! Ask,
+      NextTell ! Tell |
 	self;
 
-    Sends =?= [{Ask, Tell}] :
-      NextAsk = Ask,
-      NextTell = Tell,
-      Writes = (Asks : Tells).
+    Prepares ? (Identify, Read) :
+      Read = read_vector(_, _, Stream),
+      Streams ! Stream,
+      NextRead ! Identify,
+      NextRead' ! Read |
+	self;
 
-  make_choice_name(Prefix, Suffix, Name) :-
+    Prepares =?= [] :
+      NextAsk = Reads,
+      NextRead = [],
+      NextTell = [],
+      PrepareGuards = (Asks'? : Tells'?),
+      Streams = [] |
+	piutils#make_predicate_list(',', Asks, Asks'),
+	piutils#make_predicate_list(',', Tells, Tells').
+
+  make_communication_name(Prefix, Suffix, Communicator) :-
     string_to_dlist(Prefix, PL, PS),
     string_to_dlist(Suffix, SL, []) :
       PS = SL |
-	list_to_string(PL, Name).
+	list_to_string(PL, Communicator).
 
-  make_choice_atom(InnerLHS, Name, ChoiceVars, ChoiceAtom) :-
-	utils#tuple_to_dlist(InnerLHS, [_|Channels], ChoiceVars),
-	utils#list_to_tuple([Name|Channels], ChoiceAtom).
+  make_communication_atom(InnerLHS, Communicator, ChoiceVars,
+				CommunicationAtom) :-
 
-  make_right_hand_side(RHSS, FinalMode, Index, ClauseList, Sends, NextSends) :-
+	utils#tuple_to_dlist(InnerLHS, [_ | Channels], ChoiceVars),
+	utils#list_to_tuple([Communicator | Channels], CommunicationAtom).
+
+  make_right_hand_side(RHSS, FinalMode, Index, ClauseList,
+				Prepares, NextPrepares) :-
 
     RHSS ? RHS,
     RHS = {Mode, RHSList},
     Index++ |
 	make_clauselist(Mode, FinalMode, Index, RHSList,
-			ClauseList, ClauseList'?, Sends, Sends'?),
+		ClauseList, ClauseList'?, Prepares, Prepares'?),
 	self;
 
     RHSS ? true,
@@ -489,21 +513,37 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       FinalMode = _,
       Index = _,
       ClauseList = [],
-      Sends = NextSends.
+      Prepares = NextPrepares.
 
 
-  make_clauselist(Mode, FinalMode, Index, RHSList, ClauseList, NextClauseList,
-			Sends, NextSends) :-
+  make_clauselist(Mode, FinalMode, Index, RHSList,
+	ClauseList, NextClauseList, Prepares, NextPrepares) :-
+
+    Mode =?= receive,
+    RHSList = [Cdr, Consume] :
+      FinalMode = _,
+      Index = _,
+      ClauseList = [Cdr, Consume | NextClauseList],
+      Prepares = [PrepareRead? | NextPrepares] |
+	identify_read;
+
+    Mode =?= receive,
+    RHSList = [Cdr, Exclude, Consume] :
+      FinalMode = _,
+      Index = _,
+      ClauseList = [Cdr, Exclude, Consume | NextClauseList],
+      Prepares = [PrepareRead? | NextPrepares] |
+	identify_read;
 
     Mode =?= send, FinalMode =?= mixed,
     RHSList ? (Send | Body) :
-      Sends ! Send,
+      Prepares ! Send,
       ClauseList ! (`pifcp(chosen) = Index : `pifcp(sendid) = `"_" | Body) |
 	self;
 
     Mode = send, FinalMode =\= mixed,
     RHSList ? (Send | Body) :
-      Sends ! Send,
+      Prepares ! Send,
       ClauseList ! (`pifcp(chosen) = Index | Body) |
 	self;
 
@@ -511,7 +551,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
     RHSList ? _ |
 	self;
 
-    Mode =\= send, Mode =\= none,
+    Mode =\= send, Mode =\= none, Mode =\= receive,
     RHSList ? Other :
       ClauseList ! Other |
 	self;
@@ -521,7 +561,12 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       FinalMode = _,
       Index = _,
       ClauseList = NextClauseList,
-      Sends = NextSends.
+      Prepares = NextPrepares.
+
+  identify_read(Consume, PrepareRead) :-
+
+    Consume = (Stream ? _, Identify, _ : store_vector(2, _, Vector), _ | _) :
+      PrepareRead = (Identify, read_vector(2, Vector, Stream)).
 
 
 guarded_clause(RHS1, Control, Clauses, Nested, NextNested,

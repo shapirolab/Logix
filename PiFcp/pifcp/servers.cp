@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/06 08:42:13 $
+		       	$Date: 2000/04/16 08:04:01 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,6 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export([serve_empty_scope/5, make_guard_receive/5]).
--mode(interrupt).
 -language(compound).
 
 /*
@@ -432,7 +431,7 @@ serve_process_scope(In, ProcessDefinition, Means,
 			ChannelList, NextChannelList) :-
 
     List =?= [C1, C2], C1 =\= "_", C2 =\= "_" :
-      Compare = {Operator, `pinch(C1), `pinch(C2)} |
+      Compare = {Operator, `pivec(C1), `pivec(C2)} |
 	compare_channel(C1, Extract1, ChannelList, ChannelList'),
 	compare_channel(C2, Extract2, ChannelList'?, NextChannelList),
 	make_comparer;
@@ -455,7 +454,7 @@ serve_process_scope(In, ProcessDefinition, Means,
       NCL = CL;
 
     CL = [] :
-      Extract = (`C = {`"_", `pinch(C), `"_", `"_", `"_"}),
+      Extract = (`C = {`"_", `pivec(C), `"_"}),
       NCL = [C].
     
   make_comparer(Extract1, Extract2, Compare, Comparer) :-
@@ -869,75 +868,64 @@ construct_lhs_tuple(Name, Suffix, ChannelNames, Tuple) :-
 
 
 make_guard_cdr(ChannelName, Clause) :-
-    string_to_dlist(ChannelName, CL, Prime) :
-      Prime = [39],
-
       Clause =
-	(`ChannelName = {`picdr(id), `picdr(cv), `picdr(mss),
-				`picdr(receive), `picdr(send)},
-	   `picdr(mss) = [{`"_", `"_", `"_", `picdr(choice)}
-			 | `picdr(mssp)],
-	   not_we(`picdr(choice)) :
-	     `ChannelNamePrime = {`picdr(id), `picdr(cv), ?picdr(mssp),
-					`picdr(receive), `picdr(send)} |
-		self) |
-	list_to_string(CL, ChannelNamePrime).
+	(`ChannelName = {`"_", `picdr(vector), "_"},
+	 read_vector(2, `picdr(vector), `picdr(mss)),
+	 `picdr(mss) = [{`"_", `"_", `"_", `picdr(choice)} | `picdr(mssp)],
+	 not_we(`picdr(choice)) :
+	     store_vector(2, `picdr(mssp), `picdr(vector)) |
+		self) .
+
 
 make_guard_receive(ChannelName, ChannelList, SendId, Iterates, Consume) :-
-    string_to_dlist(ChannelName, CL, Prime) :
+    string_to_dlist("_pistr_", PL, PLT),
+    string_to_dlist("_pistr_", PLP, PLTP),
+    string_to_dlist(ChannelName, CL, []),
+    string_to_dlist(ChannelName, CLP, Prime) :
+      PLT = CL,
       Prime = [39],
+      PLTP = CLP,
 
       Iterates =
-	{(`ChannelName = {`pircv(id), `pircv(cv), `pircv(mss),
-				`pircv(receive), `pircv(send)},
-	   `pircv(mss) = [{`"_", `"_", `"_", `pircv(choice)}
-			 | `pircv(mssp)],
-	   not_we(`pircv(choice)) :
-	     `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
-					`pircv(receive), `pircv(send)} |
+	{(`StreamName ? {`"_", `"_", `"_", `pifcp(choice)},
+	   not_we(`pifcp(choice)) |
 		self),
 
-	  (`ChannelName = {`pircv(id), `pircv(cv), `pircv(mss),
-				`pircv(receive), `pircv(send)},
-	   `pircv(mss) =?= [{`SendId, `"_", `"_", `pircv(chosen)}
-			   | `pircv(mssp)] :
-	     `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
-					`pircv(receive), `pircv(send)} |
+	 (`StreamName ? {`SendId, `"_", `"_", `pifcp(chosen)} |
 		self)
 	},
 
-      Consume = (`ChannelName = {`"_", `"_", `pircv(mss), `"_", `"_"},
-	 `pircv(mss) =?= [{`Sender, ChannelList, `pircv(tag), `pircv(choose)}
-			 | `"_" /*pircv(mssp)*/],
-	  ExcludeSender? :
-/* This may only be done if we can handle multiple primes - e.g.
-** when the message is a <channel_list> which includes  ChannelName .
-**		    `ChannelNamePrime = {`pircv(id), `pircv(cv), ?pircv(mssp),
-**					`pircv(receive), `pircv(send)} 
-*/
-	    CancelSends?) |
-
-	list_to_string(CL, ChannelNamePrime),
+      Consume =
+	(`StreamName ? {`Sender, ChannelList, `pifcp(tag), `pifcp(choose)},
+	 `ChannelName = {`"_", `pivec(ChannelName), `"_"},
+	  ExcludeSender?
+		:
+	    store_vector(2, `StreamNamePrime?, `pivec(ChannelName)),
+	    CancelSends?
+	) |
+	list_to_string(PL, StreamName),
+	list_to_string(PLP, StreamNamePrime),
 	receive_exclude_and_cancel.
 
   receive_exclude_and_cancel(SendId, Sender, ExcludeSender, CancelSends) :-
 
     SendId =?= "_" :
       Sender = "_",
-      ExcludeSender = we(`pircv(choose)),
-      CancelSends = (`pircv(choose) = `pircv(tag));
+      ExcludeSender = we(`pifcp(choose)),
+      CancelSends = (`pifcp(choose) = `pifcp(tag));
 
     otherwise :
-      Sender = pircv(sender),
-      ExcludeSender = (`SendId =\= `Sender, we(`pircv(choose))),
-      CancelSends = (`pifcp(chosen) = 0, `pircv(choose) = `pircv(tag)).
+      Sender = pifcp(sender),
+      ExcludeSender = (`SendId =\= `Sender, we(`pifcp(choose))),
+      CancelSends = (`pifcp(choose) = `pifcp(tag), `pifcp(chosen) = 0).
+			
 
 
 make_guard_send(ChannelName, ChannelList, Sender, SendIndex, Guard) :-
 
     true :
-      VN = pinch(ChannelName),
-      Guard = {`ChannelName = {`"_", `VN, `"_", `"_", `"_"},
+      VN = pivec(ChannelName),
+      Guard = {`ChannelName = {`"_", `VN, `"_"},
 		write_channel({Sender, ChannelList, SendIndex, `pifcp(chosen)},
 				`VN)} .
 

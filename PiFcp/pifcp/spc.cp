@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/21 08:11:40 $
+		       	$Date: 2000/04/16 08:04:02 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -97,18 +97,12 @@ add_schedule_channel(Atom, LHS) :-
 
 stochastic(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
 
-    Mode =?= receive,
-    Procedure =?= [] |
-	create_receive_scheduler(LHS, RHSS, RHSS', Procedure'),
-	communication;
-
-    Mode =\= receive,
     Procedure =?= [] :
+      Mode = _,
       Terms ! (Atom? :- RHSS) |
 	piutils#tuple_to_atom(LHS, Atom),
 	output;
 
-    Mode =\= receive,
     Procedure =?= (Atom :- Communicate) :
       Procedure' = (Atom'? :- Communicate) |
 	add_schedule_channel(Atom, Atom'),
@@ -116,20 +110,18 @@ stochastic(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
 
   communication(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
 
-    Procedure =?= (Atom1 :- Communicate1),
-    arg(1, Atom1, ProcName),
+    Procedure =?= (Atom :- Communicate1),
+    arg(1, Atom, ProcName),
     string_to_dlist(ProcName, PNL, []) : Mode = _,
       Terms ! (LHS :- RHS?),
-      Terms' ! (Atom2? :- Communicate2?) |
-	remake_rhs(RHSS, Sends, RHSS'),
+      Terms' ! (Atom :- Communicate2?) |
+	remake_rhs(RHSS, Prepares, RHSS'),
 	reform_rhs(RHSS',
 		write_channel(schedule(WaitList?), `pifcp(schedule)), RHS),
 	piutils#untuple_predicate_list(';', Communicate1, CL1),
 	make_reference_name,
 	rewrite_rhss,
 	piutils#make_predicate_list(';', CL2?, Communicate2),
-	utils#tuple_to_dlist(Atom1, AL1, [`pifcp(count) | WaitVariables?]),
-	utils#list_to_tuple(AL1?, Atom2),
 	output.
 
   reform_rhs(RHSS, Schedule, RHS) :-
@@ -155,74 +147,92 @@ make_reference_name(PNL, RefName) :-
 	true.
 
 
-create_receive_scheduler(LHS, RHS1, RHS2, Procedure) :-
-
-    arg(1, LHS, ProcedureName),
-    string_to_dlist(ProcedureName, PL, Receive),
-    string_to_dlist(".receive", RL, []) :
-      Receive = RL,
-      Procedure = (ReceiveLHS? :- RHS1) |
-	list_to_string(PL, RHS2),
-	utils#tuple_to_dlist(LHS, [_ProcedureName | Arguments],	[]),
-	utils#list_to_tuple([RHS2 | Arguments?], ReceiveLHS).
-
-
-remake_rhs(RHS1, Sends, RHS2) :-
+remake_rhs(RHS1, Prepares, RHS2) :-
 
     RHS1 =\= (_ | _) :
-      Sends = {[], []},
+      Prepares = {[], []},
       RHS2 = RHS1;
 
-    RHS1 =?= (SendChannels : SendWrites | Body1) :
-      RHS2 = Body2?,
-      Sends = {Channels, Writes} |
-	piutils#untuple_predicate_list(',', SendChannels, Channels),
-	piutils#untuple_predicate_list(',', SendWrites, Writes),
-	make_waits(Channels?, Writes?, Body2, Body1).
+    RHS1 =?= (Asks : Tells | Body) :
+      Prepares = {Asks'?, Tells'?} |
+	piutils#untuple_predicate_list(',', Asks, Asks'),
+	piutils#untuple_predicate_list(',', Tells, Tells'),
+	extract_reads_and_writes,
+	make_waits(IdWrites?, Body, Body'),
+	complete_preparation.
 
-  make_waits(Channels, Writes, NewBody, OldBody) :-
+  make_waits(IdWrites, OldBody, NewBody) :-
 
-    Channels ? (Channel = _PiChannel),
-    Writes ? write_channel(PiMessage, _FcpChannel),
+    IdWrites ? {_Identify, write_channel(PiMessage, _FcpChannel)},
     PiMessage =?= _Sender(_Message, ChoiceTag, _Choice) :
-      NewBody = (pi_wait_to_send(`spsfcp(ChoiceTag), PiMessage, Channel,
-				 `sptfcp(ChoiceTag)),
-		 NewBody'?) |
+      NewBody = (pi_wait_to_send(`spsfcp(ChoiceTag), PiMessage),  NewBody'?) |
 	self;
 
-    Channels =?= [],
-    Writes =?= [] :
+    IdWrites =?= [] :
       NewBody = OldBody.
 
+  /* This procedure should be replaced if the monitor is enhanced to
+     prepare the Receives.*/
+  complete_preparation(Reads, Body, RHS2) :-
 
-rewrite_rhss(ProcName, RefName, CL1, Sends, WaitList, WaitVariables, CL2) :-
+    Reads =?= [] :
+      RHS2 = Body;
+
+    otherwise :
+      RHS2 = (PrepareReceives?, Body) |
+	piutils#make_predicate_list(',', Reads, PrepareReceives).
+
+
+extract_reads_and_writes(Asks, Tells, IdWrites, Reads) :-
+
+    Asks ? Identify,
+    Tells ? Write, Write = write_channel(_PiMessage, _FcpChannel) :
+      IdWrites ! {Identify, Write} |
+	self;
+
+    Asks ? Identify,
+    Tells ? true,
+    Identify = (`ChannelName = _Tuple),
+    Asks' ? Read,
+    Read =?= read_vector(2, _FcpVector, Stream) :
+      Reads ! pi_wait_to_receive(`sprfcp(ChannelName),`pifcp(chosen), Stream) |
+	self;      
+
+    Asks ? Identify,
+    Tells =?= [],
+    Identify = (`ChannelName = _Tuple),
+    Asks' ? Read,
+    Read =?= read_vector(2, _FcpVector, Stream) :
+      Reads ! pi_wait_to_receive(`sprfcp(ChannelName),`pifcp(chosen), Stream) |
+	self;      
+
+    Asks =?= [] :
+      Tells = _,
+      IdWrites = [],
+      Reads = [].
+
+
+rewrite_rhss(ProcName, RefName, CL1, Prepares, WaitList, CL2) :-
 
     CL1 ? Receive, Receive =?= (Ask : Tell | Body), Body =\= self,
-    Ask = (Channel = _Tuple, _We),
-    Channel = `ChannelName, string(ChannelName) :
-      WaitVariable = `sprfcp(ChannelName),
-      WaitList ! receive(Channel, WaitVariable),
-      WaitVariables ! WaitVariable,
-      CL2 ! (known(WaitVariable), Ask :
-		write_channel(terminate(RefName, `pifcp(count)),
+    Ask = (_Stream ? _Message, Identify, _We),
+    Identify = (`ChannelName = _Creator(_FcpVector, _Arguments)) :
+      WaitList ! receive(`ChannelName, `sprfcp(ChannelName)),
+      CL2 ! (Ask : write_channel(terminate(RefName, `pifcp(count)),
 					`pifcp(schedule)), Tell |
 			Body) |
 	self;
 
     CL1 ? Send, Send =?= (Ask | Body),
-    Ask = (`pifcp(chosen) = Index) :
-      WaitVariable = `sptfcp(Index),
-      CL2 ! (known(WaitVariable), Ask :
-		write_channel(terminate(RefName, `pifcp(count)),
+    Ask = (`pifcp(chosen) = _Index) :
+      CL2 ! (Ask : write_channel(terminate(RefName, `pifcp(count)),
 					`pifcp(schedule)) |
 			Body) |
 	self;
 
     CL1 ? Send, Send =?= (Ask : Tell | Body),
-    Ask = (`pifcp(chosen) = Index) :
-      WaitVariable = `sptfcp(Index),
-      CL2 ! (known(WaitVariable), Ask :
-		write_channel(terminate(RefName, `pifcp(count)),
+    Ask = (`pifcp(chosen) = _Index) :
+      CL2 ! (Ask : write_channel(terminate(RefName, `pifcp(count)),
 					`pifcp(schedule)), Tell |
 			Body) |
 	self;
@@ -233,22 +243,19 @@ rewrite_rhss(ProcName, RefName, CL1, Sends, WaitList, WaitVariables, CL2) :-
 	self;
 
     CL1 =?= [],
-    Sends = {Channels, Writes} :
+    Prepares = {Asks, Tells} :
       ProcName = _,
       CL2 = [] |
+	extract_reads_and_writes + (Reads = _),
 	complete_waitlist + (EndList = RefName(`pifcp(count))).
 
-  complete_waitlist(EndList, Channels, Writes, WaitList, WaitVariables) :-
+  complete_waitlist(EndList, IdWrites, WaitList) :-
 	
-    Channels ? (Channel = PiChannel), Channel =?= `_ChannelName,
-    PiChannel = _ChannelId(FcpChannel, _Stream, _Receive, _Send),
-    Writes ? write_channel(PiMessage, FcpChannel),
+    IdWrites ? {(Channel = _PiChannel),
+		write_channel(PiMessage, _FcpChannel)},
     PiMessage =?= {_Sender, _ChannelList, SendIndex, _ChoiceVariable} :
-      WaitList ! send(Channel, `spsfcp(SendIndex)),
-      WaitVariables ! `sptfcp(SendIndex) |
+      WaitList ! send(Channel, `spsfcp(SendIndex)) |
 	self;
 
-    Channels =?= [],
-    Writes =?= [] :
-      WaitList = EndList,
-      WaitVariables = [] .
+    IdWrites =?= [] :
+      WaitList = EndList.

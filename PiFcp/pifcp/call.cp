@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/06 08:42:13 $
+		       	$Date: 2000/04/16 08:04:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -16,7 +16,6 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 -language(compound).
 -export([make_local_call/10, make_remote_call/8,
 	 prime_local_channels/3, sum_procedures/3]).
--mode(interpret).
       
 make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 		In, NextIn, Errors, NextErrors, CallDefinition) :-
@@ -519,20 +518,20 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
 
     Reply =?= new :
       Cumulated' = [Name | Cumulated] |
-	make_summed_rhs(Name, Calls, CodeTuples, 1, Sends, Code, Cdrs,
-				FinalMode, Errors, Errors'?),
+	make_summed_rhs(Name, Calls, CodeTuples, 1, Prepares, Code,
+			Streams, FinalMode, Errors, Errors'?),
 	piutils#sort_out_duplicates(Channels?, SumChannels, _Reply),
-	make_named_list(Sends?, Writes, Name-duplicate_send_channel_in_sum,
+	make_named_list(Prepares?, Writes, Name-duplicate_send_channel_in_sum,
 				Errors', Errors''?),
 	make_named_guard(Writes?, Ask, Tell),
 	make_named_list(Code?, Code', Name-duplicate_receive_channel_in_sum,
 				Errors'', Errors'''?),
-	piutils#sort_out_duplicates([Cdrs], Cdrs', _),
-	piutils#concatenate_lists([Code'?, Cdrs'?], RHS),
-	make_named_predicates(';', RHS, RHS'),
+	/* Eliminate duplicate stream names. */
+	utils#binary_sort_merge(Streams, Streams'),
+	make_named_predicates(';', Code', RHS),
 	piutils#make_lhs_tuple(Name, SumChannels, Tuple),
-	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS'?, Tuple?,
-				Entries, Entries'?),
+	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS?, Tuple?,
+				Streams'?, Entries, Entries'?),
 	make_sum_call(Name, Calls, Call, Errors''', Errors''''?),
 	sum_procedures.
 
@@ -563,20 +562,19 @@ make_sum_call(Name, Calls, Call, Errors, NextErrors)
 	make_named_predicates(',', ArgList, Substitutes).
 
 
-make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, Cdrs, FinalMode,
-		Errors, NextErrors) + (Mode = none, Sender = _) :-
+make_summed_rhs(Name, Calls, CodeTuples, Index, Prepares, Code, Streams,
+			FinalMode, Errors, NextErrors) +
+		(Mode = none, Sender = _) :-
 
     CodeTuples ? ProcessMode(SendRHS, ProcessRHS),
     Calls ? _,
-    SendRHS =?= (Idents : Writes | _Relay) |
-	add_sends_and_receives(Idents, Writes, ProcessRHS, Sender?,
-		Index, Index', Sends, Sends'?, Code, Code'?, Cdrs, Cdrs'),
-	piutils#update_process_mode(Mode, ProcessMode, Mode'),
-	self;
-
-    CodeTuples ? ProcessMode([], ProcessRHS), ProcessRHS =\= [],
-    Calls ? _ |
-	add_receives(ProcessRHS, Sender, Code, Code'?, Cdrs, Cdrs'),
+    SendRHS =?= (Idents : Tells | _Relay) |
+	piutils#untuple_predicate_list(",", Idents, Asks),
+	piutils#untuple_predicate_list(",", Tells, Tells'),
+	piutils#untuple_predicate_list(";", ProcessRHS, ClauseList),
+	add_sends_and_receives(Asks?, Tells'?, ClauseList?, Sender?,
+				Index, Index', Prepares, Prepares'?,
+				Code, Code'?, Streams, Streams'?),
 	piutils#update_process_mode(Mode, ProcessMode, Mode'),
 	self;
 
@@ -589,9 +587,9 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, Cdrs, FinalMode,
     CodeTuples = [] :
       Calls = _,
       Index = _,
-      Sends = [],
+      Prepares = [],
       Code = [],
-      Cdrs = [],
+      Streams = [],
       FinalMode = Mode,
       Errors = NextErrors |
 	final_process_mode(Name, Mode, Sender).
@@ -611,86 +609,67 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, Cdrs, FinalMode,
       Mode = _,
       Sender = [].
 
-  add_sends_and_receives(Idents, Writes, ProcessRHS, Sender,
-	Index, NewIndex, Sends, NextSends, Code, NextCode, Cdrs, NextCdrs) :-
+  add_sends_and_receives(Asks, Tells, ClauseList, Sender,
+			Index, NewIndex, Prepares, NextPrepares,
+			Code, NextCode, Streams, NextStreams) :-
+    Asks ? Identify,
+    Tells ? true,
+    Asks' ? Read,
+    Read =?= read_vector(2, _Vector, `StreamName):
+      Prepares ! StreamName((Identify, Read), true) |
+	self;
 
-    Idents =?= (Identify, Idents'),
+    Asks ? Identify,
     Identify = (`ChannelName = _Tuple),
-    Writes =?= (Write, Writes'),
+    Tells ? Write,
     Write =?= write_channel(_,_),
-    ProcessRHS =?= (Sent ; ProcessRHS'),
+    ClauseList ? Sent,
+    Sent =?= (`pifcp(chosen) = _Index | Body),
+    Index++ :
+      Prepares ! ChannelName(Identify, Write'?),
+      Code ! Index((`pifcp(chosen) = Index | Body)) |
+	reindex_write(Write, Sender, Index, Write'),
+	self;
+
+    Asks ? Identify,
+    Identify = (`ChannelName = _Tuple),
+    Tells ? Write,
+    Write =?= write_channel(_,_),
+    ClauseList ? Sent,
+    /* Belt and Suspenders */
     Sent =?= (`pifcp(chosen) = _Index : Tell | Body),
     Index++ :
-      Sends ! ChannelName(Identify, Write'?),
+      Prepares ! ChannelName(Identify, Write'?),
       Code ! Index((`pifcp(chosen) = Index : Tell | Body)) |
 	reindex_write(Write, Sender, Index, Write'),
 	self;
 
-    Idents =?= (Identify, Idents'),
-    Identify = (`ChannelName = _Tuple),
-    Writes =?= (Write, Writes'),
-    Write =?= write_channel(_,_),
-    ProcessRHS =?= (Sent ; ProcessRHS'),
-    Sent =?= (`pifcp(chosen) = _Index | Body),
-    Index++ :
-      Sends ! ChannelName(Identify, Write'?),
-      Code ! Index((`pifcp(chosen) = Index | Body)) |
-	reindex_write(Write, Sender, Index, Write'),
+    ClauseList = [] :
+      Sender = _,
+      Asks = _,
+      Tells = _,
+      NewIndex = Index,
+      NextPrepares = Prepares,
+      Code = NextCode,
+      Streams = NextStreams;
+
+    /* Ignore cdr's - residual code. */
+    otherwise,
+    ClauseList ? Cdr,
+    Cdr =?= (_ : _ | self) |
 	self;
 
-    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
-    ProcessRHS =?= ((`pifcp(chosen) = _Index : Tell | Body) ; Receives),
-    Index++ :
-      Sends ! ChannelName(Idents, Write?),
-      NewIndex = Index',
-      NextSends = Sends',
-      Code  ! Index((`pifcp(chosen) = Index : Tell | Body)) |
-	reindex_write(Writes, Sender, Index, Write),
-	add_receives;
-
-    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
-    ProcessRHS =?= (`pifcp(chosen) = _Index : Tell | Body),
-    Index++ :
-      NewIndex = Index',
-      Sends = [ChannelName(Idents, Write?) | NextSends],
-      Code = [Index((`pifcp(chosen) = Index : Tell | Body)) | NextCode],
-      Cdrs = NextCdrs |
-	reindex_write(Writes, Sender, Index, Write);
-
-    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
-    ProcessRHS =?= ((`pifcp(chosen) = _Index | Body) ; Receives),
-    Index++ :
-      Sends ! ChannelName(Idents, Write?),
-      NewIndex = Index',
-      NextSends = Sends',
-      Code ! Index((`pifcp(chosen) = Index | Body)) |
-	reindex_write(Writes, Sender, Index, Write),
-	add_receives;
-
-    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
-    ProcessRHS =?= (`pifcp(chosen) = _Index | Body),
-    Index++ :
-      NewIndex = Index',
-      Sends = [ChannelName(Idents, Write?) | NextSends],
-      Code = [Index((`pifcp(chosen) = Index | Body)) | NextCode],
-      Cdrs = NextCdrs |
-	reindex_write(Writes, Sender, Index, Write);
-
-    Idents = [] :
-      ProcessRHS = _,
-      Sender = _,
-      Writes = _,
-      Idents = _,
-      NewIndex = Index,
-      NextSends = Sends,
-      Code = NextCode,
-      Cdrs = NextCdrs;
-
     otherwise,
-    ProcessRHS = (Cdr ; Receive),
-    Cdr =?= ((Assign, _) : _ | self) |
-	analyze_receive_or_cdr(Receive, Sender, Assign,
-			Cdr, Code, Code',Cdrs, Cdrs', ProcessRHS'),
+    ClauseList ? Cdr,
+    Cdr =?= (CdrStream, _ | self),
+    CdrStream = (`StreamName ? _) :
+      Streams ! `StreamName |
+        /* Anti-Kluge to reclaim the channel name. */
+	string_to_dlist(StreamName, SL, []),
+	string_to_dlist("_pistr_", SL, NL),
+	list_to_string(NL, ChannelName),
+	analyze_receive(ClauseList', Sender, ChannelName, Cdr,
+			Code, Code', ClauseList''),
 	self.
 
   reindex_write(Write, Sender, Index, NewWrite) :-
@@ -698,82 +677,56 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, Cdrs, FinalMode,
     Write = write_channel({_Sender, ChannelList, _SendIndex, Chosen}, VN) :
       NewWrite = write_channel({Sender, ChannelList, Index, Chosen}, VN).
 
+/*
+analyze_receive_or_cdr(Receive, Sender, CdrStream, Cdr,
+		Code, NextCode, Streams, NextStreams, NextRHS) :-
 
-add_receives(Receives, Sender, Code, NextCode, Cdrs, NextCdrs) :-
+    CdrStream = (`StreamName ? _) :
+      Streams = [`StreamName | NextStreams] |
 
-    Receives = (Cdr ; Receive),
-    Cdr =?= (Assign, _ : _ | self) |
-	analyze_receive_or_cdr(Receive, Sender, Assign, Cdr,
-				Code, Code', Cdrs, Cdrs', Receives'),
-	self;
-
-    Receives =?= (`ChannelName = _, _ : _ | self) :
-      Sender = _,
-      Code = NextCode,
-      Cdrs = [ChannelName(Receives) | NextCdrs];
-
-    Receives =?= [] :
-      Sender = _,
-      Code = NextCode,
-      Cdrs = NextCdrs.
-
-
-analyze_receive_or_cdr(Receive, Sender, Assign, Cdr,
-		Code, NextCode, Cdrs, NextCdrs, NextRHS) :-
-
-    Assign =?= (`ChannelName = {`picdr(_), _, _, _, _}) :
-      Sender = _,
-      Cdrs = [ChannelName(Cdr) | NextCdrs],
-      Code = NextCode,
-      NextRHS = Receive;
-
-    otherwise,
-    Assign = (`ChannelName = _) :
-      Cdrs = NextCdrs |
+	string_to_dlist(StreamName, SL, []),
+	string_to_dlist("_pistr_", SL, NL),
+	list_to_string(NL, ChannelName),
 	analyze_receive.
+*/
 
-analyze_receive(Receive, Sender, ChannelName, Cdr, Code, NextCode, NextRHS) :-
+analyze_receive(ClauseList, Sender, ChannelName, Cdr, 
+		Code, NextCode, NextClauseList) :-
 
-    Receive =\= (_ ; _),
-    Sender =?= [] :
-      Code = [ChannelName(Cdr, Receive) | NextCode],
-      NextRHS = [];
-
-    Receive =?= (Consume ; Receive'), Consume =\= (_ | self),
+    ClauseList = [Consume],
     Sender =?= [] :
       Code = [ChannelName(Cdr, Consume) | NextCode],
-      NextRHS = Receive';
+      NextClauseList = [];
+
+    ClauseList ? Consume, Consume =\= (_ | self),
+    Sender =?= [] :
+      Code = [ChannelName(Cdr, Consume) | NextCode],
+      NextClauseList = ClauseList';
 
     /* The summation is mixed. */
-    Receive =\= (_ ; _),
+    ClauseList =?= [Consumer],
     Sender =\= [] :
       Code = [ChannelName(Cdr, Iterate?, Consume?) | NextCode],
-      NextRHS = [] |
-	invent_iterate(ChannelName, Receive, Iterate, Consume);
+      NextClauseList = [] |
+	invent_iterate(ChannelName, Consumer, Iterate, Consume);
 
-    Receive =?= (Consume; Receive'), Consume =\= (_ | self),
+    ClauseList ? Consume, ClauseList' =\= [], Consume =\= (_ | self),
     Sender =\= [] :
       Code = [ChannelName(Cdr, Iterate?, Consume'?) | NextCode],
-      NextRHS = Receive'|
+      NextClauseList = ClauseList'|
 	invent_iterate(ChannelName, Consume, Iterate, Consume');
 
     /* This Process was already mixed. */
-    Receive =?= (Iterate; Consume),
-    Iterate =?= (_ | self), Consume =\= (_ ; _) :
+    ClauseList ? Iterate, 
+    Iterate =?= (_ | self),
+    ClauseList' ? Consume |
       Sender = _,
       Code = [ChannelName(Cdr, Iterate, Consume) | NextCode],
-      NextRHS = [];
-
-    Receive =?= (Iterate; Consume ; Receive'),
-    Iterate =?= (_ | self) :
-      Sender = _,
-      Code = [ChannelName(Cdr, Iterate, Consume) | NextCode],
-      NextRHS = Receive'.
+      NextClauseList = ClauseList''.
 
   invent_iterate(ChannelName, Consume, Iterate, NewConsume) :-
 
-    Consume = ( _ChMsg,
-		_Mss =?= [{_Sender, ChannelList, _Tag, _Choose} | _],
+    Consume = (	_Mss ? {_Sender, ChannelList, _Tag, _Choose},
 		_We : _Tell | Body ) :
       NewConsume = (Consume'? | Body) |
 	servers#make_guard_receive(ChannelName, ChannelList, pifcp(sendid),
@@ -781,14 +734,22 @@ analyze_receive(Receive, Sender, ChannelName, Cdr, Code, NextCode, NextRHS) :-
 
 
 /* Compare to make_RHS2 */
-make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
+make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Streams,
+			Entries, NextEntries) :-
+
+    Mode =?= receive :
+      Entries = [Mode(Atom?, (Writes | SendChoices?), (ChoiceAtom? :- RHS))
+		| NextEntries] |
+	piutils#tuple_to_atom(Tuple, Atom),
+	make_choice_name(Name, ".receive", SendChoices),
+	make_choice_atom(Atom, SendChoices?, Streams, ChoiceAtom);
 
     Mode =?= send :
       Entries = [Mode(Atom?, (Writes | SendChoices?), (ChoiceAtom? :- RHS))
 		| NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom),
 	make_choice_name(Name, ".send", SendChoices),
-	make_choice_atom(Atom, SendChoices?, [`pifcp(chosen)],
+	make_choice_atom(Atom, SendChoices?, [`pifcp(chosen) | Streams],
 				ChoiceAtom);
 
     Mode =?= mixed :
@@ -800,13 +761,14 @@ make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
 		| NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom),
 	make_choice_name(Name, ".mixed", MixedChoices),
-	make_choice_atom(Atom, MixedChoices, [`pifcp(chosen), Sender],
+	make_choice_atom(Atom, MixedChoices, [`pifcp(chosen), Sender |Streams],
 				ChoiceAtom);
 
-    /* receive, conflict */
-    Mode =\= send, Mode =\= mixed :
+    /* conflict */
+    otherwise :
       Name = _,
       Writes = _,
+      Streams = _,
       Entries = [Mode(Atom?, RHS, []) | NextEntries] |
 	piutils#tuple_to_atom(Tuple, Atom).
 

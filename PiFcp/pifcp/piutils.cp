@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/04/06 08:42:13 $
+		       	$Date: 2000/04/16 08:04:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 2.0 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -language(compound).
--mode(interrupt).
+%-mode(interrupt).
 -export([concatenate_lists/2, make_lhs_tuple/3,
 	 make_predicate_list/3, untuple_predicate_list/3,
 	 names_to_channel_list/2,
@@ -187,15 +187,15 @@ make_lhs_tuple(Name, ChannelNames, Tuple) :-
 	fill_tuple(Variables, Tuple, 2, Tuple).
 
 
-untuple_predicate_list(Operator, Predicates, List) :-
+untuple_predicate_list(Operator, Predicates, List) + (NextList = []) :-
 
-    Predicates =?= {Operator, Predicate, Predicates'} :
-      List ! Predicate |
+    Predicates =?= {Operator, Predicate, Predicates'} |
+	untuple_predicate_list(Operator, Predicate, List, List'?),
 	self;
 
     otherwise :
       Operator = _,
-      List = [Predicates].
+      List = [Predicates | NextList].
 
 
 make_predicate_list(Operator, List, Predicates) :-
