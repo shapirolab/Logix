@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/widgets/pretty.cp,v 1.1 1999/07/09 07:03:23 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/widgets/pretty.cp,v 1.2 2002/06/26 06:48:36 bill Exp $ */
 -export([context / 3, module / 2, intermediate / 2, term / 2]).
 -mode(interrupt).
 -language(compound).
@@ -149,10 +149,17 @@ term1(Term1, Term2, Left, Right) :-
     Term1 = Term2,
     Left = Right ;
 
+  string_length(Term1) > 1,
   string_to_dlist(Term1, Chars, []),
   Term1 =\= "procedure",
   Chars ? C, ascii(a) =< C, C =< ascii(z) |
       unquoted(Term1, Chars', Term2, Left, Right);
+
+  string_length(Term1) =:= 1,
+  nth_char(1, Term1, C),
+  ascii(a) =< C, C =< ascii(z) :
+    Term2 = Term1,
+    Left = Right;
 
   Term1 = "" :
     Term2 = """""",
@@ -170,15 +177,12 @@ term1(Term1, Term2, Left, Right) :-
     Term2 = "''''",
     Left = Right ;
 
-  string(Term1),
-  Term1 =\= "",
-  Term1 =\= $,
-  Term1 =\= '"',
-  Term1 =\= '''',
-  string_to_dlist(Term1, List, _) :
+  string_length(Term1) =:= 1,
+  nth_char(1, Term1, Char),
+  otherwise :
     ascii('''', Quote),
-    List = [Char] |
-      single_character(Quote, Char, Term2, Left, Right);
+    ascii("""", DoubleQuote) |
+      single_character(Quote, DoubleQuote, Char, Term2, Left, Right);
 
   string(Term1),
   otherwise,
@@ -212,15 +216,18 @@ term1(Term1, Term2, Left, Right) :-
       tuple(Functor, Arity, Term1, Term2, Left, Right).
 
 
-single_character(Quote, Char, Term, Left, Right) :-
+single_character(Quote, DoubleQuote, Char, Term, Left, Right) :-
 
   Char =:= ascii(lf),
-  list_to_string([Char, Quote, Char, Quote, Char], String) : Right = _,
+  list_to_string([Char, Quote, Char, Quote, Char], String) :
+    DoubleQuote = _,
+    Right = _,
     Term = String,
     Left = true ;
 
   otherwise,
-  list_to_string([Quote, Char, Quote], String) :
+  list_to_string([DoubleQuote, Char, DoubleQuote], String) :
+    Quote = _,
     Term = String,
     Left = Right .
 
@@ -430,8 +437,35 @@ reserved(Functor, First, Arity, Tuple, Tuple1, PrettyTuple, Left, Right) :-
   Functor =\= "div", Functor =\= "mod" |
       tuple_args(0, Arity, Tuple, Tuple1, PrettyTuple, Left, Right);
 
-  otherwise,	% It won't be requoted! This is bad, if it isn't an operator.
-  arg(1, Tuple1, Functor^) : First = _ |
+  otherwise,
+  Arity =?= 2 :
+    First = _ |
+      parse#syntax#fcp#serve([prefix_operator(Functor, _, _, _),
+			      postfix_operator(Functor, _, _, _)], Errs),
+      reserved2;
+
+  otherwise,
+  Arity =?= 3 :
+    First = _ |
+      parse#syntax#fcp#serve([infix_operator(Functor, _, _, _, _)], Errs),
+      reserved3.
+
+reserved2(Errs, Functor, Arity, Tuple, Tuple1, PrettyTuple, Left, Right) :-
+  Errs =?= [_, _] :
+    Functor = _ |
+      tuple_args(0, Arity, Tuple, Tuple1, PrettyTuple, Left, Right);
+  otherwise,
+  arg(1, Tuple1, Functor^) :
+    Errs = _ |
+      tuple_args(1, Arity, Tuple, Tuple1, PrettyTuple, Left, Right).
+
+reserved3(Errs, Functor, Arity, Tuple, Tuple1, PrettyTuple, Left, Right) :-
+  Errs =?= [_] :
+    Functor = _ |
+      tuple_args(0, Arity, Tuple, Tuple1, PrettyTuple, Left, Right);
+  otherwise,
+  arg(1, Tuple1, Functor^) :
+    Errs = _ |
       tuple_args(1, Arity, Tuple, Tuple1, PrettyTuple, Left, Right).
 
 tuple_args(N, A, C, C1, PC, Left, Right) :-
