@@ -1,0 +1,263 @@
+BNF for PiFcp
+
+<program>              ::= <psi_attributes> . <process_definitions> .
+                           <process_definitions> .
+
+<psi_attributes>       ::= <psi_attribute>
+                           <psi_attribute> . <psi_attributes>
+
+<psi_attribute>        ::= <global_declaration>
+                           <default_base_rate_declaration>
+
+<global_declaration>   ::= global([<communicator_list>])
+
+<baserate_declaration> ::= baserate(<base_rate>)
+
+<communicator_list>    ::= <communicator_declaration>
+                           <communicator_declaration> , <communicator_list>
+
+<communicator_declaration> ::=
+                           <communicator>
+                           <communicator>(<base_rate>)
+
+<base_rate>            ::= <number>
+                           infinite
+
+<process_definitions>  ::= <process>
+                           <process> . <process_definitions>
+
+<process>              ::= <left_hand_side> ::= <right_hand_side>
+
+<left_hand_side>       ::= <atom>
+                           <atom>+<channel_declaration>
+                           <atom>+(<declaration_list>)
+
+<atom>                 ::= <name>
+                           <name>(<channel_list>)
+
+<declaration_list>     ::= <channel_declaration>
+                           <channel_declaration> , <declaration_list>
+
+<channel_declaration> ::=  <channel>
+                           <channel>(<base_rate>)
+
+<channel>              ::= <communicator>
+                           <logix_variable>
+
+<channel_list>         ::= <channel>
+                           <channel> , <channel_list>
+
+<right_hand_side>      ::= <communication_clauses>
+                           <comparison_clauses>
+                           <logix_guard_clauses>
+                           <body>
+
+<communication_clauses> ::= 
+                           <communication_clause> 
+                           <communication_clause> ; <communication_clauses>
+
+<communication_clause> ::= <communication> , <right_hand_side>
+
+<communication>        ::= <receive>
+                           <send>
+
+<receive>              ::= <communicator> ? <transmission>
+
+<send>                 ::= <communicator> ! <transmission>
+
+<transmission>         ::= <message>
+                           <multiplier> * <message>
+                           <message> * <multiplier>
+
+<message>              ::= []
+                           {<channel_list>}
+
+<multiplier>           ::= <positive_integer>
+
+<comparison_clauses>   ::= <comparisons>
+                           <comparisons> ; otherwise , <right_hand_side>
+
+<comparisons>          ::= <comparison_clause>
+                           <comparison_clause> ; <comparisons>
+
+<comparison_clause>    ::= <comparison> , <right_hand_side>
+
+<comparison>           ::= <compare>
+                           <compare> & <comparison>
+
+<compare>              ::= <communicator> =?= <communicator>
+                           <communicator> =/= <communicator>
+
+<logix_guard_clauses>  ::= <logix_guard_clause> 
+                           <logix_guard_clause> ; <logix_guard_clauses>
+
+<logix_guard_clause>   ::= {<logix_ask_guard>} , <right_hand_side>
+                           {(<logix_guard>)} , <right_hand_side>
+
+<logix_guard>          ::= <logix_ask_guard_list>
+                           <logix_ask_guard_list> : <logix_tell_guard_list>
+
+<logix_ask_list>       ::= <logix_ask_guard>
+                           <logix_ask_guard> , <logix_ask_list>
+
+<logix_tell_list> ::=      <logix_tell_guard>
+                           <logix_tell_guard> , <logix_tell_list>
+                           <channel> =\= <channel>
+
+<body>                 ::= <call>
+                           <call> | <body>
+
+<call>                 ::= <local_call>
+                           <local_sum>
+                           << <new_scope> >>
+                           <external_call>
+                           {<logix_goal>}
+                           {(<logix_goal_list>)}
+                           self
+			   self( <substitution_list> )
+                           true
+                           0
+
+<local_sum>            ::= <local_call>
+                           <local_sum> + <local_call>
+
+<local_call>           ::= <atom>
+                           <name>( <substitution_list> )
+
+<substitution_list>    ::= <substitution>
+                           <substitution> , <substitution_list>
+
+<substitution>         ::= <channel> = <channel>
+
+<new_scope>            ::= <channel_list> . <scope_content>
+                           <scope_content>
+
+<scope_content>        ::= <right_hand_side>
+                           <right_hand_side> . <process_definitions>
+
+<external_call>        ::= <logix_path_term>#<atom>
+                           <logix_path_term>#<logix_goal>
+                           <logix_path_term>#<external_call>
+
+<logix_goal_list>      ::= <logix_goal>
+                           <logix_goal> , <logix_goal_list>
+
+Primitives:
+
+
+A <communicator> is an alpha-numeric string, beginning with a lower-case
+alphabetic character; the string which may contain underscore (_) characters.
+
+
+A <name> is an alpha-numeric string, beginning with an upper case letter, which
+may contain underscore (_) characters.
+
+
+A <logix_variable> is an alpha-numeric string, beginning with an upper-case
+alphabetic character; the string may contain underscore (_) characters,
+or it may be a single underscore character.  By convention the single
+underscore character is an anonymous <logix_variable>; it may only appear in
+a <message> or within a <logix_guard>, a <logix_ask_guard> or a <logix_goal>.
+
+WARNING:  when the single underscore character <logix_variable> appears in a
+<message>, it should not appear in place of a <communicator>, unless the
+corresponding <communicator> is defined by a <global_declaration>.
+
+
+A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
+language(compound).
+
+A <logix_tell_guard> is any predicate permitted in the tell of a guard in logix
+language(compound).
+
+A <logix_goal> is any predicate permitted in the right-hand-side of a clause
+in logix language(compound).
+
+A <logix_path_term> is any term permitted in the path specification of a remote
+procedure call in logix language(compound).
+
+
+Notes:
+
+The "new" predicate has been subsumed into a prefix <channel_list>
+of a <new_scope> and the added <channel_list> of a <process>.
+
+
+The <channel>s in the <arguments> of a <process> are provided by a caller.
+A <channel> may be "extruded" from a <process> by a <send> to such an argument
+channel.
+
+
+A <process> which is declared at level one of a <program> definition, may be
+called by an external process.
+
+
+Nested "new" processes are scoped with double angle brackets (see definition
+of <new_scope>).
+
+
+The reserved words are "self", "true" and "otherwise".
+
+"self" may be used to iterate any process, including anonymous processes.
+"true" should only be needed as the only <call> in the <body> of a clause.
+"otherwise" appears as the guard of the last clause of <comparisons>.
+
+
+A  new channel which is a <logix_variable> is initially uninstantiated.
+
+
+Within a <logix_term>, normal logix recognition of variables applies - i.e.
+variable names all begin with a capital letter or underscore; to reference a
+<channel> whose name begins with a lower case letter, within a <logix_term>,
+refer to '_var'(<channel_name>.
+
+
+A <logix_variable> may have a value which is an arbitrary logix term.  Such
+values may be tested by a <logix_ask_guard> or manipulated by a <logix_goal>
+or by a <logix_tell_guard>.  An arbitrary <logix_term> may be sent in a
+<message> by the library <logix_goal> psi_send/3, or received by the logix
+goal, psi_receive/3:
+
+    psi_send(<sender>, <message_content>, <channel>)
+
+e.g.
+
+    psi_send(Id1, {"A string", a(Tuple), [A, list | Tail]}, '_var'(channel))
+
+    psi_receive(Id2, {Arg1, String(f(x)), Arg3}, 'var'(also_a_channel))
+
+
+Channel typing has been omitted.  
+
+
+The additive definition of <left_hand_side> is syntactic sugar - e.g.
+
+    P+(<channel_list>) ::= <right_hand_side>.
+
+is equivalent to:
+
+    P ::= << <channel_list> . P1 . P1 ::= <right_hand_side> >> .
+
+The recursive definition of <right_hand_side> is syntactic sugar - e.g.
+
+    P ::= <communication1> , ({<logix_ask_guard>} , Q;
+          <communication2> , (<comparison> , R; otherwise , S).
+
+is equivalent to:
+
+    P ::= <communication1> , << P1 . P1 ::= {<logix_ask_guard>} , Q >>;
+          <communication2> , << P2 . P2 ::= <comparison> , R ; otherwise , S >>.
+
+and
+
+    P ::= <communication> , ( {<logix_ask_guard1>} , Q ;
+                              {<logix_ask_guard2>} , R ) .
+
+is equivalent to:
+
+    P ::= <communication> , << P1 . P1 ::= {<logix_ask_guard1>} , Q ;
+                                           {<logix_ask_guard2>} , R >> .
+
+
+Each <local_call> in a <local_sum> must be to  <process> whose
+<right_hand_side> consists of <communication_clauses>.

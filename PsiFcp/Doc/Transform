@@ -1,0 +1,163 @@
+Representations and transformations of the PsiFcp language to Compound Fcp
+
+<message>        ::~ <psi_message>
+
+  <psi_message>     ::= <direction>(<sender>, <message_content>,
+                                    <choice_tag>, <multiplier>, <choice>)
+
+  <sender> identifies the process which sent the <message> and the channel
+           on which it was sent.
+  <message_content> is [] or a tuple of <psi_channel>s.
+  <choice_tag> is an integer.
+  <multiplier> is a positive integer.
+  <choice> is writable until the <message> is transmitted - then it is
+           assigned an integer, which is used by the originating process
+           to select a continuation.
+
+<channel>        ::~ <psi_channel>
+
+  <psi_channel>     ::= <creator>(<fcp_vector>, <short_circuit>)
+
+  <creator> identifies the <process> which created the channel; it is used
+            for debugging and includes the name of the fcp variable which
+            represents the channel and the <name> of the creating <process>.
+
+   <fcp_vector> is used to transmit a request for the <channel>.  The
+                request may be to send or receive a message.
+
+   <short_circuit> is a 2-tuple.  The circuit is expanded when a <process>
+                   forks, passing the <channel> to 2 or more continuation
+                   processes, or when the channel is "extruded" by a send.
+                   The circuit is closed (by unifying its arguments) when
+                   the <process> terminates or continues to <process>es
+                   which don't need the <channel> (recursively).
+
+When a <channel> name begins with a lower case letter, the transformation
+converts it to an Fcp variable of the same name; declared process names
+begin with an upper case letter.
+
+To <send> or <receive> one or more synchronized <message>s, a procedure
+offers the <message>(s) by writing each <psi_message> to the <fcp_vector>
+of the corresponding <communicator>. When multiple <psi_message>s are
+offered, they share the same <choice> variable.  The <process> then waits
+in a generated procedure for a <psi_message> to be matched to a <receive>
+or <send>; the <choice_tag> and the <choice> of each matched (received or
+sent) <psi_message>, are unified, effectively withdrawing all other offered
+<message>s.  The procedure commits the clause corresponding to the chosen
+<message>.
+
+Each <process> is represented by an Fcp procedure.  Each <communicator> which
+is a parameter or an added <communicator> of the <process> is represented by a
+<psi_channel> - the Fcp variable which represents the <psi_channel> has the
+same name as the <channel>.
+
+A <program> is the content of a module, following its fcp attributes.
+The fcp attributes should always include:
+
+    -language([psifcp,compound,colon]).
+
+A <process> may be "exported" from the module by an fcp export attribute - e.g.
+
+    -export("MAIN")
+
+A <program> defines a scope which is global to every <process> which is
+defined within the <program>.  At the head of the <program>, prior to the
+<process_definitions>, global channels may be declared in a psi attribute:
+
+    global([<communicator_list>]).
+
+A <program> may include the psi attribute:
+
+    stochastic(<base_rate>).
+
+The declared <base_rate> is the default for any global or new <psi_channel>
+which is declared without an explicit <base_rate>.  If this declaration is
+omitted, the default is "infinite".
+
+
+A <process> defines a scope within which each <channel> in the containing
+scope is defined.  This is implemented by adding each <channel> to the
+parameters of the Fcp procedure definitions and to calls within the Fcp
+procedure.
+
+No two processes within a module may share the same <name>.
+
+A <new_scope> in a <call> is represented by an invented Fcp procedure.  The
+brackets (<< >>) define a nested scope. The invented Fcp procedure and each Fcp
+procedure representing a <process> within the scope has an augmented parameter
+list as above.
+
+Each <process> defined in the outermost scope of the program is like an
+independant program - such <process>es do not share any context, other than
+the global <communicator_list>.
+
+
+A PsiFcp process is transformed into a procedure as follows.
+
+
+Each <process> in the <program> is transformed into one Fcp procedure with
+the same name, if it does not have an added <declaration_list> - i.e.
+its <left_hand_side> is an <atom>.  Otherwise, it is transformed into two
+Fcp procedures.  The first procedure initializes each added communicator
+and calls the second procedure.
+
+The parameter <channel_list> of a <process> (if any) consists of channels
+which have been initialized elsewhere.
+
+A procedure in the outermost scope has additional parameters consisting of
+the global <communicator_list>.  Its <communicators>s and its other parameters
+form the base channel-set for all scopes which are defined within its
+<process>.  Each <process> defines a scope.
+
+For each procedure defined within a scope, the scope's channel-set is reduced
+by removing any channels which are explicitly declared by the procedure's
+<process>.  The defined parameters of the procedure are the declared parameters
+of its <process>, followed by the reduced channel-set of the containing scope,
+followed by any added channels.  These defined parameters form the base
+channel-set of the inner scope.
+
+When a <receive> in a <communication_guard> instantiates a <channel> whose name
+is in the channel-set of the scope, that instance and all subsequent instances
+of the <channel> in the same <communication_clause> are renamed, by appending a
+single-quote (') to its name.
+
+A <channel> whose name is not in the channel-set of the scope and which is
+instantiated by a <receive> in a <communication_guard>, is referred to as a
+"local" channel.  A local channel is added to the channel-set of its scope,
+within the <communication_clause> in which it is declared; this is significant
+for any <call> within the <body> and for and <new_scope> which is declared
+within the <body> of the clause.
+
+A <new_scope> within a <process> has the same semantics as a declared
+<process>, except that it can only be activated by commitment of its clause,
+not called; in addition it may contain <process_definitions> whose <process>es
+can only be referred to within the declared scope.
+
+When a <process> is composed of <communication_clause>s, an additional
+procedure is invented.  The first procedure implements all <communication>
+offers, and calls the additional procedure.  The additional procedure commits
+to the corresponding <body> when an offer is accepted.
+
+No <communication> can be resolved until the psi_monitor and all channel
+objects jointly determine the next event (matching a <send> and <receive>
+message.  Each channel object maintains a set of <psi_message>s, using
+the <base rate> of the <channel>, and the <multiplier> of each <psi_message>
+to determine a weighted rate.  The monitor selects randomly among the
+weighted rates, and the chosen channel completes a transaction by unifying
+the message of a <send> and a <receive>.  The sum of the weighted rates is
+also used by the monitor to advance an internal clock, which may be used in
+tracing transactions.
+
+A <call> to <atom> or to <name>( <substitution_list> ) to a <process> within
+the same <program> is implemented by a compound-fcp call to the named
+procedure:  name  or  name+(substitutes)  as appropriate.
+
+An <external_call> is implemented by a logix Remote Procedure Call - it is not
+synchronized.
+
+
+Note:
+
+Process summations and many of the transformations related to stochastic
+communication are deferred until all of the other transformations are
+completed.

@@ -1,0 +1,118 @@
+Process Channels
+----------------
+
+1. Global
+
+2. Parameter
+
+3. New
+
+4. Received
+
+   a. Prime
+
+   b. Local
+
+5. Indeterminate?
+
+Known:
+
+a. which channels are "needed" by this process.
+
+b. which channels are "needed" by each called process.
+
+
+
+Call Channels
+-------------
+
+1. Argument
+
+2. Context
+
+
+Channel Status at end-of-clause
+-------------------------------
+
+0. not passed
+
+1. passed once
+
+2. passed mutiply
+
+
+
+
+Post-clause Action
+------------------
+
+1. Passed once or known global - do nothing
+
+2. Not passed - close circuit
+
+3. otherwise (passed multiply) - n-split channel circuit
+
+Initially (maybe forever), omit know global test - minor optimisation.
+
+
+ChannelTable: per clause
+------------
+
+  Key:   <name>
+  Value: {<refs>, <primename>}
+
+   (<primename> = <name> if not primed or primed entry)
+
+  For each clause:
+
+    For each entry:
+
+      <refs> = 1 : remove entry
+
+      <refs> = 0 : Asks  + (<name> = <id>(<ch>, {<link(0)>, <link(1)>}
+                   Tells + (<link(0)>, <link(1)>)
+
+      <refs> = n, n > 1:
+                   Asks  + (<name> = <id>(<ch>, {<link(0)>, <link(n)>}
+                   Tells + [<name(i)> = <id>(<ch>, {<link(i-1)>, <link(i)>}]
+
+    Start i at 1.
+      
+      For each <sent channel> which matches <name>:
+
+          replace <sent channel> by next <name(i)>, i++
+
+      For each call (ignoring logix goals),
+
+          if local call prepare set of implicit argument names
+	  else implicit arguments set is []
+
+          if <explicit argument> = <name>,
+
+              replace <explicit argument> by next <name(i)>, i++
+
+              remove target's <name> from set of implicit argument names
+
+          for each (remaining) implicit argument name
+
+               add:    (<name> = <primename(i)>) to arguments
+
+  Representation:
+  --------------
+
+    If <name> has been received, there are two corresponding entries in
+    the ChannelTable:
+
+      e.g. P(a) :- i ? a | ...
+
+          a(0, a'), a'(Refs, a')
+
+    <name> is represented by `name
+
+    <primename> is represented by `name'
+
+    <id> is represented by `psiid(name)
+
+    <name(i)> is represented by `psich_i(name)
+
+    <link(i)> is represented by `psiln_i(name)

@@ -1,0 +1,523 @@
+channel classes:
+---------------
+
+instantaneous
+
+    An instantaneous channel satisfies a receive/send pair of requests
+    as soon a both are available - it does not participate in the
+    selection of the next event to enable.  It is designated by a
+    BaseRate of 0.
+
+bimolecular
+
+    A bimolecular channel computes its contribution to the selection
+    Sum by  BaseRate*NSend*NRead .  When selected, it satisfies a
+    send and a receive.  It's BaseRate is positive, non-zero.
+
+homodimerized
+
+    A homodimerized channel computes its contribution to the selection
+    Sum by BaseRate*(NSends*(NSends-1))/2 .  When selected is satisfies
+    the send of one request withe the receive of another.  It's BaseRate
+    is positive, non-zero.
+
+
+channel:
+-------
+
+<channel_name>(RequestChannel
+
+
+communication request:
+---------------------
+
+<type>(<id>, <<type>_message>,  <<type>_tag>, <multiplier>, <reply>)
+
+<type>            ::= dimer
+                      send
+                      receive
+
+<id>              ::= <process_name>(<local_channel_name>)
+
+<dimer_message>   ::= {<send_message>, <receive_message>}
+<send_message>    ::= <message>
+<receive_message> ::= <variable>
+
+<message>         ::= []
+                      {<channel_list>}
+
+<dimer_tag>       ::= {<send_tag>, <receive_tag>}
+<send_tag>        ::= <tag>
+<receive_tag>     ::= <tag>
+
+<tag>             ::= <clause_identification_integer>
+
+<multiplier>      ::= <weight_additive_integer>
+
+<reply>           ::= <clause_identification_integer>
+
+<tag>        is an index to the clauses of the communication process.
+
+<reply>      is unified with tag when the request is completed; it is
+             shared between all communication requests of a process. The
+             process uses <reply> to select a continuation.
+
+instantaneous_channel:
+---------------------
+
+  resources:
+  ---------
+
+	initial:
+
+    ChannelName    A string.
+
+    Input          A stream of requests.
+
+    InputChannel   An fcp channel.
+
+    NotesChannel   An fcp channel.
+
+    Stop           A flag.
+
+	local:
+
+    Sends          A list of send requests.
+
+    Receives       A list of receive requests.
+
+
+  send request: Input ? send( ... )
+  ------------
+
+    if there is an active message on Receives which is not offered by the
+       same process instance which offered the send message,
+
+      complete the send with the first such message on Receives;
+
+    otherwise
+      Queue the request to Sends;
+
+
+  receive request: Input ? receive( ... )
+  ---------------
+
+    if there is an active message on Send which is not offered by the
+       same process instance which offered the receive message,
+
+      complete the send with the first such message on Receives;
+
+    otherwise
+      Queue the request to Sends;
+
+
+
+  inspect request: Requests ? inspect(Head, Tail)
+  ---------------
+
+    Head = [instantaneous(ChannelName, Content?) | Tail]
+
+    copy Requests to Content
+
+
+  If Requests is empty, and Stop = stop
+
+    terminate
+
+
+bimolecular_channel: 
+-------------------
+
+  resources: 
+  ---------
+
+	initial:
+
+    ChannelName    A string.
+
+    Input          A stream of requests.
+
+    InputChannel   An fcp channel -> Input.
+
+    NotesChannel   An fcp channel.
+
+    Stop           A flag.
+
+    BaseRate       A positive number; it corresponds to the constant
+                   c-sub-mu in Gillespie's paper (1977).
+
+    CommandIn      A stream of commands.
+
+    CommandOut     A stream of commands.
+
+	local:
+
+    RateWeight     A non-negative number - initially 0.
+
+    WeightR        The weight of Receives - initially 0.
+
+    WeightS        The weight of Sends - initially 0.
+
+    Sends          A list of send requests - the leading messages
+                   may be already resolved.
+
+    Receives       A list of receive requests - the leading messages
+                   may be already resolved.
+
+
+  send request: Input ? send( ... )
+  ------------
+
+    Queue the request to Sends; increment WeightS by its Weight.
+
+
+  receive request: Input ? receive( ... )
+  ---------------
+
+    Queue the request to Receives; increment WeightR by its Weight.
+
+
+  inspect request: Requests ? inspect(Head, Tail)
+  ---------------
+
+    Head = [bimolecular(ChannelName, Content?) | Tail]
+
+    copy Receives, Sends to Content
+
+
+  sum command: CommandIn ? sum(SumIn)
+  -----------
+
+    cdr down Sends and Receives to the first unconsumed message on
+    each; decrement the corresponding weight for each consumed message.
+
+    Compute Weight := BaseRate*WeightR*WeightS
+
+    Compute SumOut := SumIn + Weight
+
+    CommandOut ! sum(SumOut)
+
+
+  select command: CommandIn ? select(ResidueIn, Selected)
+  --------------
+
+    if ResidueIn < Weight
+
+      complete the first (active) message in Sends with the first (active)
+      Message in Receives, decrementing WeightS and WeightR as necessary.
+      
+      Selected = done(SendProcess, ReceiveProcess)
+
+    otherwise
+
+       ResidueOut := ResidueIn - Weight
+
+       CommandOut ! select(ResidueOut, Selected)
+
+
+  If WeightS = 0 and WeightR = 0 and Stop = stop
+
+    terminate
+
+
+homodimerized_channel:
+---------------------
+
+  resources: 
+  ---------
+
+	initial:
+
+    ChannelName    A string.
+
+    Input          A stream of requests.
+
+    InputChannel   An fcp channel -> Input.
+
+    NotesChannel   An fcp channel.
+
+    Stop           A flag.
+
+    BaseRate       A positive number; it corresponds to the constant
+                   c-sub-mu in Gillespie's paper (1977).
+
+    CommandIn      A stream of commands.
+
+    CommandOut     A stream of commands.
+
+	local:
+
+    Weight         The sum  of active request mutipliers - initially 0.
+
+    Requests       A list of dimer requests - initially empty.
+
+    Ready          A {0,1} flag - initially 1.
+
+
+  dimer request: Input ? dimer( ... )
+  -------------
+
+    Queue the request to Requests
+
+    cumulate Weight
+
+    Ready = 1.
+
+
+  inspect request: Requests ? inspect(Head, Tail)
+  ---------------
+
+    Head = [homodimerized(ChannelName, Content?) | Tail]
+
+    copy Requests to Content
+
+
+  sum command: CommandIn ? sum(SumIn)
+  -----------
+
+    cdr down Requests to the first active message;
+    decrement NRequests for each consumed message.
+
+    Compute BiasedWeight := BaseRate*(Weight*(Weight - 1))/2
+
+    Compute SumOut := SumIn + BiasedWeight
+
+    CommandOut ! sum(SumOut)
+
+
+  select command: CommandIn ? select(ResidueIn, Selected)
+  --------------
+
+    if Ready = 0
+
+      CommandOut ! select(ResidueIn, Selected)
+
+    otherwise
+
+      if ResidueIn < BiasedWeight
+
+	complete send of the first active message in Requests with receive
+	of the next active Message in Requests, which is not offered by
+        the same process as the first active message, decrementing Weight
+	as necessary;
+
+	Selected = done(SendId, ReceiveId).
+
+      otherwise
+
+	ResidueOut := ResidueIn - BiasedWeight
+
+	CommandOut ! select(ResidueOut, Selected)
+
+
+  If Weight*Ready =:= 0 and Stop = stop
+
+    terminate
+
+
+Macros:
+------
+
+complete(ReceiveId,      SendId,
+	 ReceiveMessage, SendMessage,
+         ReceiveTag,     SendTag,
+         ReceiveReply,   SendReply)
+
+  Unify ReceiveMessage with SendMessage
+  Unify ReceiveTag with ReceiveReply
+  Unify SendTag with SendReply
+  Unify Selected with selected(SendProcess-SendId,
+                               ReceiveProcess-ReceiveId)
+
+
+terminate(Commandout, CommandIn, InputChannel)
+
+  CommandOut = CommandIn
+  close InputChannel
+
+
+
+serve_channels:
+--------------
+
+The channel_server is a monitor which dispatches channels and selects
+which channel should transmit a message.  It also maintains a clock
+and a record stream which are used to note the simulated start and
+termination times of communication processes.
+
+
+  resources:
+  ---------
+
+    Schedule       An input stream of requests.
+
+    Offset         The offset for a math request
+
+    NegativeExponential
+                   A computed random variate.
+
+    Random         A computed (uniform 0-1) random variate
+
+    Now            The current simulated time.
+
+    Waiting        Status in {true, false}
+
+    Waiter         An output stream of machine(idle_wait(...),...) requests.
+
+    Wakeup         A flag.
+
+    CommandOut     A command stream.
+
+    CommandIn      A command stream.
+
+    NotesIn        An input stream of completion notes.
+
+    NotesChannel   An fcp channel.
+
+    Record         A stream of events.
+
+    Cutoff         A positive number.
+
+    Start_Real_Time
+                   A positive number.
+
+  new channel request:
+  -------------------
+
+    Schedule ? new(ChannelName, Channel, BaseRate)
+
+    Create new fcp channel: InputChannel -> Input
+
+    Return Channel = ChannelName(InputChannel, {Stop, stop})
+
+    if BaseRate = 0
+
+      Create new instantaneous_channel - arguments:
+
+	ChannelName, Input, InputChannel, NotesChannel, Stop
+
+    elseif first message is dimer
+
+      Create new dimerized_channel - arguments:
+
+	ChannelName, Input, InputChannel, NotesChannel, Stop, BaseRate,
+		CommandIn = CommandOut'?, CommandOut = CommandOut
+
+    else
+
+      Create new bimolecular_channel - arguments:
+
+	ChannelName, Input, InputChannel, NotesChannel, Stop, BaseRate,
+		CommandIn = CommandOut'?, CommandOut = CommandOut
+      
+    continue_waiting
+
+
+  start request:
+  -------------
+
+    Schedule ? start_process(ProcessName)
+
+
+    Record ! start(ProcessName)
+
+    continue_waiting
+
+
+  pause request:
+  -------------
+
+    Schedule ? pause(Resume)
+
+
+    Wait until Resume is instantiated
+
+    continue_waiting
+
+
+  continue request:
+  ----------------
+
+    continue_waiting
+
+
+  record request:
+  --------------
+
+    Schedule ? record(Stream)
+
+    Stream = Record?
+
+
+  end_record request:
+  ------------------
+
+    Schedule ? end_record(Stream)
+
+    Record = []
+    Stream = Record?
+    Now' = 0.0
+
+
+  cutoff request:
+  --------------
+
+    Schedule ? cutoff(Cutoff')
+
+    Restart Real Time
+
+
+  events:
+  ------
+
+  Now >= Cutoff
+  -------------
+
+    terminate with message to computation (RealTime)
+
+
+  Wakeup = done
+  -------------
+
+    CommandOut ! sum(0)
+
+    Wait for
+
+    CommandIn ? sum(Total)
+
+    if Total > 0
+
+      CommandOut ! select(Total*ran(0), Selected)
+
+      if Selected = selected(Id1, Id2)
+
+	Record ! selected(Process1)
+	Record' ! selected(Process2)
+
+      else if Selected = fail(Reason)
+
+	announce failure
+
+      meanwhile wait for
+
+	CommandIn ? select(Residue, _)
+        announce status
+
+      Compute Now' = Now - ln(ran(0))/Total
+      Waiter ! machine(idle_wait(Wakeup'))
+
+    otherwise
+
+      Waiting = false
+    
+
+Macros:
+
+continue_waiting(Waiting, Waiter, Wakeup)
+
+   if Waiting = false
+
+      Waiter ! machine(idle_wait(Wakeup'))
+      Waiting' = true
+
+   serve_channels

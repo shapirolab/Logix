@@ -1,0 +1,726 @@
+/*
+Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
+
+Bill Silverman, February 1999.
+
+Last update by		$Author: bill $
+		       	$Date: 2000/06/27 11:01:09 $
+Currently locked by 	$Locker:  $
+			$Revision: 1.1 $
+			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
+
+Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
+-export(stochasticize/2).
+-mode(interpret).
+-language(compound).
+
+
+stochasticize(In, Terms) :-
+	stream#hash_table(HashTable),
+	procedure_channels,
+	output.
+
+  procedure_channels(In, HashTable, ProcessTable) :-
+
+    In ? conflict(_Atom, _RHSS, _Procedure) |
+	self;
+
+    In ? Type(Atom, _RHSS, _Procedure), Type =\= conflict,
+    arg(1, Atom, Name) :
+      HashTable ! lookup(Name, Channels, _Old, _Found) |
+	utils#tuple_to_dlist(Atom, [_ | Variables], []),
+	extract_psi_channels(Variables, Channels),
+	self;
+
+    In =?= [] :
+      ProcessTable = HashTable.
+
+/*
+** output/3
+**
+** Input:
+**
+**   In is a stream of  Mode(Atom, RHSS, Procedure).
+**
+**      Mode is one of {export,
+**			none, no_guard,
+**			compare, logix,
+**			communication}.
+**
+**      Atom is an Fcp atom of a compound procedure:
+**
+**        ProcedureName(<arguments>)
+**  or
+**        ProcedureName
+**
+**      RHSS is the right-hand-side of the compound procedure.
+**
+**      Procedure is [] or the compound procedure's communication part.
+**
+**        ProcedureName.Mode(<arguments'>) :- <compound rhs>
+**
+**      where Mode is in {send, mixed}.
+**
+** Output:
+**
+**   Terms is a stream of compound procedures.
+*/
+
+output(In, ProcessTable, Terms) :-
+
+    /* Discard conflicted code. */
+    In ? conflict(_Atom, _RHSS, _Procedure) |
+	self;
+
+    In ? export(Atom, RHSS, _Procedure) :
+      Terms ! (Atom'? :- RHSS) |
+	utilities#tuple_to_atom(Atom, Atom'),
+	self;
+
+
+    In ? outer(Atom, RHSS, _Procedure) :
+      Terms ! (Atom' :- RHSS) |
+	utilities#tuple_to_atom(Atom, Atom'),
+	self;
+
+    In ? Mode(Atom, RHSS, Procedure),
+    Mode =\= outer, Mode =\= export, Mode =\= conflict,
+    arg(1, Atom, Name) :
+      ProcessTable ! member(Name, Channels, _Ok),
+      Terms ! (Atom'? :- NewRHSS?) |
+	utilities#tuple_to_atom(Atom, Atom'),
+	prototype_channel_table,
+	utilities#untuple_predicate_list(';', RHSS, RHSS'),
+	stochastic;
+
+    In = [] :
+      Terms = [] |
+	ProcessTable = [].
+
+
+stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
+		NewRHSS) :-
+
+    Procedure =\= (_ :- _) :
+      Name = _ /*,
+      NewRHSS = RHSS*/ |				/* fix this */
+	analyze_rhss(RHSS, Prototype, [], ChannelTables,
+			ProcessTable, ProcessTable'?),
+	update_rhss(false, RHSS, ChannelTables,
+			ProcessTable', ProcessTable''?, Rhss),
+	utilities#make_predicate_list(';', Rhss, NewRHSS),
+%display_update(Name, Rhss),
+%display_tables(Name, ChannelTables),
+	output;
+
+    Procedure =?= (Atom :- Communicate1),
+%arg(1, Atom, CommName),
+    RHSS =?= [(Ask : Writes | Body)] :
+      NewRHSS = (Ask : Tell | Body),
+      Terms ! (Atom :- Communicate2?) |		/* fix this */
+	utilities#untuple_predicate_list(',', Ask, Asks),
+	utilities#untuple_predicate_list(',', Writes, Writes'),
+	utilities#untuple_predicate_list(';', Communicate1, Communicate1'),
+	analyze_rhss(Communicate1'?, Prototype, Writes'?, ChannelTables,
+			ProcessTable, ProcessTable'?),
+	utilities#make_predicate_list(',',
+		[write_channel(start(Name), `"Scheduler.") | Writes'?], Tell),
+	extract_communication_list,
+	rewrite_clauses,
+	update_rhss(true, Communicate2''?, ChannelTables,
+			ProcessTable', ProcessTable''?, Communicate2'),
+	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
+%display_update(CommName, Rhss),
+	output.
+
+  prototype_channel_table(Channels, Prototype) :-
+
+    Channels ? Name :
+      Prototype ! Name(0, Name) |
+	self;
+
+    Channels = [] :
+      Prototype = [].
+
+  extract_communication_list(Asks, Writes, Communications) :-
+
+    Asks ? Identify,
+    Writes ? _write_channel(Ms, Channel),
+    Ms = Type(_Id, _Message, Tag, Multiplier, _Chosen) :
+      Communications ! {Tag, Identify, Type, Multiplier, Channel} |
+	self;
+
+    Asks = [],
+    Writes = [] :
+       Communications = [].
+
+rewrite_clauses(Communicate1, Communications, Communicate2) :-
+
+    Communicate1 ? (Ask | Body),
+    Ask = (Select, Consume),
+    Select = (_Chosen = ClauseTag) :
+      Communicate2 ! (Ask'? : Withdrawn? | Body),
+      Asks = [Select, Consume | Identifies?] |
+	generate_withdraws,
+	utilities#make_predicate_list(',', Asks, Ask'),
+	utilities#make_predicate_list(',', Withdraws?, Withdrawn),
+	self;
+
+    Communicate1 ? (Guard | Body),
+    Guard = (Select : Unify),
+    Select = (_Chosen = ClauseTag) :
+      Communicate2 ! (Select, Identifies? : Unify, Withdrawn? | Body) |
+	generate_withdraws,
+	utilities#make_predicate_list(',', Identifies'?, Identifies),
+	utilities#make_predicate_list(',', Withdraws?, Withdrawn),
+	self;
+
+    Communicate1 = [] :
+      Communications = _,
+      Communicate2 = [].
+
+  generate_withdraws(Communications, ClauseTag, Identifies, Withdraws) :-
+
+    Communications ? {ClauseTag, _Identify, _Type, _Multiplier, _Channel} |
+	self;
+
+    Communications ? {Tag, Identify, Type, Multiplier, Channel},
+    Tag =\= ClauseTag :
+      Identifies ! Identify,
+      Withdraws ! write_channel(withdraw(Type, Multiplier), Channel) |
+	self;
+
+    Communications = [] :
+      ClauseTag = _,
+      Identifies = [],
+      Withdraws = [].
+
+
+analyze_rhss(RHSS, Prototype, Writes, ChannelTables,
+		ProcessTable, NextProcessTable) :-
+
+    RHSS =?= [] :
+      Prototype = _,
+      Writes = _,
+      ChannelTables = [],
+      ProcessTable = NextProcessTable;
+
+    RHSS ? RHS,
+    Writes =?= [] :
+      ChannelTables ! NewChannelTable |
+	stream#hash_table(ChannelTable),
+	initialize_channel_table(Prototype, ChannelTable, ChannelTable'?),
+	analyze_rhss1(RHS, ChannelTable', NewChannelTable?,
+			ProcessTable, ProcessTable'?),
+	self;
+
+    RHSS ? RHS,
+    Writes ? Write :
+      ChannelTables ! NewChannelTable |
+	extract_message_channels,
+	update_prototype(Code, Channels, Prototype, ClPrototype),
+	stream#hash_table(ChannelTable),
+	initialize_channel_table(ClPrototype?, ChannelTable, ChannelTable'?),
+	analyze_rhss1(RHS, ChannelTable', NewChannelTable?,
+			ProcessTable, ProcessTable'?),
+	self.
+
+  extract_message_channels(Write, RHS, Code, Channels) :-
+
+    arg(2, Write, Request), arg(1, Request, send) :
+      RHS = (_ : _ = Variables | _),
+      Code = send |
+	extract_psi_channels;
+
+    arg(2, Write, Request), arg(1, Request, receive),
+    RHS = (_, _ = Variables | _) :
+      Code = receive |
+	extract_psi_channels.
+
+ update_prototype(Code, Channels, Prototype, NewPrototype) :-
+
+    Channels ? Channel,
+    Code =?= send |
+	update_prototype_send(Channel, Prototype, Prototype'),
+	self;
+
+    Channels ? Channel,
+    Code =?= receive |
+	update_prototype_receive(Channel, Prototype, Prototype'),
+	self;
+
+    Channels = [] :
+      Code = _,
+      Prototype = NewPrototype.
+
+  update_prototype_send(Channel, Prototype, NewPrototype) :-
+
+    Prototype ? Channel(Refs, PrimeName),
+    Refs++ :
+      NewPrototype = [Channel(Refs', PrimeName) | Prototype'];
+
+    Prototype ? Other,
+    otherwise :
+      NewPrototype ! Other |
+	self;
+
+    Prototype = [] :
+      NewPrototype = [] |
+	screen#display("Can't find in Prototype" - Channel).
+
+  update_prototype_receive(Channel, Prototype, NewPrototype) :-
+
+    /* Primed Channel */
+    Prototype ? Channel(Refs, PrimeName),
+    string_to_dlist(Channel, CL, Prime) :
+      Prime = [39],
+      NewPrototype = [Channel(Refs, PrimeName?), PrimeName?(0, PrimeName?)
+		     | Prototype'] |
+	list_to_string(CL, PrimeName);
+
+    Prototype ? Other,
+    otherwise :
+      NewPrototype ! Other |
+	self;
+
+    /* Add Local channel */
+    Prototype = [] :
+      NewPrototype = [Channel(0, Channel)].
+
+  initialize_channel_table(Prototype, ChannelTable, Initialized) :-
+
+    Prototype ? ChannelName(Refs, PrimeName) :
+      ChannelTable ! lookup(ChannelName, {Refs, PrimeName}, _, _) |
+	self;
+
+    Prototype =?= [] :
+      ChannelTable = Initialized.
+
+analyze_rhss1(RHS, ChannelTable, NewChannelTable,
+		ProcessTable, NextProcessTable) :-
+
+    RHS =?= (_Guard | Body) |
+	utilities#untuple_predicate_list(',', Body, Body'),
+	body_channel_usage;
+
+    RHS =\= (_ | _) |
+	utilities#untuple_predicate_list(',', RHS, Body),
+	body_channel_usage.
+
+  body_channel_usage(ChannelTable, NewChannelTable, Body,
+			ProcessTable, NextProcessTable) :-
+
+    Body ? (Name + Args), string(Name) :
+      ProcessTable ! member(Name, Channels, Ok) |
+	utilities#untuple_predicate_list(',', Args, Args'),
+	body_channel_usage1;
+
+    Body ? Name, string(Name) :
+      ProcessTable ! member(Name, Channels, Ok) |
+	body_channel_usage1 + (Args = []);
+
+    Body ? (_ # Goal) |
+	remote_call;
+
+    Body ? _Other,
+    otherwise |
+	self;
+
+    Body =?= [] :
+      ChannelTable = NewChannelTable,
+      ProcessTable = NextProcessTable.
+
+  remote_call(ChannelTable, NewChannelTable, Body,
+		ProcessTable, NextProcessTable, Goal) :-
+
+    Goal =?= (_ # Goal') |
+	self;
+
+    Goal =\= _ # _, arg(1, Goal, Name), string(Name),
+    nth_char(1, Name, C), ascii('A') =< C, C =< ascii('Z') |
+	extract_psi_channels(Goal, Channels),
+	body_channel_usage2;
+
+    otherwise :
+      Goal = _ |
+	body_channel_usage.	
+
+
+body_channel_usage1(ChannelTable, NewChannelTable, Body,
+		ProcessTable, NextProcessTable, Channels, Ok, Args) :-
+
+    Ok =?= true |
+	replace_arguments(Args, Channels, Channels'),
+	body_channel_usage2;
+
+    /* Call to .comm procedure or perhaps some library procedure. */
+    Ok =\= true,
+    Args = [] :
+      Channels = _ |
+	body_channel_usage.
+
+  replace_arguments(Args, Channels, NewChannels) :-
+
+    Args ? (`ChannelName = `Channel),
+    string(ChannelName), nth_char(1, ChannelName, C),
+    ascii(a) =< C, C =< ascii(z) |
+	replace_argument(ChannelName, Channel, Channels, Channels'),
+	self;
+
+    Args ? _Other,
+    otherwise |
+	self;
+
+    Args = [] :
+      NewChannels = Channels.
+
+  replace_argument(ChannelName, Channel, Channels, NewChannels) :-
+
+    Channels ? ChannelName :
+      NewChannels = [Channel | Channels'];
+
+    Channels ? OtherName, ChannelName =\= OtherName |
+	self.
+
+
+body_channel_usage2(ChannelTable, NewChannelTable, Body,
+		ProcessTable, NextProcessTable, Channels) :-
+
+    /* This will fail for library processes. */
+    Channels ? ChannelName :
+      Old = {Refs, ChannelName},
+      ChannelTable ! lookup(ChannelName, New, Old, Found),
+      New = {Refs'?, ChannelName} |
+	Found? = old,				/* debugging code */
+	Refs++,
+	self;
+
+    Channels =?= [] |
+	body_channel_usage.
+
+
+update_rhss(Comm, RHSS, ChannelTables, ProcessTable, NextProcessTable, Rhss) :-
+
+    RHSS ? RHS,
+    ChannelTables ? Table :
+      Table ! entries(Entries),
+      Rhss ! (NewAsk'? : NewTell''? | NewBody''?) |
+	partition_rhs(RHS, Ask, Tell, Body),
+	reduce_channel_table(Entries, AddAsk, AddTell, Table', Table''?),
+	utilities#untuple_predicate_list(',', Ask, NewAsk, AddAsk?),
+	utilities#untuple_predicate_list(',', Tell, NewTell, AddTell?),
+	update_tell(Comm, NewTell, NewTell', Table'', Table'''?),
+	utilities#untuple_predicate_list(',', Body, NewBody),
+	update_body(NewBody, Table''', NewBody', ProcessTable, ProcessTable'?),
+	utilities#make_predicate_list(',', NewAsk?, NewAsk'),
+	utilities#make_predicate_list(',', NewTell'?, NewTell''),
+	utilities#make_predicate_list(',', NewBody'?, NewBody''),
+	self;
+
+    RHSS =?= [] :
+      Comm = _,
+      ChannelTables = [],
+      Rhss = [],
+      ProcessTable = NextProcessTable.
+
+  partition_rhs((Ask : Tell | Body), Ask^, Tell^, Body^).
+  partition_rhs((Ask  | Body), Ask^, true^, Body^) :-
+    Ask =\= (_ : _) | true.
+  partition_rhs(Body, true^, true^, Body^) :-
+    Body =\= (_ | _) | true.
+
+
+reduce_channel_table(Entries, AddAsk, AddTell, Table, NextTable) :-
+
+    Entries ? entry(Name, {1, _}) :
+      Table ! delete(Name, _, _) |
+	self;
+
+    Entries ? entry(Name, {0, _}) :
+      Table ! delete(Name, _, _),
+      AddTell ! (`Name = {`"_", `"_",
+			 {`psiln(Name), `psiln(Name)}}) |
+	self;
+
+    Entries ? entry(Name, {N, PName}),
+    N > 1,
+    convert_to_string(N, NS),
+    string_to_dlist(psiln_, PsiL, PsiT),
+    string_to_dlist(NS, NSL, []) :
+      PsiT = NSL,
+      Table ! replace(Name, {1, PName}, _Old, _Ok),
+      AddAsk ! (`Name = {`psiid(Name), `psich(Name),
+			{`psiln_0(Name), `Psiln_N?(Name)}}) |
+	list_to_string(PsiL, Psiln_N),
+	add_tells(Name, 0, N, AddTell, AddTell'),
+	self;
+
+    Entries =?= [] :
+      AddAsk = [],
+      AddTell = [],
+      Table = NextTable.
+
+  add_tells(Name, Index, N, AddTell, NextAddTell) :-
+
+    Index < N,
+    Index++,
+    convert_to_string(Index, IS),
+    string_to_dlist(psiln_, PsiL, PsiT),
+    string_to_dlist(IS, ISL, []),
+    convert_to_string(Index', IS'),
+    string_to_dlist(psiln_, PsiL', PsiT'),
+    string_to_dlist(IS', ISL', []),
+    string_to_dlist(psich_, PsiC, PsiU) :
+      PsiT = ISL,
+      PsiT' = ISL',
+      PsiU = ISL',
+      AddTell ! (`PsichIndex?(Name) =
+			{`psiid(Name), `psich(Name),
+			 {`PsilnIndex?(Name), `PsilnIndex'?(Name)}}) |
+	list_to_string(PsiL, PsilnIndex),
+	list_to_string(PsiL', PsilnIndex'),
+	list_to_string(PsiC, PsichIndex),
+	self;
+
+    Index >= N :
+      Name = _,
+      AddTell = NextAddTell.
+
+
+update_tell(Comm, Tell, NewTell, Table, NextTable) :-
+
+    Comm = true,
+    Tell = [(`psims(ChannelName) = Message) | Tail],
+    tuple(Message),
+    arity(Message, A),
+    make_tuple(A, Message') :
+      NewTell = [(`psims(ChannelName) = Message') | Tail] |
+	replace_sent_channels(1, Message, Message', Table, NextTable);
+
+    otherwise :
+      Comm = _,
+      NewTell = Tell,
+      Table = NextTable.
+
+  replace_sent_channels(Index, Message, NewMessage, Table, NextTable) :-
+
+    Index =< arity(Message),
+    arg(Index, Message, `ChannelName),
+    arg(Index, NewMessage, NewChannel),
+    Index++ :
+      Table ! member(ChannelName, Value, Ok) |
+	replace_channel + (Table = Table', NextTable = Table''?),
+	self;
+
+    Index > arity(Message) :
+      Message = _,
+      NewMessage = _,
+      Table = NextTable.
+
+
+update_body(Body, Table, NewBody, ProcessTable, NextProcessTable) :-
+
+    Body ? Goal, string(Goal) :
+      NewBody ! Goal'?,
+      ProcessTable ! member(Goal, Channels, Ok) |
+	update_goal(Goal, Goal, Channels, Ok, [], Goal', Table, Table'?),
+	self;
+
+    Body ? Goal, Goal = Functor + (Substitutions), string(Functor) :
+      NewBody ! Goal'?,
+      ProcessTable ! member(Functor, Channels, Ok) |
+	utilities#untuple_predicate_list(',', Substitutions, Substitutions'),
+	update_goal(Goal, Functor, Channels, Ok, Substitutions'?, Goal', 
+			Table, Table'?),
+	self;
+
+    Body ? RemoteCall, RemoteCall =?= Path#RemoteGoal :
+      NewBody ! Path#RemoteGoal'? |
+	update_remote_goal(RemoteGoal, RemoteGoal', Table, Table'?),
+	self;
+
+    Body ? Other,
+    otherwise :
+      NewBody ! Other |
+	self;
+
+    Body =?= [] :
+      NewBody = [],
+      Table = [],
+      ProcessTable = NextProcessTable.
+
+
+update_remote_goal(RemoteGoal, NewRemoteGoal, Table, NextTable) :-
+
+    RemoteGoal = Path#RemoteGoal' :
+      NewRemoteGoal = Path#NewRemoteGoal'? |
+	self;
+
+    RemoteGoal =\= (_#_), tuple(RemoteGoal), arg(1, RemoteGoal, Functor),
+    string(Functor), nth_char(1, Functor, C),
+    ascii('A') =< C, C =< ascii('Z'),
+    arity(RemoteGoal, Index),
+    make_tuple(Index, NRG),
+    arg(1, NRG, F) :
+      F = Functor |
+	update_remote_goal1;
+
+    otherwise :
+      NewRemoteGoal = RemoteGoal |
+	Table = NextTable.
+
+  update_remote_goal1(RemoteGoal, NewRemoteGoal, Table, NextTable,
+			NRG, Index) :-
+
+    Index > 1,
+    arg(Index, RemoteGoal, Arg),
+    arg(Index, NRG, NewArg),
+    Index-- |
+	update_argument(Arg, NewArg, Table, Table'?),
+	self;
+
+    Index =< 1 :
+      RemoteGoal = _,
+      NewRemoteGoal = NRG,
+      Table = NextTable.
+
+  update_argument(Arg, NewChannel, Table, NextTable) :-
+
+    Arg = `ChannelName, string(ChannelName) :
+      Table ! member(ChannelName, Value, Ok) |
+	replace_channel;
+
+    otherwise :
+      NewChannel = Arg,
+      Table = NextTable.
+
+
+update_goal(Goal, Functor, Channels, Ok, Substitutions, NewGoal,
+		Table, NextTable) :-
+
+    Ok =?= true :
+      Goal = _ |
+	update_substitutions(Substitutions, Substitutions', NextSubstitutions?,
+				Channels, Channels', Table, Table'?),
+	update_implicit(Channels'?, NextSubstitutions, Table', NextTable),
+	construct_newgoal(Functor, Substitutions'?, NewGoal);
+	
+
+    Ok =\= true :
+      Goal = _,
+      Channels = _,
+      Table = NextTable |
+	construct_newgoal(Functor, Substitutions, NewGoal).
+
+
+update_substitutions(Subs, NewSubs, NextSubs, Channels, NewChannels,
+			Table, NextTable) :-
+
+    Subs ? (`Channel1 = `Channel2) :
+      NewSubs ! (`Channel1 = Channel2'?),
+      Table ! member(Channel2, CV, Ok) |
+	utilities#remove_item(Channel1, Channels, Channels'),
+	substitute_channel(Channel2, CV, Ok, Channel2', Table', Table''?),
+	self;
+
+    Subs =?= [] :
+      NewSubs = NextSubs,
+      NewChannels = Channels,
+      Table = NextTable.
+
+  substitute_channel(ChannelName, Value, Ok, NewChannel, Table, NextTable) :-
+
+    Ok =?= true,
+    Value = {_Value, ChannelName} |
+	replace_channel;
+
+    Ok =?= true,
+    Value = {_Value, ChannelName'}, ChannelName =\= ChannelName' :
+      Table ! member(ChannelName', Value', Ok') |
+	self;
+
+    Ok =?= false :
+      Value = _,
+      NewChannel = `ChannelName,
+      Table = NextTable.
+
+
+update_implicit(Channels, Substitutions, Table, NextTable) :-
+
+    Channels ? ChannelName :
+      Table ! member(ChannelName, Value, Ok) |
+	update_implicit1;
+
+    Channels =?= [] :
+      Substitutions = [],
+      Table = NextTable.
+
+  update_implicit1(Channels, Substitutions, Table, NextTable,
+			ChannelName, Value, Ok) :-
+
+    Ok =?= true :
+      Substitutions ! (`ChannelName = Substitute?) |
+	replace_channel(ChannelName, Substitute, Ok, Value, Table, Table'?),
+	update_implicit;
+
+    Ok =\= true :
+      ChannelName = _,
+      Value = _ |
+	update_implicit.    
+
+
+construct_newgoal(Functor, Substitutions, NewGoal) :-
+
+    Substitutions = [] :
+      NewGoal = Functor;
+
+    Substitutions =\= [] :
+      NewGoal = Functor + Substitutions'? |
+	utilities#make_predicate_list(',', Substitutions, Substitutions').
+
+
+replace_channel(ChannelName, NewChannel, Ok, Value, Table, NextTable) :-
+
+    Ok =?= true,
+    Value = {Index, PName},
+    Index++,
+    convert_to_string(Index, IS),
+    string_to_dlist(IS, ISL, []),
+    string_to_dlist(psich_, PsiC, PsiU) :
+      PsiU = ISL,
+      NewChannel = `PsichIndex?(ChannelName),
+      Table = [lookup(ChannelName, {Index', PName}, Value, Status)
+	      |	NextTable] |
+	list_to_string(PsiC, PsichIndex),
+	Status? = old;				/* Debugging aid. */
+
+    Ok =\= true :
+      Value = _,
+      NewChannel = `ChannelName,
+      Table = NextTable.
+
+extract_psi_channels(Variables, Channels) :-
+
+    Variables ? `Name, string(Name),
+    nth_char(1, Name, C), ascii(a) =< C, C =< ascii(z) :
+      Channels ! Name |
+	self;
+
+    Variables ? _Other,
+    otherwise |
+	self;
+
+    tuple(Variables) |
+	utils#tuple_to_dlist(Variables, Variables', []),
+	self;
+
+    Variables = [] :
+      Channels = [].
+
+/*
+display_update(Name, Rhss) :-
+	screen#display((Name ::= Rhss), type(ground)).
+*/
