@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/12 10:44:05 $
+		       	$Date: 2000/11/22 12:49:22 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 -language([evaluate, compound, colon]).
 -export(transform/5).
-%-mode(trust).
+-mode(trust).
 
 -include(psi_constants).
 
