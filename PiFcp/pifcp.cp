@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/08 10:47:20 $
+		       	$Date: 2000/02/08 13:40:33 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.13 $
+			$Revision: 1.14 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -47,7 +47,11 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
   filter_attributes(In, GlobalList, NewGlobalList, Out, Exported,
 			Errors, NextErrors) :-
 
-    In ? export(Es) :
+    In ? export(Es), string(Es), Es =\= all :
+      Exported = [Es] |
+	self;
+
+    In ? export(Es), list(Es) :
       Exported = Es |
 	self;
 
@@ -170,7 +174,8 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 		Entries, NextEntries) :-
 
 
-    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom,
+					CodeTuple},
     Name =\= "_",
     GlobalList =\= [],
     Export = true,
@@ -181,20 +186,21 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
       Entries ! (OuterAtom :- Initializer?),
       NextEntries = Entries',
       NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?,
-					_CodeTuple} |
+					CodeTuple} |
 	list_to_string([Space|NL], Name'),
 	split_channels(1, Index, Channels, ParamList, ChannelList),
 	construct_lhs_atoms,
 	initialize_global_channels(Index', OuterAtom'?, Initializer);
 
-    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom,
+					CodeTuple},
     Name =\= "_",
     GlobalList =\= [],
     Export = false,
     Index := arity(OuterAtom) :
       NextEntries = Entries,
       NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?,
-					_CodeTuple} |
+					CodeTuple} |
 	split_channels(1, Index, Channels, ParamList, ChannelList),
 	construct_lhs_atoms;
 	
@@ -426,8 +432,6 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
     ProcessDefinition =?= {_Name, _Arity, _Channels, _OuterAtom, _InnerAtom,
 					CodeTuple} :
       CodeTuple = Mode?(SendRHS?, ProcessRHS?) |
-%arg(1, ProcessDefinition, Name),
-%screen#display(Name(Mode)),
 	self;
 
     /* Pass along */
@@ -2295,12 +2299,11 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
 
   cumulate(Name, Cumulated, Reply) :-
 
-    Cumulated = [Definition | _],
-    arg(1, Definition, Name) :
-      Reply = found(Definition);
+    Cumulated = [Name | _] :
+      Reply = found;
 
-    Cumulated ? _Definition,
-    otherwise |
+    Cumulated ? Other,
+    Other =\= Name |
 	self;
 
     Cumulated = [] :
@@ -2310,27 +2313,25 @@ sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
   cumulated(Summed, Entries, Errors, Cumulated,
 	Name, Calls, Channels, CodeTuples, Call, Reply) :-
 
-    Reply =?= found(ProcedureDefinition) :
+    Reply =?= found :
       Channels = _,
-			ProcedureDefinition = _,
       CodeTuples = _ |
 	make_sum_call(Name, Calls, Call, Errors, Errors'?),
 	sum_procedures;
 
     Reply =?= new :
-      NewDefinition = {Name, 0, SumChannels?, Atom?, Atom?, none([], [])},
-      Cumulated' = [NewDefinition | Cumulated] |
+      Cumulated' = [Name | Cumulated] |
 	make_summed_rhs(Name, CodeTuples, 1, Sends, Code, FinalMode),
 	sort_out_duplicates(Channels?, SumChannels, _Reply),
 	make_named_list(Sends?, Writes, Name-duplicate_send_channel_in_sum,
 				Errors, Errors'?),
-	make_named_predicates(',', Writes?, Writes'),
+	make_named_guard(Writes?, Ask, Tell),
 	make_named_list(Code?, RHS, Name-duplicate_receive_channel_in_sum,
 				Errors', Errors''?),
 	make_named_predicates(';', RHS, RHS'),
 	channels_to_variables(SumChannels, Variables, N),
 	make_atom(N?, Name, Variables, Atom),
-	make_sum_procedure(FinalMode?, Name, Writes'?, RHS'?, Atom?,
+	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS'?, Atom?,
 				Entries, Entries'?),
 	make_sum_call(Name, Calls, Call, Errors'', Errors'''?),
 	sum_procedures.
@@ -2402,19 +2403,19 @@ make_summed_rhs(Name, CodeTuples, Index, Sends, Code, FinalMode) +
   add_sends_and_receives(Idents, Writes, ProcessRHS, Sender,
 	Index, NewIndex, Sends, NextSends, Code, NextCode) :-
 
+    Idents =?= (Identify, Idents'),
+    Identify = (`ChannelName = _Tuple),
     Writes =?= (Write, Writes'),
     Write =?= write_channel(_,_),
     ProcessRHS =?= (Sent, ProcessRHS'),
     Sent =?= (`pifcp(chosen) = _Index : Tell | Body),
-    Idents =?= (Identify, Idents'),
-    Identify = (ChannelName = _Tuple),
     Index++ :
       Sends ! ChannelName(Identify, Write'?),
       Code ! Index((`pifcp(chosen) = Index : Tell | Body)) |
 	reindex_write(Write, Sender, Index, Write'),
 	self;
 
-    Idents = (ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
     ProcessRHS =?= (`pifcp(chosen) = _Index : Tell | Body),
     Index++ :
       NewIndex = Index',
@@ -2422,7 +2423,7 @@ make_summed_rhs(Name, CodeTuples, Index, Sends, Code, FinalMode) +
       Code = [Index((`pifcp(chosen) = Index : Tell | Body)) | NextCode] |
 	reindex_write(Writes, Sender, Index, Write);
 
-    Idents = (ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
     ProcessRHS =?= (`pifcp(chosen) = _Index | Body),
     Index++ :
       NewIndex = Index',
@@ -2509,9 +2510,9 @@ make_sum_procedure(Mode, Name, Writes, RHS, Atom, Entries, NextEntries) :-
 
     Mode =?= mixed :
       Sender = `pifcp(sendid),
-      Entries = [(Atom :- (Writes? |
+      Entries = [(Atom :- Writes? |
 			pi_monitor#unique_sender(Name, Sender),
-			MixedChoices?)),
+			MixedChoices?),
 		 (ChoiceAtom? :- RHS?)
 		| NextEntries] |
 	make_choice_name(Name, ".mixed", MixedChoices),
@@ -2526,6 +2527,22 @@ make_sum_procedure(Mode, Name, Writes, RHS, Atom, Entries, NextEntries) :-
 
 
 /************************** Summation Utilities ******************************/
+
+make_named_guard(Writes, Ask, Tell) :-
+
+    Writes ? _Name(Idents, Write), Writes' =\= [] :
+      Ask = (Idents, Ask'?),
+      Tell = (Write, Tell'?) |
+	self;
+
+    Writes = [_Name(Idents, Write)] :
+      Ask = Idents,
+      Tell = Write;
+
+    Writes = [] :
+      Ask = true,
+      Tell = true.
+
 
 make_named_list(NamedClauses, Clauses, Diagnostic, Errors, NextErrors) :-
 
