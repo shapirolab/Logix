@@ -62,6 +62,12 @@ filter_data(Stream, Out) :-
       Out ! String |
 	self;
 
+    Stream ? Name - _ChannelName, string(Name),
+    string_to_dlist(Name, DN, [EOL]),
+    list_to_string([MINUS | DN], String) :
+      Out ! String |
+	self;
+
     Stream ? Name(_Time), string(Name),
     string_to_dlist(Name, DN, [EOL]),
     list_to_string([PLUS | DN], String) :
