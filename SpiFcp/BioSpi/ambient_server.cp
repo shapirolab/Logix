@@ -218,7 +218,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
  * Create a nested computation.
  */
 ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
-    channel(Parent) :
+    vector(Parent) :
       write_vector(AMBIENT_CONTROL, new_id(UniqueId), Parent, Parent'),
       write_vector(AMBIENT_CONTROL, ambient_id(ParentId), Parent', Parent''),
       make_channel(SuperChannel, FromSub),
@@ -566,7 +566,10 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? merge(MergingAmbient, Ready),
-    channel(MergingAmbient) :
+    vector(MergingAmbient),
+    read_vector(AMBIENT_ID, MergingAmbient, FromId) :
+      FromId? = _FromType(Index),
+      write_channel(record_item(reset(Index)), Scheduler),
       write_vector(AMBIENT_CONTROL,
 		   extract(Goals, Ambient, Ready),
 		   MergingAmbient, MergingAmbient') |
@@ -586,7 +589,10 @@ serve_ambient(In, Events, FromSub, Done,
 %	DEBUG(change_parent, "no_remove"),
 	self;
 
-    In ? change_parent(Parent', true, Ready) :
+    In ? change_parent(Parent', true, Ready),
+    read_vector(AMBIENT_ID, Ambient, AmbientId) :
+      AmbientId? = _FromType(Index),
+      write_channel(record_item(reset(Index)), Scheduler),
       write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
@@ -740,6 +746,7 @@ serve_ambient(In, Events, FromSub, Done,
     Goals =?= [] :
       NewRequests = Requests,
       Ready = true.
+
 
   ambient_lookup(In, Events, FromSub, Done,
 		 Ambient, Parent, Children,
