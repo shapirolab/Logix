@@ -96,10 +96,10 @@ instances of the <channel> in the same <clause> are renamed.  A local
 <channel> is one which is instantiated by a <receive> in a <guard>, whose
 name does not match any of the cumulated channels.
 
-A <new_scope> within a <process> behaves just like has the same semantics
-as a declared <process>, except that it can only be activated by commitment
-of its clause, not called; in addition it may contain <process_definitions>
-whose <process>es can only be referred to within the declared scope.
+A <new_scope> within a <process> has the same semantics as a declared
+<process>, except that it can only be activated by commitment of its clause,
+not called; in addition it may contain <process_definitions> whose <process>es
+can only be referred to within the declared scope.
 
 The initial version of the transformation requires that no two <process>es
 within a <program> have the same name.

@@ -78,10 +78,11 @@ BNF for PiFcp
 Primitives:
 
 
-A <channel> is an alpha-numeric string, beginning with an lower case letter,
+A <channel> is an alpha-numeric string, beginning with a lower case letter,
 which may contain  an underscore (_) character, or it is just an underscore
-character.  By convention the <channel> "_" is anonymous; it does not match
-any other <channel>, not even another "_" <channel>.
+character.  By convention the <channel> "_" is anonymous; it may only be
+used in a <receive> <channel_list>, where it matches any <channel> which
+is sent in the corresponding position.
 
 
 A <name> is an alpha-numeric string, beginning with a upper case letter, which
@@ -106,7 +107,7 @@ If a <process> is declared at level one of a <program> definition, it may be
 called by an external process.
 
 
-Nested "new" processes are scoped with curly braces (see definition of
+Nested "new" processes are scoped with angle brackets (see definition of
 <new_scope>).
 
 
@@ -122,8 +123,8 @@ appear as the last <call> in a <body>.
 
 The recursive definition of <compound_guard> is syntactic sugar - e.g.
 
-    p :- <guard1> & <compound_guard1> | q;
-         <guard2> & <compound_guard2> | r.
+    p :- <guard1> | <compound_guard1> | q;
+         <guard2> | <compound_guard2> | r.
 
 is equivalent to:
 
