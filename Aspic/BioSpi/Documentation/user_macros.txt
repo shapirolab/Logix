@@ -41,11 +41,7 @@ created by different instantiations of the same process.  Examples:
 
 Imbedded numbers indicate the sub-process which declared the channel.
 
-A public channel  is identified by the word "public" concatenated
-with the declared name of the channel.  Example:
-
-    public.in
-    public.cell3
+A public channel  is identified by the  declared name of the channel.
 
 An external channel is derived from an internal channel by declaring
 an inter-ambient communication or asserting a capability.  The channel
@@ -54,7 +50,7 @@ which is the name of the internal channel.
 
     enter(Ligand.0.lig2(5))
     p2c(Symporter_Out.0.symO(2)),
-    merge(public.complexAB)
+    merge(complexAB)
 
 There are four user macros which display the ambient tree of a computation.
 These are atr, btr, ctr, dtr (see also rtr below).  Each user macro may
@@ -67,7 +63,7 @@ specify an argument, which may be:
      unique positive integer identifier of an ambient (e.g. -6),
      designates a single node to be displayed.
 
-  c. A name designates a class of nodes, all of which share the user
+  c. A name designates a set of nodes, all of which share the user
      specified name (as functor of the identifying tuple); the name
      "system", specifies the root node as well as any sub-nodes
      which the user may have chosen to identify with that name.
@@ -97,7 +93,7 @@ instantaneous channel, or in the dtr display of a based channel: a
 Receive request count is preceded by a question mark (?); a Send
 request count is followed by an exclamation mark (!); a combined
 request count includes both of the operators for a homodimerized
-channel - e.g. public.h(?10!).
+channel - e.g. h(?10!).
 
 The ctr and dtr displays represent instantaneous channels in infix
 notation: the channel is the left-hand operand;  the operator is "!",
@@ -110,52 +106,50 @@ inside curly braces.
 
 Examples of ambient tree displays following:
 
-    run(symporter_comm#"System",15)
+    run(symporter_comm#"System",9)
 
 @atr
 <1> system
 <1>  public(1)
-<1>   molecule(2)
 <1>   cell(6)
+<1>    molecule(2)
 <1>    molecule(5)
 <1>    molecule(4)
 <1>    molecule(3)
 @ctr(1)
 <1> public(1)
-<1>   {s2s(Symporter_In.0.symI(1)), ?1}
-<1>   {enter(Symporter_In.0.symI(1)), 1!}
-<1>  molecule(2)
 <1>  cell(6)
-<1>    {enter(public.cell3), 1!}
-<1>    {exit(public.cell4), 1!}
-<1>    {p2c(public.cell2), 1.0}
-<1>    {s2s(public.cell1), ?1}
+<1>    {enter(cell3), 2!}
+<1>    {exit(cell4), 2!}
+<1>    {p2c(cell2), 1.0}
+<1>    {s2s(cell1), ?1}
+<1>   molecule(2)
 <1>   molecule(5)
 <1>   molecule(4)
 <1>   molecule(3)
 @btr(-6)
 <1> cell(6)
-<1>   {p2c(public.cell2), 1.0}
+<1>   {p2c(cell2), 1.0}
 @ctr(cell(6))
 <1> cell(6)
-<1>   {enter(public.cell3), 1!}
-<1>   {exit(public.cell4), 1!}
-<1>   {p2c(public.cell2), 1.0}
-<1>   {s2s(public.cell1), ?1}
+<1>   {enter(cell3), 2!}
+<1>   {exit(cell4), 2!}
+<1>   {p2c(cell2), 1.0}
+<1>   {s2s(cell1), ?1}
 @dtr(molecule)
 <1> molecule(2)
-<1>   public.cell1 ? 2
-<1>   public.cell2 ? 2
+<1>   cell1 ? 2
+<1>   cell2 ? 2
 <1>   Symporter_In.0.symI(1) ? 1
 <1> molecule(5)
-<1>   public.cell3 ? 2
-<1>   public.cell4 ? 2
+<1>   cell3 ? 2
+<1>   cell4 ? 2
 <1> molecule(4)
-<1>   public.cell1 ? 2
-<1>   public.cell2 ? 2
+<1>   cell1 ? 2
+<1>   cell2 ? 2
 <1> molecule(3)
-<1>   public.cell3 ? 2
-<1>   public.cell4 ? 2
+<1>   cell3 ? 2
+<1>   cell4 ? 2
 
 (The operator "?" indicates that the channel is based, but has never
  been used for local communication.)
@@ -219,13 +213,13 @@ Signal
 <1> system
 <1>  public(1)
 <1>   membrane(2)
-<1>     eg1 # Receptor.0'(public.c, p2c(public.c))
+<1>     eg1 # Receptor.0'(c, p2c(c))
 <1>    molecule(4)
-<1>      eg1 # Domain3'(public.a, public.b, s2s(public.a))
-<1>      eg1 # Domain4'(public.b)
+<1>      eg1 # Domain3'(a, b, s2s(a))
+<1>      eg1 # Domain4'(b)
 <1>    molecule(3)
-<1>      eg1 # Domain1.1'(public.b, public.c)
-<1>      eg1 # Domain2'(public.a, public.b)
+<1>      eg1 # Domain1.1'(b, c)
+<1>      eg1 # Domain2'(a, b)
 @
 
 Notes:
@@ -256,8 +250,8 @@ In addition to the usual record features, the ambient record includes:
 
 The spi2t script handles these modifications:
 
- * Processes are counted per ambient, since the user-specified class
-   and the numeric identifier are part of the process name.
+ * Processes are counted per ambient, since the user-specified set
+   name and the numeric identifier are part of the process name.
 
  * Ambient merger is accounted for, so process accounting is correct.
 
