@@ -12,7 +12,7 @@ The generated file may be used to start a Logix session on the
 appropriate platform - e.g.s:
 
     % Logix/linux_logix
-    % Logix/sgi_ligix
+    % Logix/sgi_logix
     % Logix/solaris_logix
 
 However, do NOT run the system from within the Logix Directory,
