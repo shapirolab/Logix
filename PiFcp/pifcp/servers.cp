@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/07 11:52:27 $
+		       	$Date: 2000/03/14 13:41:30 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -111,12 +111,12 @@ serve_empty_scope(In, Controls, Exports, Entries, Errors) +
     Export =?= true,
     arg(1, Means, stochastic),
     GlobalNames = [] |
-      Prefix = scheduler(`spifcp(schedule));
+      Prefix = scheduler(`pifcp(schedule));
 
     Export =?= true,
     arg(1, Means, stochastic),
     GlobalNames =\= [] |
-      Prefix = global_channels(_GlobalPairList, `spifcp(schedule));
+      Prefix = global_channels(_GlobalPairList, `pifcp(schedule));
 
     Export =?= true,
     arg(1, Means, none),
@@ -140,13 +140,13 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
-      ascii(' ', Space),
+      ascii('.', Period),
       Entries ! export(Atom?, Initializer?, []),
       NextEntries = Entries',
       NewDefinition = {Name, Arity, ChannelNames'?, OuterLHS'?, InnerLHS'?,
 					CodeTuple} |
 	piutils#tuple_to_atom(OuterLHS, Atom),
-	list_to_string([Space|NL], Name'),
+	list_to_string([Period|NL], Name'),
 	split_channels(1, Index, ChannelNames, ParamList, ChannelList),
 	make_lhs_tuples,
 	initialize_global_channels(Index', OuterLHS'?, GlobalDescriptors,
