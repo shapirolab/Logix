@@ -1,9 +1,10 @@
-/* $Header: /home/qiana/Repository/Logix/system/parse/syntax/fcp.cp,v 1.1 1999/07/09 07:03:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/parse/syntax/fcp.cp,v 1.2 1999/11/28 12:41:47 bill Exp $ */
 -language(syntax).
 
 yfx( ';'  , 1070).	% 18/6/89	1050
 yfx( '|'  , 1060).	% 18/6/89	1100
 yfy( ':'  , 1050).	% 18/6/89	1060
+yfx( '&'  , 1000).      % 16/11/99      new
 yfx( ','  , 1000).
 yfx( '!'  ,  900).	% 1/1/88	new
 xfy( '?'  ,  900).	% 4/5/88	new
