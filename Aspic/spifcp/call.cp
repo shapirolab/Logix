@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/04/01 13:04:49 $
+		       	$Date: 2004/05/31 07:01:52 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -219,8 +219,9 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	self;
 
     ArgTypes ? real,
-    Arguments ? Arg, number(Arg),
+    Arguments ? Arg,
     /* herewith a kluge due to problem in assembler$real_kind_code */
+    Arg @< [],
     convert_to_string(Arg, Arg') :
       OkArgs ! Arg' |
 	self;
