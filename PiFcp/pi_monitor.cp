@@ -121,4 +121,7 @@ cdr_past_msgs(In, Out) :-
 
     In = [_Sender(_Msg, _Tag, Choice) | _],
     unknown(Choice) :
+      Out = In;
+
+    unknown(In) :
       Out = In.
