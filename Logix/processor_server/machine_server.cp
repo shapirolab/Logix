@@ -6,9 +6,9 @@ modified: Avshalom Houri 12/87
 Machine manager process
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:39 $
+		       	$Date: 2004/06/22 11:59:29 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/processor_server/machine_server.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -134,6 +134,10 @@ server(In, Machine, Faults) + (Queue = [], BootVar = _, GCs = _) :-
 
     In ? {faults(Faults'?, Old), true^, done^} :
       Faults = Old? |
+	server;
+
+    In ? {signals(Machine', Old), true^, done^} :
+      Machine = Old |
 	server;
 
     In ? {poll(Poll?, Delay), true^, done^},
