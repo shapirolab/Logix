@@ -1,0 +1,45 @@
+Coventry is a daemon which monitors and re-nices processes in the
+TS (time-sharing) queue, so as to provide fair scheduling and more
+efficient use of the processors.
+
+It monitors the queue periodically, relegating processes which are
+using too much processor time to less favorable nice classes.  When
+more than one such "greedy" process is being executed by the same
+user, at most one may execute in each nice class - the others are 
+sent to coventry (the least favorable class).
+
+Certain users and processes are exempt from this scheduling.  These
+are listed in the coventryd daemon, declared as PERL hashes, %users
+and %commands.
+
+The script coventry may be used to start and stop coventryd.
+
+    coventry start
+and
+    coventry stop
+
+You may also run coventryd directly.  To do so you should be root,
+and the directory of coventryd, /usr/local/sbin,  should be in the 
+PATH environment variable, or you should call it with its full path
+name, /usr/local/sbin/coventryd.  When running coventryd directly you 
+may  use the option "-Q" or "-Q#" to query the states of processes, 
+where "#" in minutes is the  lower bound of elapsed time of processes
+to be displayed - the  default is 1 minute.  Processes are displayed:
+
+    <user>(<nice value>) - <elapsed time> - <command>(<process id>)
+
+The query option must be the first argument, if it is present at all.
+Other arguments are used as options for System V ps (default "-A").
+The option:
+
+    -o <fields>
+
+is used by coventryd when calling ps, and should not be included.
+
+Example:
+
+    coventryd -Q4 -u bill,leah,schramm
+
+To debug coventryd, set the environment variable:
+
+    setenv DEBUG_COVENTRY 1
