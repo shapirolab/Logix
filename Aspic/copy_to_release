@@ -95,6 +95,8 @@ cp -p Examples/circadian/self.cp release/Examples/circadian/self.cp
 rm -f release/Examples/circadian/think.cp
 cp -p Examples/circadian/think.cp release/Examples/circadian/think.cp
 
+rm -f release/BioSpi/Examples/README
+cp -p BioSpi/Examples/README release/BioSpi/Examples/README
 rm -f release/BioSpi/Examples/complex_merge.cp
 cp -p BioSpi/Examples/complex_merge.cp release/BioSpi/Examples/complex_merge.cp
 rm -f release/BioSpi/Examples/eg1.cp
@@ -109,6 +111,18 @@ rm -f release/BioSpi/Examples/symporter_comm.cp
 cp -p BioSpi/Examples/symporter_comm.cp release/BioSpi/Examples/symporter_comm.cp
 rm -f release/BioSpi/Examples/vesicle_merge.cp
 cp -p BioSpi/Examples/vesicle_merge.cp release/BioSpi/Examples/vesicle_merge.cp
+rm -f release/BioSpi/Examples/vesicle/cell.cp
+cp -p BioSpi/Examples/vesicle/cell.cp release/BioSpi/Examples/vesicle/cell.cp
+rm -f release/BioSpi/Examples/vesicle/self.cp
+cp -p BioSpi/Examples/vesicle/self.cp release/BioSpi/Examples/vesicle/self.cp
+rm -f release/BioSpi/Examples/vesicle/vesicle.cp
+cp -p BioSpi/Examples/vesicle/vesicle.cp release/BioSpi/Examples/vesicle/vesicle.cp
+rm -f release/BioSpi/Examples/complex/proteinA.cp
+cp -p BioSpi/Examples/complex/proteinA.cp release/BioSpi/Examples/complex/proteinA.cp
+rm -f release/BioSpi/Examples/complex/proteinB.cp
+cp -p BioSpi/Examples/complex/proteinB.cp release/BioSpi/Examples/complex/proteinB.cp
+rm -f release/BioSpi/Examples/complex/self.cp
+cp -p BioSpi/Examples/complex/self.cp release/BioSpi/Examples/complex/self.cp
 
 rm -f release/Tutorial/bland.cp
 cp -p Tutorial/bland.cp release/Tutorial/bland.cp
