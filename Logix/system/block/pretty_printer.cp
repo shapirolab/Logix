@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/pretty_printer.cp,v 1.1 1999/07/09 07:03:11 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/pretty_printer.cp,v 1.2 2002/06/07 11:57:00 bill Exp $ */
 /*
  *  Handles appropriate output of the block-module, according to the
  *  options.
@@ -9,7 +9,7 @@
 
 -export([pretty/3]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 /******* PRETTY **************************************************************/
 
