@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/03 04:58:08 $
+		       	$Date: 2000/07/26 07:14:35 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export(transform/5).
--mode(failsafe).
+-mode(trust).
 -language(compound).
 
 /*
@@ -377,7 +377,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
     Index++ :
       NextRHSS ! Clauses? |
 	guarded_clause(Guarded, GuardMode(Index'), Clauses,
-			Nested, Nested'?, Scope, Scope'?),
+			Nested, Nested'?, Scope, [end_clause | Scope'?]),
 	utilities#update_process_mode(Mode, GuardMode, Mode'),
 	self;
 
@@ -637,19 +637,7 @@ transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
 	transform_body1(Body2, Goals, Goals'?, Nested, Nested'?,
 			Scope, Scope'?),
 	self;
-/*
-    Body1 = (Channel ? Message) :
-      Scope ! body_receive(Channel, Message, Goal),
-      Goals = [Goal? | NextGoals],
-      Nested = NextNested,
-      Scope' = NextScope;
 
-    Body1 = (Channel ! Message) :
-      Scope ! body_send(Message, Channel, Goal),
-      Goals = [Goal? | NextGoals],
-      Nested = NextNested,
-      Scope' = NextScope;
-*/
     Body1 = (_Channel ? _Message) :
       Scope ! error(receive_in_body(Body1)),
       Goals = NextGoals,
