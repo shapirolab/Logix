@@ -1,0 +1,46 @@
+Version Spi-release.24-03-2003.tar.gz
+
+Added macro get_channel_status - see Documentation/program_macros.txt.
+Fixed problem with suspend (see Documentation/user_macros.txt, s(N)).
+Fixed spi2t to ignore annotations in record.
+
+Version Spi-release.01-04-2003.tar.gz
+
+Corrected some problems with program macros.
+Updated debugger (pdb) to exclude system processes from display.
+
+Version Spi-release.04-05-2003.tar.gz
+
+Recognize "public" instead of "global".
+Fixed bugs in use of user_macros following Limit exceeded.
+Updated and added documentation.
+
+Version Spi-release.20-06-2003.tar.gz
+
+Fixed timing bug. 
+Completed "global"->"public" change.
+Added "note" option.
+
+Version Spi-release.05-08-2003.tar.gz
+
+Fixed bug in "all" for channel_attributes.
+Moved cta definition from "H" to "ph" in SpiFcp user_macros.
+Implemented public variables.
+Added public_variables.txt; modified BNF.txt.
+
+Version Spi-release.31-08-2003.tar.gz
+
+Added diagnostics for various errors in referencing public variables.
+Added Tutorial to release.
+
+Version Spi-release.26-12-2003.tar.gz
+
+Fixed references to ctype.h.
+Improved core dump.
+Revised README, install; added INSTALL.
+
+Version Aspic-release.2004-05-28.tar.gz
+
+Fixed various bugs.
+Improved Channel formatting.
+Constructed Aspic-release.
