@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.4 2003/12/22 09:11:58 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.5 2003/12/22 09:12:03 bill Exp $ */
 /*
  **	extern.c  -  errors handling, and reporting procedures.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 2003/12/22 09:11:58 $
+ **		       	     $Date: 2003/12/22 09:12:03 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.4 $
+ **			     $Revision: 1.5 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/externs.c,v $
  */
 
