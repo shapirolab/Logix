@@ -4,18 +4,19 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/10/25 07:04:58 $
+		       	$Date: 2000/11/06 13:37:27 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
-
+-language([evaluate, compound, colon]).
 -export(transform/5).
--mode(trust).
--language(compound).
+%-mode(trust).
+
+-include(psi_constants).
 
 /*
 ** Transform/5
@@ -80,20 +81,20 @@ program(Source, Exported, Exports, Terms, Errors) :-
 	spc#stochasticize(Terms'?, Terms).
 
 
-/* Extract Global channel declarations and Stochastic base rate. */
+/* Extract Exports and Global channel declarations, base rate and weighter. */
 filter_psifcp_attributes(Source, Exported, Controls, NextSource,
 			Errors, NextErrors) +
-	(GlobalDescriptors = [], TypeRate = _ModuleType(_Rate),
+	(GlobalDescriptors = [], Defaults = {_Weighter, _Rate},
 	 PsiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
 	psifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
-		TypeRate, TypeRate', AddExports, AddExports', Errors, Errors'),
+		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
 	self;
 
     Source ? Tuple, Tuple =\= (_ :- _) |
 	psifcp_attribute(Tuple, GlobalDescriptors, GlobalDescriptors',
-		TypeRate, TypeRate', AddExports, AddExports', Errors, Errors'),
+		Defaults, Defaults', AddExports, AddExports', Errors, Errors'),
 	self;
 
     otherwise :
@@ -104,48 +105,52 @@ filter_psifcp_attributes(Source, Exported, Controls, NextSource,
 	complete_psifcp_attributes.
 
   psifcp_attribute(Attribute, OldDescriptors, NewDescriptors,
-	TypeRate1, TypeRate, Exports, NextExports, Errors, Errors') :-
+	Defaults, NewDefaults, Exports, NextExports, Errors, Errors') :-
 
     /* obsolescent - allow for global(list) */
     Attribute = global(Gs) :
       Exports = NextExports,
-      TypeRate1 = TypeRate |
-	validate_globals(Gs, TypeRate, OldDescriptors, NewDescriptors,
+      NewDefaults = Defaults |
+	validate_globals(Gs, Defaults, OldDescriptors, NewDescriptors,
 				Errors, Errors');
 
     tuple(Attribute), arity(Attribute) > 2,
     arg(1, Attribute, global) :
       Exports = NextExports,
-      TypeRate1 = TypeRate |
+      NewDefaults = Defaults |
 	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
-	validate_globals(Gs?, TypeRate, OldDescriptors, NewDescriptors,
+	validate_globals(Gs?, Defaults, OldDescriptors, NewDescriptors,
 				Errors, Errors');
 
     tuple(Attribute), arity(Attribute) >= 2,
     arg(1, Attribute, export) :
       NewDescriptors = OldDescriptors,
-      TypeRate1 = TypeRate |
+      NewDefaults = Defaults |
 	utils#tuple_to_dlist(Attribute, [_ | Es], []),
 	validate_exports(Es?, Exports, NextExports, Errors, Errors');
   
     Attribute = baserate(Rate) :
       NewDescriptors = OldDescriptors,
-      Exports = NextExports,
-      TypeRate3 = stochastic(_Rate),
-      TypeRate = TypeRate3 |
-	validate_base(Rate, TypeRate1, TypeRate2, Errors, Errors'),
-	update_base;
+      Exports = NextExports |
+	validate_default_base_rate(Rate, Defaults, NewDefaults,
+					Errors, Errors');
+
+    Attribute = weighter(Weighter) :
+      NewDescriptors = OldDescriptors,
+      Exports = NextExports |
+	validate_default_weighter(Weighter, Defaults, NewDefaults,
+					Errors, Errors');
 
     /* skip fcp attributes - testing */
     Attribute = -_ :
       Errors' = Errors,
       Exports = NextExports,
       NewDescriptors = OldDescriptors,
-      TypeRate = TypeRate1;
+      NewDefaults = Defaults;
 
     otherwise :
       NewDescriptors = OldDescriptors,
-      TypeRate = TypeRate1,
+      NewDefaults = Defaults,
       Exports = NextExports,
       Errors ! invalid_psifcp_attribute(Attribute).
 
@@ -161,39 +166,27 @@ filter_psifcp_attributes(Source, Exported, Controls, NextSource,
     otherwise |
 	utilities#concatenate_lists([FcpExports, PsiExports], Exports).
 
-  complete_psifcp_attributes(Exported, TypeRate, GlobalDescriptors,
-				Controls) :-
 
-    TypeRate =?= stochastic(_Rate) :
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate} |
+complete_psifcp_attributes(Exported, Defaults, GlobalDescriptors, Controls) :-
+
+    Defaults =?= {DefaultWeighter, DefaultRate} :
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, Defaults} |
 	extract_global_names,
-	unify_without_failure(TypeRate, _(infinite));
-
-    true :
-      TypeRate = none(infinite),
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate} |
-	extract_global_names.
-
-  update_base(TypeRate1, TypeRate2, TypeRate3) :-
-
-    true :
-      TypeRate1 = TypeRate2,
-      TypeRate3 = TypeRate2;
-
-    otherwise :
-      TypeRate1 = _,
-      TypeRate3 = TypeRate2.
+	unify_without_failure(DefaultWeighter, PSI_DEFAULT_WEIGHT_NAME),
+	unify_without_failure(DefaultRate, infinite).
 
   extract_global_names(GlobalDescriptors, GlobalNames) :-
 
-    GlobalDescriptors ? Name(_Rate) :
+    GlobalDescriptors ? Global,
+    arg(1, Global, Name) :
       GlobalNames ! Name |
 	self;
 
     GlobalDescriptors =?= [] :
       GlobalNames = [].
 
-  validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
+
+validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
 
     New ? `String,
     nth_char(1, String, C), ascii('A') =< C, C =< ascii('Z') :
@@ -210,24 +203,95 @@ filter_psifcp_attributes(Source, Exported, Controls, NextSource,
       Errors = NextErrors.
 
 
-  validate_globals(GlobalDescriptors, TypeRate, Old, New, Errors, NextErrors) +
+validate_default_base_rate(Rate, Defaults, NewDefaults, Errors, NextErrors) :-
+
+    Defaults = {_DefaultWeighter, DefaultRate},
+    we(DefaultRate),
+    number(Rate), 0 =< Rate :
+      DefaultRate = Rate,
+      NewDefaults = Defaults,
+      Errors = NextErrors;
+
+    Defaults = {_DefaultWeighter, DefaultRate},
+    we(DefaultRate),
+    Rate =?= infinite :
+      DefaultRate = Rate,
+      NewDefaults = Defaults,
+      Errors = NextErrors;
+
+    otherwise :
+      NewDefaults = Defaults,
+      Errors = [invalid_default_base_rate(Rate) | NextErrors].
+
+validate_default_weighter(Weighter, Defaults, NewDefaults,
+				Errors, NextErrors) :-
+
+    Defaults = {DefaultWeighter, _DefaultRate},
+    we(DefaultWeighter),
+    string(Weighter), nth_char(1, Weighter, C),
+    ascii('a') =< C, C =< ascii('z') :
+      DefaultWeighter = Weighter,
+      NewDefaults = Defaults,
+      Errors = NextErrors;
+
+    Defaults = {DefaultWeighter, _DefaultRate},
+    we(DefaultWeighter),
+    tuple(Weighter), arg(1, Weighter, Name),
+    string(Name), nth_char(1, Name, C),
+    ascii('a') =< C, C =< ascii('z') :
+      DefaultWeighter = NewWeighter?,
+      NewDefaults = Defaults |
+	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
+	validate_global_weighter_params,
+	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
+
+    otherwise :
+      NewDefaults = Defaults,
+      Errors = [invalid_default_weighter(Weighter) | NextErrors].
+
+
+validate_globals(GlobalDescriptors, Defaults, Old, New,
+			Errors, NextErrors) +
 			(Head = Tail?, Tail) :-
 
-    GlobalDescriptors ? String, string(String),
-    nth_char(1, String, C), ascii(a) =< C, C =< ascii(z),
-    TypeRate =?= _Type(Rate) :
-      Tail ! String(Rate) |
+    GlobalDescriptors ? Global, string(Global),
+    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    Defaults = {PSI_DEFAULT_WEIGHT_NAME, Rate} :
+      Tail ! Global(Rate) |
 	self;
 
-    GlobalDescriptors ? String(Rate), string(String),
-    nth_char(1, String, C), ascii(a) =< C, C =< ascii(z) :
-      Global = String(_Rate),
-      Tail ! Global |
-	validate_base(Rate, TypeRate, Global, Errors, Errors'),
+    GlobalDescriptors ? Global, string(Global),
+    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    Defaults = {Weighter, Rate},
+    Weighter =\= PSI_DEFAULT_WEIGHT_NAME :
+      Tail ! Global(Rate, Weighter) |
+	self;
+
+    GlobalDescriptors ? Global(Rate), string(Global),
+    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    Defaults = {PSI_DEFAULT_WEIGHT_NAME, _Rate} :
+      Tail ! Global(Rate'?) |
+	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	self;
+
+    GlobalDescriptors ? Global(Rate), string(Global),
+    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z),
+    Defaults = {Weighter, _Rate},
+    Weighter =\= PSI_DEFAULT_WEIGHT_NAME :
+      Tail ! Global(Rate'?, Weighter) |
+	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	self;
+
+    GlobalDescriptors ? Global(Rate, Weighter), string(Global),
+    nth_char(1, Global, C), ascii(a) =< C, C =< ascii(z) :
+      Tail ! Global(Rate'?, Weighter'?) |
+	validate_global_channel_rate(Rate, Defaults, Rate', Errors, Errors'),
+	validate_global_channel_weighter(Weighter, Defaults, Weighter',
+						Errors', Errors''),
 	self;
 
     GlobalDescriptors ? Other, otherwise :
-      Errors ! invalid_global_channel_name(Other) |
+      Errors ! invalid_global_channel_descriptor(Other) |
 	self;
 
     GlobalDescriptors =\= [], GlobalDescriptors =\= [_|_] :
@@ -235,7 +299,7 @@ filter_psifcp_attributes(Source, Exported, Controls, NextSource,
 	self;
 
     GlobalDescriptors =?= [] :
-      TypeRate = _,
+      Defaults = _,
       Tail = [],
       Diagnostic = duplicate_global_channel |
 	utilities#sort_out_duplicates([Head], Head', Reply),
@@ -257,22 +321,60 @@ filter_psifcp_attributes(Source, Exported, Controls, NextSource,
       Reply = _,
       Errors = [Diagnostic | NextErrors].
 
-validate_base(Rate, TypeRate, Global, Errors, NextErrors) :-
+
+validate_global_channel_rate(Rate, Defaults, Rate', Errors, NextErrors) :-
 
     number(Rate), 0 =< Rate :
-      TypeRate = _,
-      Global = _Name(Rate),
+      Defaults = _,
+      Rate' = Rate,
       Errors = NextErrors;
 
     Rate =?= infinite :
-      TypeRate = _,
-      Global = _Name(Rate),
+      Defaults = _,
+      Rate' = Rate,
       Errors = NextErrors;
 
     otherwise,
-    TypeRate = _Type(Rate0) :
-      Global = _Name(Rate0),
-      Errors = [invalid_base_rate(Rate) | NextErrors].
+    Defaults  = _Weighter(DefaultRate) :
+      Rate' = DefaultRate,
+      Errors = [invalid_global_channel_rate(Rate) | NextErrors].
+
+
+validate_global_channel_weighter(Weighter, Defaults, NewWeighter,
+					Errors, NextErrors) :-
+
+    string(Weighter), nth_char(1, Weighter, C),
+    ascii('a') =< C, C =< ascii('z') :
+      Defaults = _,
+      NewWeighter = Weighter,
+      Errors = NextErrors;
+
+    tuple(Weighter), arg(1, Weighter, Name),
+    nth_char(1, Name, C), ascii(a) =< C, C =< ascii(z) :
+      Defaults = _ |
+	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
+	validate_global_weighter_params,
+	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
+
+    otherwise,
+    Defaults = DefaultWeighter(_DefaultRate) :
+      NewWeighter = DefaultWeighter,
+      Errors = [invalid_global_channel_weighter(Weighter) | NextErrors].
+
+
+validate_global_weighter_params(Args, Params, Errors, NextErrors) :-
+
+    Args ? Arg, number(Arg) :
+      Params ! Arg |
+	self;
+
+    Args ? Arg, otherwise :
+      Errors ! invalid_default_global_weighter_parameter(Arg) |
+	self;
+
+    Args = [] :
+      Params = [],
+      Errors = NextErrors.
 
 /************************* Program Transformations ***************************/
 
@@ -331,37 +433,43 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
   initialize_channels(Name, NewChannelList, Initializer) +
-			(Body = Name, MakeList = Make?, Make) :-
+			(MakeList = Make?, Make) :-
 
     NewChannelList ? Descriptor |
-	make_and_name_channel(Name, Body, Descriptor, Body', Make, Make'),
+	make_and_name_channel(Name, Descriptor, Make, Make'),
 	self;
 
     NewChannelList = [] :
       Name = _,
       Make = [],
-      Initializer = (true : Tell? | Body) |
+      Initializer = (true : Tell? | Name) |
 	utilities#make_predicate_list(',', MakeList?, Tell).
 
-  make_and_name_channel(Name, Body, Descriptor, NewBody, Make, NextMake) :-
+  make_and_name_channel(Name, Descriptor, Make, NextMake) :-
 
     Descriptor = ChannelName(BaseRate),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       Make = [write_channel(
-		new_channel(ChannelId, `ChannelName, BaseRate'?),
+		new_channel(ChannelId, `ChannelName, BaseRate),
 				`"Scheduler.") |
 	      NextMake],
       PS = Suffix |
-	list_to_string(PH, ChannelId),
-	utilities#real_base_kluge(BaseRate, Body, BaseRate', NewBody);
+	list_to_string(PH, ChannelId);
 
-    Descriptor = ChannelName(_BaseRate),
-    otherwise :
+    Descriptor = ChannelName(BaseRate, Weighter),
+    string_to_dlist(ChannelName, Suffix, []),
+    string_to_dlist(Name, PH, PS) :
+      Make = [write_channel(
+		new_channel(ChannelId, `ChannelName, BaseRate, Weighter),
+				`"Scheduler.") |
+	      NextMake],
+      PS = Suffix |
+	list_to_string(PH, ChannelId);
+
+    string(Descriptor) |
       Name = _,
-      NewBody = Body,
-      Make = [(`ChannelName = `"_") | NextMake].
+      Make = [(`Descriptor = `"_") | NextMake].
 
 
 nested_procedures(Process, Nested, Terms, NextTerms) :-

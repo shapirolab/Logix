@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/09/26 08:35:29 $
+		       	$Date: 2000/11/06 13:37:28 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -215,9 +215,8 @@ update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
   update_globals1(Globals, Channels, NewGlobals, Ok) :-
 
     Ok = true,
-    Globals ? Name(`Name, Multiplier) |
-	update_global_list(Name, Channels, Multiplier,
-		NewGlobals, NewGlobals'?),
+    Globals ? Global, arg(1, Global, Name) |
+	update_global_list(Name, Channels, Global, NewGlobals, NewGlobals'?),
 	self;
 
     otherwise :
@@ -225,19 +224,20 @@ update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
       Channels = _,
       NewGlobals = Globals.
 
-  update_global_list(Name, Channels, Multiplier, NewGlobals, NextNewGlobals) :-
+  update_global_list(Name, Channels, Global, NewGlobals, NextNewGlobals) :-
 
     Channels ? Name :
       Channels' = _,
-      NewGlobals = [Name(`Name, Multiplier) | NextNewGlobals];
+      NewGlobals = [Global | NextNewGlobals];
 
     Channels ? Other, Other =\= Name |
 	self;
 
     Channels =?= [] :
       Name = _,
-      Multiplier = _,
+      Global = _,
       NewGlobals = NextNewGlobals.
+
 
 update_body_list(BodyList, NewGlobals, NewBody) :-
 
@@ -252,7 +252,7 @@ update_body_list(BodyList, NewGlobals, NewBody) :-
 
   ignore_unused_assignment(Assignment, Variable, Globals, Body, NextBody) :-
 
-    Globals ? _Name(_Vector, Variable) :
+    Globals ? Global, arg(3, Global, Variable) :
       Globals' = _,
       Body = [Assignment | NextBody];
 

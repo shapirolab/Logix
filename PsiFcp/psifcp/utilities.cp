@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/10/25 07:02:09 $
+		       	$Date: 2000/11/06 13:37:28 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -19,7 +19,6 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 	 make_predicate_list/3,
 	 untuple_predicate_list/3, untuple_predicate_list/4,
 	 names_to_channel_list/2,
-	 real_base_kluge/4,
 	 remove_duplicate_strings/3, sort_out_duplicates/3,
 	 remove_item/3, subtract_list/3,
 	 tuple_to_atom/2, update_process_mode/3,
@@ -371,41 +370,6 @@ names_to_variables(ChannelNames, Variables, Count) +
     ChannelNames =?= [] :
       Variables = [],
       Count = Counter.
-
-real_base_kluge(Base, Body, Base', Body') :-
-
-    integer(Base) :
-      Base' = Base,
-      Body' = Body;
-
-    Base = infinite :
-      Base' = Base,
-      Body' = Body;
-
-    otherwise |
-	real_base_assignment(Base, Body, Body, Base', Body').
-
-  real_base_assignment(Base, Search, Body, Base', Body') :-
-
-    Search = (Var = Base, _) :
-      Body = Body',
-      Base' = Var;
-
-    Search = (_, Search'),
-    otherwise |
-	self;
-
-    Search =\= (_,_), Search =\= (_=_),
-    Body = (`psifcp(Index) = _, _),
-    Index++ :
-      Base' = `psifcp(Index'),
-      Body' = (Base' = Base, Body);
-
-    otherwise :
-      Search = _,
-      Base' = `psifcp(1),
-      Body'= (Base' = Base, Body).
-
 
 
 find_logix_variables(Predicate, LogixVars, NextLogixVars) :-

@@ -4,17 +4,19 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/10/25 07:03:05 $
+		       	$Date: 2000/11/06 13:37:27 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
+-language([evaluate, compound, colon]).
 -export([serve_empty_scope/6]).
--language(compound).
+
+-include(psi_constants).
 
 /*
 ** serve_empty_scope/6+5
@@ -41,15 +43,15 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
-**   Controls = {Exported, GlobalDescriptors, TypeRate}
+**   Controls = {Exported, GlobalDescriptors, WeightRate}
 **
 **          Exported is "all" or a list of exported  Name  or  Name/Arity.
 **
 **          GlobalDescriptors is a list of global channels, Name(BaseRate).
 **
-**          TypeRate = ModuleType(BaseRate) rate for new channels,
+**          WeightRate = Weighter(BaseRate) rate for new channels,
 **
-**          where ModuleType is in {none, stochastic}.
+**          where Weighter is in {none, stochastic}.
 **
 ** Output:
 **
@@ -81,8 +83,8 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
 	self;
 
     In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
-    Controls = {Exported, GlobalDescriptors, GlobalNames, TypeRate} |
-	make_process_scope(PiLHS, TypeRate, ProcessScope, [],
+    Controls = {Exported, GlobalDescriptors, GlobalNames, WeightRate} |
+	make_process_scope(PiLHS, WeightRate, ProcessScope, [],
 				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
@@ -120,12 +122,7 @@ serve_empty_scope(In, Controls, Exports, Entries, Optimize, Errors) +
     Export =?= true,
     GlobalNames =\= [] |
       Prefix = global_channels(_GlobalPairList, `"Scheduler.");
-/*
-    Export =?= true,
-    arg(1, TypeRate, none),
-    GlobalNames =\= [] :
-      Prefix = global_channels(_GlobalPairList);
-*/
+
     otherwise :
       Export = _,
       GlobalNames = _,
@@ -200,8 +197,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 
 
   initialize_global_channels(Index, Tuple, GlobalDescriptors,
-				Initializer, Prefix)
-	+ (List = Tail?, Tail, Body = ProcedureName?, ProcedureName) :-
+				Initializer, Prefix) + (List = Tail?, Tail) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
@@ -211,19 +207,31 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
+    GlobalDescriptors ? DuplicateName(_BaseRate, _Weighter),
+    DuplicateName =\= ChannelName |
+	self;
+
+    Index =< arity(Tuple),
+    arg(Index, Tuple, `ChannelName),
     GlobalDescriptors ? ChannelName(BaseRate),
     Index++ :
-      Tail ! ChannelName(`ChannelName, BaseRate'?) |
-	utilities#real_base_kluge(BaseRate, Body, BaseRate', Body'),
+      Tail ! ChannelName(`ChannelName, BaseRate) |
+	self;
+
+    Index =< arity(Tuple),
+    arg(Index, Tuple, `ChannelName),
+    GlobalDescriptors ? ChannelName(BaseRate, Weighter),
+    Index++ :
+      Tail ! ChannelName(`ChannelName, BaseRate, Weighter) |
 	self;
 
     otherwise,
+    arg(1, Tuple, ProcedureName),
     arg(2, Prefix, GlobalPairList) :
       Index = _,
       GlobalDescriptors = _,
       Tail = [],
-      Initializer = (psi_monitor#Prefix, Body) |
-	arg(1, Tuple, ProcedureName),
+      Initializer = (psi_monitor#Prefix, ProcedureName) |
 	unify_without_failure(GlobalPairList, List).
 
 
@@ -273,7 +281,7 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 ** Local: see serve_empty_scope/6+5 above.
 */
 
-serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
+serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 			Out, NextOut, Errors, NextErrors) +
 		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
 		 Refs = AddRef?, AddRef) :-
@@ -375,7 +383,7 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
     In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
 	utilities#concatenate_lists([Locals, ChannelNames], GlobalNames),
-	make_process_scope(PiLHS, TypeRate, ProcessScope, GlobalNames,
+	make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
 				NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
@@ -407,7 +415,7 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
 
     In = [],
     ProcessDefinition =?= {_Name, _Arity, _ChannelNames, _LHSS, CodeTuple} :
-      TypeRate = _,
+      WeightRate = _,
       IdIndex = _,
       Locals = _,
       Primes = _,
@@ -589,7 +597,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   PiLHS is from a process/4 request.
 **
-**   TypeRate is the module type and the default base rate.
+**   WeightRate is the module type and the default base rate.
 **
 **   GlobalNames is a list of channel descriptors (<stochactic_channel_list>)
 **   which are global to the module, and which may be shared by other modules.
@@ -609,13 +617,14 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(PiLHS, TypeRate, ProcessScope, GlobalNames, NewChannelList1,
-	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
+make_process_scope(PiLHS, WeightRate, ProcessScope, GlobalNames,
+		NewChannelList1, Out, NextOut,
+		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
       ProcessDefinition = {Name?, Arity?, ChannelNames?, LHSS, _CodeTuple},
       LHSS = {OuterLHS?, InnerLHS?} |
-	parse_lhs(PiLHS, TypeRate, Name, Arity,
+	parse_lhs(PiLHS, WeightRate, Name, Arity,
 			ParamList, ChannelList, NewChannelList,
 				Errors, Errors'?),
 	diagnose_duplicates(ParamList?, ParamList1,
@@ -634,7 +643,7 @@ make_process_scope(PiLHS, TypeRate, ProcessScope, GlobalNames, NewChannelList1,
 	make_lhs_tuples(Name?, ParamList1?, GlobalNames, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
 	optimize_procedures(NewDefinition, Notes, Out, Out'?),
-	serve_process_scope(ProcessScope?, NewDefinition, TypeRate, Notes,
+	serve_process_scope(ProcessScope?, NewDefinition, WeightRate, Notes,
 				Out', NextOut, Errors'''', NextErrors).
 
   correct_for_duplication(L1, L2, P, C1, C2) :-
@@ -741,11 +750,11 @@ add_process_definition(ProcessDefinition, PLHSS, Progeny, NewProgeny) :-
       NewProgeny = Progeny.
 
 
-parse_lhs(PiLHS, TypeRate, Name, Arity, ParamList, ChannelList, NewChannelList,
-		Errors, NextErrors) :-
+parse_lhs(PiLHS, WeightRate, Name, Arity, ParamList,
+		ChannelList, NewChannelList, Errors, NextErrors) :-
 
     PiLHS =?= `Functor, string(Functor), Functor =\= "" :
-      TypeRate = _,
+      WeightRate = _,
       Name = Functor, Arity = 0,
       ParamList = [],
       Errors = NextErrors |
@@ -757,13 +766,13 @@ parse_lhs(PiLHS, TypeRate, Name, Arity, ParamList, ChannelList, NewChannelList,
       ChannelList' = ChannelList?,
       NewChannelList' = NewChannelList? |
 	utilities#untuple_predicate_list(',', Channels, Channels'),
-	extract_channel_list(Channels', TypeRate, ChannelList, NewChannelList,
-					Errors, Errors'),
+	extract_channel_list(Channels', WeightRate, ChannelList,
+				NewChannelList,	Errors, Errors'),
 	self;
 
     arg(1, PiLHS, `Functor), string(Functor), Functor =\= "",
     arity(PiLHS, A), A-- :
-      TypeRate = _,
+      WeightRate = _,
       Name = Functor,
       Arity = A' |
 	extract_arglist(PiLHS, ParamList, Errors, NextErrors),
@@ -775,34 +784,67 @@ parse_lhs(PiLHS, TypeRate, Name, Arity, ParamList, ChannelList, NewChannelList,
       PiLHS' = `"_" |
 	self.
 
-extract_channel_list(Channels, TypeRate, ChannelList, NewChannelList,
+extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
 			Errors, NextErrors) :-
 
     Channels ? ChannelName,
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    TypeRate = _ModuleType(BaseRate) :
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    WeightRate = PSI_DEFAULT_WEIGHT_NAME(BaseRate) :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
+	self;
+
+    Channels ? ChannelName,
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    WeightRate = Weighter(BaseRate),
+    Weighter =\= PSI_DEFAULT_WEIGHT_NAME :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(BaseRate, WeightRate) |
 	self;
 
     Channels ? `VariableName,
+    nth_char(1, VariableName, C), ascii('A') =< C, C =< ascii('Z'),
     string(VariableName), VariableName =\= "_", VariableName =\= "" :
       ChannelList ! VariableName,
-      NewChannelList ! VariableName(logix) |
+      NewChannelList ! VariableName |
 	self;
 
     Channels ? ChannelName(BaseRate),
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    number(BaseRate), BaseRate >= 0 :
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    number(BaseRate), BaseRate >= 0,
+    WeightRate = PSI_DEFAULT_WEIGHT_NAME(_BaseRate) :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
 	self;
 
     Channels ? ChannelName(BaseRate),
-    string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    number(BaseRate), BaseRate >= 0,
+    WeightRate = Weighter(_BaseRate),
+    Weighter =\= PSI_DEFAULT_WEIGHT_NAME :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(BaseRate, Weighter) |
+	self;
+
+    Channels ? ChannelName(BaseRate),
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
     BaseRate =?= infinite :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(BaseRate) |
+	self;
+
+    Channels ? ChannelName(BaseRate, Weighter),
+    string(ChannelName),
+    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z),
+    number(BaseRate), BaseRate >= 0 :
+      ChannelList ! ChannelName,
+      NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
+	validate_new_weighter(Weighter, NewWeighter, Errors, Errors'?),
 	self;
 
     Channels ? Other,  
@@ -811,11 +853,44 @@ extract_channel_list(Channels, TypeRate, ChannelList, NewChannelList,
 	self;
 
     Channels =?= [] :
-      TypeRate = _,
+      WeightRate = _,
       ChannelList = [],
       NewChannelList = [],
       Errors = NextErrors.
 
+  validate_new_weighter(Weighter, NewWeighter, Errors, NextErrors) :-
+
+    /* Ammend this procedure for variable weighter, variable weighter name */
+    string(Weighter), nth_char(1, Weighter, C),
+    ascii('a') =< C, C =< ascii('z') :
+      NewWeighter = Weighter,
+      Errors = NextErrors;
+
+    tuple(Weighter), arg(1, Weighter, Name),
+    string(Name), nth_char(1, Name, C),
+    ascii('a') =< C, C =< ascii('z') |
+	utils#tuple_to_dlist(Weighter, [_Name | Args], []),
+	validate_new_weighter_params,
+	utils#list_to_tuple([Name, `"_" | Params], NewWeighter);
+
+    otherwise :
+      Errors = [invalid_new_weighter(Weighter) | NextErrors],
+      NewWeighter = PSI_DEFAULT_WEIGHT_NAME.
+
+  /* Ammend this procedure for variable parameters */
+  validate_new_weighter_params(Args, Params, Errors, NextErrors) :-
+
+    Args ? Arg, number(Arg) :
+      Params ! Arg |
+	self;
+
+    Args ? Arg, otherwise :
+      Errors ! invalid_default_weighter_parameter(Arg) |
+	self;
+
+    Args = [] :
+      Params = [],
+      Errors = NextErrors.
 
 extract_arglist(PiLHS, ParamList, Errors, NextErrors) + 
 			(Index = 2) :-
