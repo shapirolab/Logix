@@ -1,0 +1,46 @@
+\begin{thebibliography}{1}
+
+\bibitem{Gil77}
+D.T. Gillespie.
+\newblock Exact stochastic simulation of coupled chemical reactions.
+\newblock {\em Journal of Physical Chemistry}, 81(25):2340--2361, 1977.
+
+\bibitem{Milner99}
+R.~Milner.
+\newblock {\em Communicating and Mobile Systems: The $\pi$-Calculus}.
+\newblock Cambridge University Press, Cambridge, 1999.
+
+\bibitem{PT99}
+B.C. Pierce and D.N. Turner.
+\newblock {PICT}: A programming language based on the pi-calculus.
+\newblock In {\em In Proof, Language and Interaction: Essays in honour of Robin
+  Milner}. MIT Press, 1999.
+
+\bibitem{Pri95}
+C.~Priami.
+\newblock Stochastic $\pi$-calculus.
+\newblock {\em The Computer Journal}, 38(6):578--589, 1995.
+
+\bibitem{RPSS}
+A.~Regev, C.~Priami, W.~Silverman, and E.~Shapiro.
+\newblock Stochastic process algebras for the modeling of biomolecular
+  processes.
+\newblock 2000.
+\newblock Submitted.
+
+\bibitem{Shapiro87a}
+E.~Shapiro.
+\newblock In E.~Shapiro, editor, {\em Concurrent Prolog (vol. I)}, pages
+  157--187. MIT Press, 1987.
+
+\bibitem{logix:user-man-supp}
+W.~Silverman, M.~Hirsch, A.~Houri, and E.~Shapiro.
+\newblock Supplement to user manual for system 2.0.
+\newblock Logix System distribution documents.
+
+\bibitem{logix:user-man}
+W.~Silverman, M.~Hirsch, and E.~Shapiro.
+\newblock Logix user manual for system 2.0.
+\newblock Logix System distribution documents.
+
+\end{thebibliography}

@@ -1,0 +1,129 @@
+A channel is characterized by a name, an identifier, a type, a rate
+and a weighter.  A global channel has identifier 0; a private channel
+(originally created by declaration - e.g. P+pc ::= ...) has a unique
+identifier (in the existing implementation of spifcp the identifier
+is a unique integer).  The name and identifier are referred to below
+as the channel's id.
+
+The type and function of a channel is one of:
+
+  LOCAL        message communication within an ambient;
+  P2C          message communication between a parent ambient and its
+               child ambients;
+  S2S          message communication between sibling ambients of the
+               same parent ambient;
+  MERGE        capability communication between merging child ambients
+               of the same parent ambient;
+  ENTER        capability communication between two ambients changing
+               from siblings to parent-child;
+  EXIT         capability communication between two ambients changing
+               from parent-child to siblings.
+
+Channels which differ in name, identifier or type are different channels.
+
+
+A channel may be created in one of several ways.
+
+1. By local declaration of a private channel:
+
+   The channel is created with a given name, a unique identifier, with
+   given or defaulted rate and weighter and with type LOCAL.
+
+2. By global declaration:
+
+   The channel is created with a given name, identifier 0, with given or
+   defaulted rate and weighter and with type LOCAL.
+
+3. By inheritance when a membrane is declared:
+
+   Declaration of a membrane creates a new ambient.   Consider all of 
+   the channels in the ambient of the process which  declares the 
+   membrane.  All such channels which are needed by the transitive
+   closure of the membrane and its continuations are inherited by the
+   new ambient.  A fresh version of each channel is created, with copied
+   id, rate and weighter and with type LOCAL.  All of the created
+   channels are in the new ambient.
+
+4. By s2s reference in a process in a child ambient:
+
+   e.g.     s2s siblings ? []
+
+   The created channel has type S2S.  It is in the parent ambient
+   of the process's ambient.
+
+5. By a p2c reference from a process in an ambient:
+
+   e.g.     p2c child ! []
+
+   The created channel has type P2C.  It is in the same ambient.
+
+6. By a c2p reference from a process in a child ambient:
+
+   e.g.     c2p parent ! []
+
+   The created channel has type = P2C.  It is in the parent ambient.
+
+7. By a merge+ or merge- capability reference from a process in a 
+   child ambient:
+
+   e.g.s    merge+ sibling
+            merge- sibling
+
+   The created channel has type MERGE.  It is in the parent ambient.
+   When the capability is performed, the former merge- ambient disappears,
+   and its component processes are relocated to the merge+ ambient.
+
+8. By an expel capability reference from a parent ambient, or by an exit
+   capability reference from a child ambient:
+
+   e.g.s    expel child
+            exit parent
+
+   The created channel has type EXIT.  It is in the parent ambient.
+   When the capability is performed, the ambients become siblings.
+
+9. By an enter capability reference from a sibling, or by an accept
+   capability reference in a sibling.
+
+   e.g.s    enter sibling
+            accept sibling
+
+   The created channel has type ENTER.  It is in the parent of the
+   two siblings.  When the capability is performed, the entering
+   ambient becomes a child of the accepting ambient.
+
+10. By receipt of a message from another ambient via directed channel
+   communication:
+
+   e.g.s    s2s x ? {c}
+            c2p y ? {c}
+            p2c z ? {c}
+
+   The created channel (c) has the same id, rate and weighter as the
+   channel which was sent.  Its type is LOCAL.
+
+
+Re-declaration of a global channel must specify the same rate and weighter 
+as the existing global channel.
+
+In case 2, if a channel with the same id but of type other than LOCAL
+already exists, the created global channel must have the same rate and 
+weighter as the existing channel.
+
+In cases 4-10 the channel is created by reference to an existing LOCAL
+channel which already exists within the same ambient as the referencing
+process.  The id, rate and weighter of the created channel  are copied 
+from the referenced channel.
+
+In cases 4-10, if another channel in the  target ambient has the same
+id (but a different type) as the created  channel, it must  have the 
+same rate and weighter.
+
+Note that in cases 3-10, the id, rate and weighter of original channel
+created in case 1 or case 2 is conserved - only the type can change.
+  
+When a channel could have been created in cases 3-10, but a channel with 
+the same id and of the appropriate type already exists in the target
+ambient, the rate and weighter of the existing channel must match the
+rate and weighter of the referenced channel.
+

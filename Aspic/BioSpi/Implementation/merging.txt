@@ -1,0 +1,57 @@
+Two capabilities of sibling ambients, merge+<channel> and merge-<channel>,
+determine a merge when the transmission is completed.
+
+The transmission consists of:
+
+    merge+ :  (parent)<channel> ? {(merge-)<ambient>, Ready}
+    merge- :  (parent)<channel>	! {(merge-)<ambient>, Ready}
+
+The sending process waits for Ready to be known
+
+The receiving process sends:
+
+    (merge+)<ambient> ! merge((merge-)<ambient>, Ready)
+
+to its own ambient and waits for Ready to be known.
+
+The receiving ambient sends:
+
+    (merge-)<ambient> ! extract(Goals, (merge+)<ambient>, Ready)
+
+The sending ambient receives:
+
+    (merge-)<ambient> ? extract(Goals, (merge+)<ambient>, Ready)
+
+It detaches all of its channels and directs each of its child ambients to
+change parent to (merge+)<ambient> (This may include suspension and resumption
+of the child's sub-computation, to retract any of its inter-ambient
+communications which were posted with the sending ambient), and then sends
+controls to its own sub-computation:
+
+    Controls ! suspend
+    Controls' ! extract(all, Goals)
+
+tells its parent to drop any inter-ambient communications which may be
+posted for it, and then waits for Ready.
+
+The sub-computation of the sending ambient returns all of its interruptable
+goals in the Goals list (replacing each extracted goal by true).
+
+The receiving ambient freezes the Goals list and replaces all of the channels
+of the sending ambient by channels of the receiving ambient.  Then it melts
+the Goals list, sending all of the revised goals to its own sub-computation.
+Finally, it unifies Ready with "true",and proceeds with its augmented
+sub-computation.
+
+When Ready is known, the sending ambient resumes its sub-computation:
+
+    Controls ! resume
+
+At this point, the receiving process, the sending process and the sending
+ambient all proceed.  The sending ambient processes (now all true) all
+terminate, and the sending ambient completes service of its (former)
+sub-ambients and terminates.
+
+
+Note: Suspending a sub-computation retracts all of its communication goals
+(both transmissions and capabilities).

@@ -1,0 +1,281 @@
+The macro commands supplied for Spi include and in some cases replace
+the user macros of the Logix system.  They fall into three major
+categories:
+
+  * Channel management and message transmission;
+
+  * Program execution;
+
+  * Debugging.
+
+Channels
+--------
+
+The macros:
+
+    pc(C)
+    pc(C,S,B)
+
+are used to create channels.  The former macro creates an "instantaneous"
+(infinite rate) channel C.  The latter creates a "based" channel C,whose
+name is derived from the string S, and whose base rate is specified by
+the non-negative number B (When B is 0, the created channel is a "sink" -
+i.e. all sends and receives on the channel are discarded, and no actual
+transmission occurs.)
+
+
+The macros:
+
+    ps(M,C)
+    ps(M,C,N)
+
+offer to send message M on channel C, where N is a positive integer multiplier;
+the likelihood that C will be selected for transmission increases with N.
+
+
+The macros:
+
+    pr(C,M)
+    pr(C,M,N)
+
+offer to receive message M on channel C, where N is a positive integer
+multiplier, as above.
+
+
+The macro:
+
+    weighter(W)
+
+sets the default weight computation.  W  is an atom: a computation name
+(string) or a tuple  Name(P1, ..., Pn), where P1, ... Pn are additional
+parameters to the weight computation, each a number.
+
+
+Program Execution
+-----------------
+
+The basic Logix command to execute a program has the form:
+
+    <directory path>#<goal>
+
+The system creates a computation, uniquely identified by a positive
+integer throughout the session.
+
+
+To execute a Spi program, e.g. RunTT in module booland in directory
+boolean, call:
+
+    boolean#booland#"RunTT"
+
+The call above is an example of a Remote Process Call (RPC).
+
+The quotation marks around RunTT are necessary, since the Logix system
+treats names beginning with a capital letter or an underscore as logic
+variables.
+
+
+The macros:
+
+    run(<goals>)
+    run(<goals>, <limit>
+
+execute all of the goals as a single computation: the first form continues
+indefinitely; the second continues until <limit> units of internal time have 
+elapsed.  See  repeat.txt  for details on specification of multiple goals.
+
+
+The macro:
+
+    record(<goals>, <file name>, <limit>
+
+also executes all of the goals until <limit>, and records their behavior
+on the named file.  See  repeat.txt  for details on specification of
+multiple goals.  See  record.txt  for details about the file.
+
+
+A computation may be  suspended ,  resumed  or  aborted.  You may also
+inspect its resolvent - the set of unterminated processes (see Debugging
+below).
+
+The macros:
+
+    s
+    suspend
+    a(all)
+    suspend(all)
+    s(N)
+    suspend(N)
+
+suspend the current or the specified computation(s) (N or all).  The last
+two forms also reset the current computation number.
+
+
+The macros:
+
+    re
+    resume
+    resume
+    re(N)
+    resume(N)
+
+resume the current or the specified computation(s), as above.
+
+
+The macros:
+
+    a
+    abort
+    a(all)
+    abort(all)
+    a(N)
+    abort(N)
+    
+abort the current or the specified computation(s), as above.
+
+
+Debugging
+---------
+
+Debugging aids consist of inspection and execution control macros.
+
+
+The macros:
+
+    options(New)
+    options(New,Old)
+
+set new display control options and (optionally) return old ones.
+New  may be a single option or a Logix list of options.
+
+  * none	Don't display any messages.
+  * active	Display all active message actions (send, receive, dimer);
+		this is the usual default..
+  * sender      Display each message's sender in the form:
+
+			Process(ChannelName, Multiplier, Action)
+
+  * no_sender	Only display a message's action; this is the usual default.
+
+An example list is:
+
+    [active,sender]
+
+In the macros below, options may be specified explicitly in one variant
+of most groups.  When the options are specified, they override the
+global options set by the options macro above.
+
+
+The macros:
+
+   spg
+   spg(N)
+   spg(N,Options)
+
+display the goals of the current or of the specified computation.  The last
+two forms also reset the current computation number.
+
+
+The macros:
+
+   spr
+   spr(N)
+   spr(N,Options)
+
+display the resolvent of the current or of the specified computation, as above.
+
+
+The macros:
+
+    spc(C)
+    spc(C,Options)
+
+display the channel C.
+
+
+The macros:
+
+    spgcs
+    spgcs(Options)
+
+display the global channels.
+
+
+The macros:
+
+    pdb(RPC)
+    pdb(RPC,Options)
+
+start debugging of the Remote Process Call (e.g. hysteresis#"MODULE").
+The debugger provides help in reponse to the command "help".
+
+
+The macro:
+
+    vtree(Path,Goal,Tree)
+
+executes Goal, with respect to Path and prepares Tree, which may be
+displayed using macros below.  For example, if Path is boolean#booland
+and goal is "RunTT", Tree represents the execution of the RPC:
+
+    boolean#booland#"RunTT"
+
+Ordinarily, you should wait until the system becomes idle, or the
+computation has been suspended before attempting to view Tree.
+
+To view Tree, use either of the macros:
+
+    ptree(Tree)
+    ptree(Tree,Options)
+
+The default option for messages to be displayed is "none" instead of "active".
+Additional options which may be specified are:
+
+  * prefix	Display Tree in prefix order; this is the default.
+  * execute	Display Tree in execution order.
+
+
+The macro:
+
+    ctree(Tree)
+
+may be used to close the execution tree; this terminates the system's
+participation in the execution of the computation.
+
+
+Miscellaneous Macros
+--------------------
+
+The macros:
+
+    i(Path)
+    input(Path)
+
+Input the command file designated by Path.  For example to execute
+the commands contained in the file test in sub-directory scripts:
+
+    input(scripts#test)
+
+
+The macro:
+
+    {<logix string>}
+
+may be used to execute a UNIX command directly.  Examples:
+
+    {ls}
+    {"cat notes"}
+
+
+The macro:
+
+    ^
+may be used to display all named Logix variables.
+
+
+The macro:
+
+    VariableName^
+
+may be used to display a named variable.
+
+

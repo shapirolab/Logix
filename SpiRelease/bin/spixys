@@ -1,0 +1,4 @@
+#! /bin/sh
+spi2t $@
+t2xys $1
+gnuplot

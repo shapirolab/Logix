@@ -1,0 +1,48 @@
+The directory boolean contains a set of modules which perform
+boolean and or boolean not on selected inputs.  To run the
+boolean not test, e.g. :
+
+    % cd boolean
+    % logix
+    @tnot#"RunT"
+
+To run the boolean and test, e.g. :
+
+    @tand#"RunTF"
+
+Note that the tests, tand#"RunFT" and tand#"RunFF" do not
+terminate normally - to inspect the state, enter:
+
+    @spr
+
+To force termination, enter:
+
+    @abort
+
+(or just @a - see @ph).
+
+
+The directory circadian contains a set of modules which implement
+a Circadian Clock.  To compile the entire set:
+
+    % logix
+    @c(circadian)
+
+In case of abrupt termination of the Logix System during compilation
+or execution, with the message:
+
+    garbage collection - end : MACHINE : Heap Overflow
+
+try running the system with a larger heap, e.g. :
+
+    % logix -h20000
+    @c(circadian)
+
+To execute the compiled application, with a 1000 unit time limit
+and output to file fff:
+
+    @record(circadian#go,fff,1000)
+    @abort
+    @<control>G
+
+See Documentation/record.txt for information about the output file.

@@ -1,0 +1,115 @@
+Formal BioAmbient Calculus
+~~~~~~~~~~~~~~~~~~~~
+
+Notes:
+
+- Replication (!P) is taken as primitive instead of recursion, for formal simplicity. 
+Any actual implementation is expected to use mutually recursive definitions,
+and parametric definitions.
+Once we know more about what kind of recursive definitions are needed, 
+we can formalize them directly.
+
+- Messages are always names. For simplicity, I am not allowing capabilities as
+messages (as in Ambient Calculus), but this can be revised if needed.
+
+
+Syntax
+~~~~~
+
+n,m,p			names
+
+P,Q,R,S ::=			processes
+	(nu n) P			restriction
+	0			void
+	P | Q			composition
+	!P			replication
+	[P]			membrane
+	M.P			action
+	n$!{m}.P			output
+	n$?{m}.P			input
+
+$ ::=			directions
+	*			local
+	^			parent
+	_			child
+	#			sibling
+
+M,N ::=			capabilities
+	enter n
+	accept n
+	exit n
+	expel n
+	merge+ n
+	merge- n
+
+Structural Congruence
+~~~~~~~~~~~~~~~~
+
+== (structural congruence) is the least binary relation on processes satisfying the following:
+
+P == P
+P == Q   =>   Q == P	
+P == Q, Q == R   =>   P == R
+
+P == Q   =>   (nu n)P == (nu n)Q
+P == Q   =>   P | R == Q | R
+P == Q   =>   !P == !Q
+P == Q   =>   [P] == [Q]
+P == Q   =>   M.P == M.Q
+P == Q   =>   n$!{m}.P == n$!{m}.Q
+P == Q   =>   n$?{m}.P == n$?{m}.Q
+
+P | 0 == P
+P | Q == Q | P
+(P | Q) | R == P | (Q | R)
+
+(nu n)P == (nu m)P{n<-m}    if m not in fn(P)
+n$?{m}.P == n$?{p}.P{m<-p}    if p not in fn(P)
+
+(nu n)0 == 0
+(nu n)(nu m)P == (nu m)(nu n)P
+(nu n)(P | Q) == P | (nu n)Q    if n not in fn(P)
+(nu n)[P] == [(nu n) P]
+(nu n)m$!{p}.P == m$!{p}.(nu n)P  if n=/=m, n=/=p
+(nu n)m$?{p}.P == m$?{p'}.(nu n)P{p<-p'}  if n=/=m, p' not in fn(P)
+
+!(P | Q) == !P | !Q
+!0 == 0
+!P == P | !P
+!P == !!P
+
+Reduction
+~~~~~~~
+
+--> (single-step reduction) is the least binary relation on processes satisfying the following.
+-->* (reduction) is the reflexive-transitive closure of -->.
+
+[enter n.P | R ] | [accept n.Q | S]  -->  [[P | R] | Q | S]
+[[exit n.P | R] | expel n.Q | S]   -->  [P | R] | [Q | S]
+[merge+ n.P | R] | [merge- n.Q | S]  -->  [P | R | Q | S]
+
+c*!{m}.P | c*?{n}.Q  -->  P | Q{n<-m}
+c_!{m}.P | [c^?{n}.Q | S]  -->  P | [Q{n<-m} | S]
+[c^!{m}.P | R] | c_?{n}.Q  -->  [P | R] | Q{n<-m}
+[c#!{m}.P | R] | [c#?{n}.Q | S]  -->  [P | R] | [Q{n<-m} | S]
+
+P --> Q   =>   (nu n)P --> (nu n)Q
+P --> Q   =>   P | R --> Q | R
+P --> Q   =>   [P] --> [Q]
+P==P',  P' --> Q',  Q'==Q   =>   P --> Q
+
+
+Correctness of an implementation
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+In a given partial run, an implementation I reduces a (closed) input term P to another (closed) output term Q.
+Here Q is an intermediate state of the evaluation, not necessarily the final state.
+
+1) Soundness:  If I reduces P to Q in any run, then P -->* Q must be derivable.
+2) Completeness: If P -->* Q is derivable then, with nonzero probability, I reduces P to Q. 
+(I believe this completeness spec pretty much requires a randomized scheduler.)
+
+Caveat: an implementation will likely use guarded recursion, of the form mu X. P{X}.
+The correctness requirement applies only after defining !P = mu X. P | X, for P guarded in X.
+
+--Boundary_(ID_qDbJZuZA4Ra1qXFUhCHiWQ)--

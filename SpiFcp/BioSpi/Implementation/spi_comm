@@ -1,0 +1,574 @@
+Tell Guard:
+----------
+
+  execute(SPI_OFFSET, {Request, <arguments>})
+
+
+Suffix ^ means that an argument must be writable, and it is (eventually)
+instantiated.
+
+transmit:     Request = 1
+
+    <arguments>: PId, OpList, Value^, Chosen^, Reply^
+
+    OpList Entry (referred to as Operation below):
+
+	{MessageType, CId, Channel, Multiplier, Tags}
+
+  MessageType is in {SPI_SEND, SPI_RECEIVE, SPI_DIMER}
+
+  PId is a string which identifies the transmitting process.
+
+  Value is a Logix Variable.
+
+  CId is a string, the local name of the Channel.
+
+  Multiplier is a natural number.
+
+  Tags is a natural number or a 2-tuple of natural numbers.
+
+  Chosen is instantiated to a Tag value (natural number) when the
+  transmission is complete.
+
+  Reply is a Logix variable: output string true, string true; or tuple
+  {true, PId1, CId1, PId2, CId2}, where PId1, PId2, CId1, CId2 are strings,
+  derived from a completed instantaneous operation ane the Message it
+  completed (see below).
+
+
+close:        Request = 2
+
+    <arguments>: Channels, Reply^
+
+  Channels is a tuple: {Channel, ...}
+
+  Reply is a Logix variable: output string true or
+  true(<list of deleted channels>) (see below).
+
+step:         Request = 3
+
+    <arguments>: Now, Anchor, Now'^, Reply^
+
+  Now (and output Now' >= Now) is a positive real number.
+
+  Reply is a Logix variable: output string true, string done; or tuple
+  {true, PId1, CId1, PId2, CId2}, where PId1, PId2, CId1, CId2 are strings,
+  derived from the completed Messages (see below)
+
+Channel is an 11-vector, created by scheduler -
+each sub-channel holds a stored value.
+
+ 1. Blocked			% stored initially <!> False
+ 2. Type                        % as above, + {UNKNOWN, SINK},
+                                %    initially <!> INSTANTANEOUS/UNKNOWN/SINK
+ 3. BaseRate                    % real, stored <!> by new_channel
+				%   may be re-stored by scheduler
+ 4. ReferenceCount              % integer, initially <!> 1
+ 5. SendAnchor                  % anchored <!> (circular)
+  = DimerAnchor                 % (alternate name)
+ 6. WeightSend                  % integer, initially <!> 0
+  = WeightDimer                 % (alternate name)
+ 7. ReceiveAnchor               % anchored <!> (circular)
+ 8. WeightReceive               % integer, initially <!> 0
+ 9. NextChannel                 % Circular list initialised <!> by new_channel
+10. PreviousChannel             % Circular list initialised <!> by new_channel
+11. Name			% stored initially <.> by new_channel
+
+  <!> Means updatable
+  <.> Means stored once
+
+
+  Type is in {INSTANTANEOUS, BIMOLECULAR, HOMODIMERIZED}.
+
+  A Queue Entry, referred to as Message below, is an 8-tuple created by
+  transmit action.
+
+Message:
+-------
+
+ 1. MessageType		% in {SPI_SEND, SPI_RECEIVE, SPI_DIMER} <.>
+
+ 2. CId                 % string <.>
+
+ 3. Channel		% reflected for queue management <.>
+
+ 4. Multiplier		% A natural number <.>
+
+ 5. SendTag		% Integer <.>
+
+ 6. ReceiveTag		% Integer <.>
+
+ 7. Common		% shared {PId, OpList, Value, Chosen} <.>
+
+ 8. Link		% 2-vector - circular stored <!> Message
+
+
+Actions:
+-------
+
+Notation
+
+    Operator '!' indicates that the value should be updated by
+    FCP store in the (sub)channel operand.
+
+    Operator '?' indicates that the value should be extracted by
+    FCP read from the (sub)channel operand.
+
+    Operator '.' indicates that the righthand value is an element
+    of the lefthand tuple or vector.
+
+    Operator '=' indicates that the righthand side is to be unified
+    with the lefhand side variable.
+
+    In case of an error below, set Reply to:
+
+	{error, <description of error>}
+
+    and return False
+
+    A True return may be accompanied by a warning:
+
+	{warning, <description of problem>}
+
+    A Verify step which fails (NOT suspends) should act like an error.
+
+Transmit action
+---------------
+
+Verify:
+
+    writable Value, Chosen, (Reply?).
+
+If OpList is Nil:
+
+    Value = Nil
+    Chosen = 0
+    Reply = true
+    return
+
+Pass 1 For each Operation in OpList:
+
+    Verify:
+
+	Operation.Channel - must be an 11-vector
+	
+    if Operation.Channel ? Type is UNKNOWN:
+
+	Operation.BaseRate must be positive
+	Determine final type of channel
+
+		SPI_SEND or SPI_RECEIVE implies BIMOLECULAR
+		SPI_DIMER implies HOMODIMERIZED
+
+	This should be updated during pass 1 -
+
+		Operation.Channel.Type ! final type
+
+    elseif Channel ? Type is :
+
+	BIMOLECULAR:
+	INSTANTANEOUS:
+	SINK:
+		Operation.MessageType must be SPI_SEND or SPI_RECEIVE
+     
+	HOMODIMERIZED:
+		Operation.MessageType must be SPI_DIMER
+
+    else
+
+	Error: "unknown channel type"
+
+    if Channel ? Type is INSTANTANEOUS:
+
+	Verify:
+	    Operation.Tags - must be  an integer (SendTag or ReceiveTag)
+
+	Try to complete instantaneous transmission -
+
+	    Call transmit_instantaneous -> True, False, QUEUE
+
+	if function returned True:
+
+	    Function has set
+
+		Reply = true(PID1, CID1, PID2, CID2))
+
+		where:	PID1, CID1 are from one message and
+			PID2, CID2 are from the other message
+
+	    return True
+
+	elseif function returned False:
+
+		return False
+
+	% else function returned QUEUE
+
+    Verify:
+
+	Operation.Multiplier - must be a positive integer
+	Operation.Tags - must be  an integer (SendTag or ReceiveTag) or
+		  	  a 2-tuple {SendTag, ReceiveTag} of integers (Dimer)
+
+Create new variable, HeapP MessageList equal to MessageTail
+
+Construct shared Common tuple:
+
+	{PId, MessageList, Value, Chosen}
+
+
+Pass 2 For each Operation in OpList:
+
+    Operation.Channel.Blocked ! False
+
+    Make and initialize a 2-vector:
+
+	Link: {NextMessage, PreviousMessage}
+
+    Construct Message tuple:
+
+	{Operation.CId, Operation.Channel, Operation.MessageType,
+	     Operation.Multiplier, SendTag, ReceiveTag, Common, Link}
+
+    Complete the degenerate circular message list:
+
+        NextMessage ! Message
+	PreviousMessage ! Message
+
+    Initialize.
+
+    If Operation.Channel ? Type is not INSTANTANEOUS,
+    where OC is Operation.Channel and Anchor is OC ? <mode>Anchor :
+
+	OC.Weight<mode> ! ((OC ? Weight<mode>) + Operation.Multiplier)
+
+	% Insert Message at end of queue.
+
+	Link.NextMessage ! Anchor
+	Link.PreviousMessage ! (Anchor.Link ? PreviousMessage)
+
+	((Anchor.Link ? PreviousMessage).Link.NextMessage) ! Message
+	(Anchor.Link.PreviousMessage) ! Message
+
+     Note: <mode> is one of Send, Receive, Dimer
+
+    Add Message to MessageTail
+
+set MessageTail Nil
+
+Reply = true
+
+return True
+
+Close Action:
+------------
+
+For each Channel in Channels:
+
+	Verify:
+
+	    Channel, Channel ? ReferenceCount > 0,
+	    Channel ? Previous, Channel ? Next
+
+	Channel ! ReferenceCount ! ((Channel ? ReferenceCount) - 1)
+	If Channel ? ReferenceCount is equal to zero:
+
+	    where Previous is Channel ? PreviousChannel
+	    and Next is Channel ? NextChannel
+
+	    Verify:
+
+		Previous, Next,
+		Next ? PreviousChannel is Channel
+		Previous ? NextChannel is Channel
+
+	    (Next ? PreviousChannel) ! Previous
+	    (Previous ? NextChannel) ! Next
+
+return True
+
+
+Step Action:
+-----------
+
+Note that at this point no relevant variable (other than Value, Chosen)
+should be uninstantiated.
+
+SumWeights = 0
+
+if (Anchor ? NextChannel) != Anchor:
+
+    For each Channel after Anchor, which is not Blocked:
+
+	if ChannelType is BIMOLECULAR:
+
+	    Verify:
+
+		real BaseRate > 0
+		integer SendWeight >= 0
+		integer ReceiveWeight >= 0
+
+	    SumWeights += BaseRate*SendWeight*ReceiveWeight
+
+	elseif ChannelType is HOMODIMERIZED and
+		(((Channel ? DimerAnchor).MessageLinks) ? NextMessage) =\=
+			(Channel ? DimerAnchor)
+
+	    Verify:
+
+		real BaseRate > 0
+		integer DimerWeight >= 0
+
+	    SumWeights += BaseRate*(DimerWeight-1)*DimerWeight
+
+    If SumWeights != 0:
+
+	Compute Selector = random()*SumWeights
+
+	for each Channel after Anchor, which is not Blocked:
+
+	    if Channel ? ChannelType is BIMOLECULAR:
+
+		if Channel ? SendWeight > 0 and
+		   Channel ? ReceiveWeight > 0
+
+		    Selector -= BaseRate*WeightSend*WeightReceive
+		    if Selector <= 0:
+
+			Call transmit_biomolecular
+			goto transmitted
+
+	    elseif Channel ? ChannelType is HOMODIMERIZED
+
+		if ((Channel ? DimerAnchor).MessageLinks) ? NextMessage =\=
+		   	(Channel ? DimerAnchor)
+
+		    Selector -= BaseRate*(SendWeight-1)*SendWeight
+
+		    if Selector <= 0
+
+			Call transmit_homodimerized
+			goto transmitted
+
+	    continue with next Channel
+
+transmitted:
+
+	    if function returned True:
+
+		% Function has set Reply = {true, PId1, CId1, PId2, CId2}
+
+		Now' = Now - ln(random())*SumWeights,
+		return True
+
+	    elseif function returned BLOCKED
+
+		Channel.Blocked ! True
+		Reply = done
+		return True
+
+	    else % function returned False
+
+		return False
+
+Reply = true
+
+return True
+
+
+Functions:
+---------
+
+discount(MsList):
+
+    For each Message in MsList:
+
+	where Channel is Message.Channel
+
+	if Channel.BaseRate is a positive integer
+
+	    Channel.Weight<mode> ! ((Channel ? Weight<mode>)
+				     - Message.Multiplier)
+
+	Next = Message.Link ? NextMessage
+	Previous = Message.Link ? PreviousMessage
+
+	Verify:
+
+	    Next, Previous,
+
+	Verify:
+
+	    (Next.Link) ? PreviousMessage is Message
+	    (Previous.Link) ? NextMessage is Message
+
+
+	(Next.Link.PreviousMessage) ! Previous
+	(Previous.Link.NextMessage) ! Next
+
+
+transmit_instantaneous(Operation, Channel, PId, Value, Chosen)
+
+% note that PId, Value, Chosen may be global instead.
+
+    if Operation.MessageType is SPI_SEND
+
+	MessageAnchor is Channel ? ReceiveAnchor
+	Index is SPI_RECEIVE_TAG
+
+    else
+
+	MessageAnchor is Channel ? SendAnchor
+	Index is SPI_SEND_TAG
+
+    For each Message in MessageAnchor queue:
+
+	Verify:
+
+	    Common, Common.Value, Common.Chosen
+
+	if Chosen =\= Common.Chosen
+
+	    Common.Chosen = Message.Index
+	    Common.Value = Value
+	    Chosen = Operation.Tag
+	    discount(Message.Common)
+	    Reply = {true, PId, Operation.CId, Message.Common.Pid, Message.CId}
+	    return True
+
+return QUEUE
+
+
+transmit_bimolecular(Channel)
+
+    For each ReceiveMessage in Channel ? ReceiveAnchor
+
+	Verify:
+
+	    ReceiveMessage.Common.Value, ReceiveMessage.Common.Chosen
+
+	For each SendMessage in Channel ? SendAnchor
+
+	    Verify:
+
+		SendMessage.Common.Value, SendMessage.Common.Chosen
+	    
+	    if SendMessage.Common.Chosen =\= ReceiveMessage.Common.Chosen
+
+		Verify:
+
+		    ReceiveMessage.MsList
+		    SendMessage.MsList
+
+		SendMessage.Common.Chosen = SendMessage.SendTag
+		ReceiveMessage.Common.Chosen = ReceiveMessage.ReceiveTag
+		ReceiveMessage.Common.Value = SendMessage.Common.Value
+		discount_messages(SendMessage.Common.MsList)
+		discount_messages(ReceiveMessage.Common.MsList)
+		Reply = {true,  SendMessage.Common.PId, SendMessage.CId,
+				ReceiveMessage.Common.PId, ReceiveMessage.CId}
+		return True
+
+return BLOCKED
+
+
+transmit_homodimerized(Channel)
+
+    ReceiveMessage is ((Channel ? ReceiveAnchor).MessageLinks) ? NextMessage
+
+    Verify:
+
+	ReceiveMessage.Common.Value, ReceiveMessage.Common.Chosen
+
+    For each DimerMessage following ReceiveMessage
+
+	Verify:
+
+	    DimerMessage.Common.Value, DimerMessage.Common.Chosen
+	    
+	if DimerMessage.Common.Chosen =\= ReceiveMessage.Common.Chosen
+
+	    Verify:
+
+		ReceiveMessage.MsList
+		DimerMessage.MsList
+
+	    ReceiveMessage.Common.Chosen = ReceiveMessage.ReceiveTag
+	    DimerMessage.Common.Chosen = DimerMessage.ReceiveTag
+	    DimerMessage.Common.Value = ReceiveMessage.Common.Value
+	    discount_messages(ReceiveMessage.Common.MsList)
+	    discount_messages(DimerMessage.Common.MsList)
+	    Reply = {true,  DimerMessage.Common.PId, DimerMessage.CId,
+			    ReceiveMessage.Common.PId, ReceiveMessage.CId}
+	    return True
+
+return BLOCKED
+
+
+Monitor:
+-------
+
+Monitor Resources:
+
+    GlobalChannelList
+
+    Scheduler (fcp channel)
+
+    Options
+
+Monitor Requests:
+
+    global_channels(NamedChannelList),
+    global_channels(NamedChannelList, Scheduler^)
+
+    get_global_channels(NamedChannelList)
+
+    new_channel(Creator, Channel, BaseRate)
+
+    record(RecordStream^)			!!!
+
+    reset
+
+    options(New, Old)
+
+    debug(DebugStream^)
+
+    scheduler(Scheduler^)
+
+Scheduler Resources:
+
+    INSTANTANEOUS Channel list (include SINK Channels).
+
+    Baserated Channel list (include BIMOLECULAR, HOMODIMERIZED, UNKNOWN).
+
+    Wakeup/Waiting/Cutoff/StartRealTime status variables.
+
+    Now
+
+    Record/Debug output streams
+
+    SPI_OFFSET
+
+Scheduler Requests:
+
+    cutoff(Time)
+
+    input(New, Old)
+
+    new_channel(Creator, Channel, BaseRate)
+
+    pause(Continue)
+
+    start(String, OpList, Value, Chosen)	!!!
+
+    step(Continue)				!!!
+
+  Auxilliary
+
+    record(Stream)
+
+    end_record
+
+    debug(Stream)
+
+    end_debug

@@ -1,0 +1,144 @@
+The spi_record process can run a Stochastic Pi Calculus (spifcp) process
+and record its behavior.
+
+   spi_record#run(<call program>, <time limit>)
+or
+   spi_record#run(<call program>, <file_name>, <time limit>)
+or
+   spi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+or
+   spi_record#run(<call program>, <file_name>, <time limit>, <format>)
+or
+   spi_record#run(<call program>, <file_name>, <time limit>, <format>, <scale>)
+or
+   spi_record#run(<call program>, <file_name>, <time limit>, <scale>, <format>)
+
+
+The time limit forces termination of the run, after that much internal
+time has elapsed.  If the run terminates before the the time limit is
+reached, you will usually want to abort the run (enter: abort<cr>).
+
+When the internal times are very small, or very large, you can scale 
+the output - this does not effect process behavior.
+
+You may also format the output, which is written to the named file,
+specifying one of the strings:
+
+   none, process, creator, full
+
+The default is "none".  The others add information to the formatted
+output.
+
+You may also use the macros:
+
+    run(<quantified process set>, <time limit>)
+or
+    record(<quantified process set>, <file_name>, <time limit>)
+or
+    record(<quantified process set>, <file_name>, <time limit>, <scale>)
+or
+    record(<quantified process set>, <file_name>, <time limit>, <format>)
+or
+    record(<quantified process set>, <file_name>, <time limit>,
+           <scale>, <format>)
+or
+    record(<quantified process set>, <file_name>, <time limit>,
+           <format>, <scale>)
+
+See repeat.txt for the definitition of <quantified process set>.
+
+Examples:
+
+1. run(hysteresis#"MODULE", 100)
+
+   starts the process  MODULE  in program module  hysteresis  and
+   terminates the run after 100 time units have elapsed.  To 
+   terminate the run prematurely, suspend the Logix computation
+   or enter  <control>C  to kill the Logix system.
+
+2. record(hysteresis#"MODULE", fff, 100)
+
+   does the same thing, and records the events of the run on file 
+   fff.
+
+3. record(hysteresis#"MODULE", fff, 100, 10)
+
+   does the same thing, and records the events of the run on file 
+   fff with time values scaled times 10.
+
+4. record(hysteresis#"MODULE", fff, 100, full)
+
+   does the same thing as 2, recording on fff with fully annotated
+   output.
+
+The elements of the file are lines which have one of three forms.
+
+   a. A positive real-valued time.
+
+   b. +<process name>, which records the start of a procedure.
+
+   c. -<process name>, which records the termination of a procedure.
+
+Annotation appears on c lines:
+
+1. The "process" format includes an arrow, indicating whether the
+   process sent (->) or received (<-) a message, followed by the name
+   within the process of the channel which transmitted the message.
+
+2. The "creator" format is similar, but with the global identifier of
+   the channel instead of its name - this includes a unique index for
+   each instance of a local channel.
+
+3. The "full" format is similar, providing both the name and the global
+   identifier,  separated by a colon (:).
+
+To analyze the file, producing a table suitable for plotting with
+Matlab, use the PERL program "spi2t" - e.g.
+
+   % spi2t fff
+
+creates a table, where column 1 is time, and columns 2...n are totals
+of active processes.  A short file, with one long line, listing the
+column (process) names, and n-1 lines associating process names with
+array columns is also produced.  For example:
+
+  fff.table  and  fff.names
+
+Column one of the .table file is incremented approximately by 1 between
+rows (lines).  To change the increment to another positive number, N,
+add the argument N to the call to spi2t - e.g.
+
+  % spi2t fff 0.1
+
+To combine columns sums add terms of the form:
+
+    <summed_column_name>+=<absorbed_column_name>
+
+e.g.
+
+  % spi2t fff A_GENE+=BASAL_A+PROMOTED_A A_GENE+=ACTIVATED_TRANSCRIPTION_A
+
+To rescale the output times, specify negative rescale value - e.g.
+
+  % spi2t fff -10
+
+to rescale output times by 1/10.
+
+Arguments following the file name may appear in any order
+
+
+To split the table into multiple 2-column files, suitable for gnuplot,
+use the PERL program "t2xys" - e.g.
+
+  % t2xys fff
+  % gnuplot
+  gnuplot> plot "fff.3" smooth unique
+
+A short shell script, spixys, combines the functions with a call to
+gnuplot.
+
+
+Please note that the current version of spi2t does not accept
+annotation.
+
+

@@ -1,0 +1,14 @@
+By default, processes of this implementation of Stochastic Pi
+Calculus, run with a base rate "infinite" - i.e. communication
+is instantaneous, whenever a send and receive are active for
+the same channel.
+
+To set the default base rate for all of the processes in a module
+include the spifcp attribute:
+
+    baserate(<default rate>).
+
+Declared channels may be specified with explicit base rates (see
+Documentation/BNF).
+
+See the modules in Examples/circadian.

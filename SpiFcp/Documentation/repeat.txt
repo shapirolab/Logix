@@ -1,0 +1,38 @@
+The repeat process can run a quantified set of Stochastic Pi Calculus (spifcp)
+processes.
+
+    repeat#run(<quantified process set>)
+
+where:
+
+    <quantified process set> ::=
+	<external_call>
+        (<process set>)
+        <repetition> * (<process set>)
+
+    <process set> ::=
+        <quantified process set>
+        <process set> , <quantified process set>
+
+    <repetition> ::= <integer>
+
+A negative <repetition> is treated as zero.
+
+(See BNF for the definition of <external_call>.)
+
+
+Examples:
+
+1. repeat#run(64*(dimerization#"A_PROTEIN"))
+
+2. repeat#run([6*(activator#"A_PROTEIN"),activator#"A_GENE",
+                  repressor#"R_GENE"])
+
+3. repeat#run([2*[activator#"A_GENE",3*(repressor#"R_GENE")],
+               hysteresis#"MODULE"])
+
+Note that the parentheses are necessary in the case of:
+
+    <repetition>*(<external_call>)
+
+This process is used by the run and record macros (see record.txt).

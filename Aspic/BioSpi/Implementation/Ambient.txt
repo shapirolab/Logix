@@ -1,0 +1,58 @@
+An ambient is a persistent procedure, driven by an
+input stream which is the output of an FCP channel
+called Ambient.  The ambient consists of:
+
+  Ambient	An FCP channel to its own input stream;
+
+  Scheduler	an FCP channel which accepts commands to a
+		monitor which schedules channel communication;
+
+  Requests	a request stream to an FCP computation;
+
+  Events	an event stream from the computation;
+
+  Globals	a sorted list of global channels
+
+  AmbientChannels 
+		a hash table of inter-ambient communication channels
+		key = name(identifier,class)
+		value = communication channel;
+
+  Parent	an FCP channel which refers to its parent ambient;
+
+  Children	a list of child ambients.
+
+
+It accepts commands on its input stream:
+
+  global_channels(List)
+
+  global_channels(List, Scheduler^)
+
+  get_global_channels(List^)
+
+  new_channel(Creator, Channel^, BaseRate)
+
+  new_channel(Creator, Channel^, ComputeWeight, BaseRate)
+
+  ambient_channel(Channel, Locus, AmbientChannel^)
+
+  capability_channel(Channel, Capability, CapabilityChannel^)
+
+  parent(Parent^)
+
+  merge_operations(OldAmbient, NewAmbient, Reply^)
+
+  abort_operations(TargetAmbient, Reply^)
+  
+
+
+
+
+Locus is one of {s2s, p2c, c2p}
+
+Capability is one of {enter, accept,   exit, expel,   merge}
+			AMB_ENTER,       AMB_EXIT   AMB_MERGE
+
+merge_operations and abort_operations return true if any
+modified operation was mixed (intra/inter).

@@ -1,0 +1,115 @@
+          Timing Results for C-Coded Optimization of PsiFCP
+
+
+Several timing tests of various Stochastic Pi Calculus programs were run.
+Programs were timed on three systems:
+
+Object Channels: referred to below as OCM
+
+    Each channel is a separate object, which manages its own queues of
+    requests.  A monitor communicates with the channels via a request
+    circuit, which appears as an input and an output stream to the channel.
+    Selection of a non-instantaneous channel involves two passes through
+    the request circuit: the first pass cumulates the total weight of all
+    queued transmission requests, and the second pass selects a channel,
+    which then completes a send/receive pair of queued operations.  The
+    selected channel completes the transmission.  References to a channel
+    are controlled by a short-circuit; when the circuit closes (i.e. no
+    more references exist) the channel terminates, unifying its input
+    and output request streams.
+
+Vector Channels: referred to below as VCM
+
+    Each channel is an FCP-vector; its sub-channels hold state information
+    and links to other channels and messages.  Sub-channels are treated as
+    re-writable values, using FCP store_vector and read_vector operations.
+    A monitor manages a circular list of channels; it walks the list in
+    two passes to cumulate the total weight and select a channel for which
+    it completes a pair of queued operations.  A PsiFcp process increments
+    a reference count whenever the channel is forked (passed to two or
+    more processes) and calls the monitor to decrement the count whenever
+    the channel is discarded; the monitor removes the channel from the
+    circular list when its reference count goes to zero.
+
+C-Vector Channels: referred to below as MVC
+
+    The data structures are the same as for VCM.  The same monitor is used.
+    The monitor executes a C-coded foreign kernel whenever operations are
+    queued, a channel is to be selected, or channel references counts are
+    reduced.  The C-code queues operations, selects channels and handles
+    discard calls, simulating the monitor's actions for VCM.
+
+Three programs, designated, PSB, CLOCK and MOD were tested.  The principle
+measure was the real time required to execute the program for various
+amounts of internal time.  The observed values are real time, kilo-reductions,
+kilo-suspensions and megawords of heap used.
+
+                               PSB
+                     Run on isolated Pentium 2
+
+System    Internal    Real    reductions   suspensions   heap words
+            time     seconds    x1000         x1000       x1000000
+
+            100        153       5273          5200           86            
+OCM         500        864      32803         32486          490
+           1000       1992      82720         82121         1117
+
+            100         82       5407           100           42
+VCM         500        387      27182           434          192
+           1000        769      57487           784          353
+
+            100         19        150            89            3
+MVC         500         76        551           331           10
+           1000        135        931           555           18
+
+
+                              CLOCK
+                    Run on networked Pentium 3
+
+System    Internal    Real    reductions   suspensions   heap words
+            time     seconds    x1000         x1000       x1000000
+
+OCM        1000       2118     223608        230110         2044
+
+VCM        1000        711     135298          3011          325
+
+MVC        1000        236       6157          2902          145
+
+
+                               MOD
+                    Run on networked Pentium 3
+
+System    Internal    Real    reductions   suspensions   heap words
+            time     seconds    x1000         x1000       x1000000
+
+OCM         1000       136       6780          4867          105       
+
+VCM         1000        79       8245          1752          103
+
+MVC         1000        48       2980          1693           68
+    
+
+          Ratios
+        Real Times
+
+Systems    Worst      Best
+
+VCM/OCM    0.581      0.336
+MVC/VCM    0.608      0.176
+MVC/OCM    0.353      0.068
+
+
+Remarks:
+
+1. The C-coded queue-management functions produced a small improvement
+   in timing (measured separately).
+
+2. The C-coded summation/selection operation produced a substantial
+   improvement in timing.
+
+3. The Object Channels system was slowed by excess suspensions.  This
+   may also account in part for the enormous (unanticipated) differences
+   in heap utilization.
+
+4. The more active base-rate channels, the greater the effect of the
+   C-coded optimization.

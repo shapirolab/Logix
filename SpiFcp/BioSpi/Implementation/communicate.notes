@@ -1,0 +1,55 @@
+Compilation:
+-----------
+
+1.  Exported process calls spi_monitor
+
+        scheduler(Schedule)
+    or
+        global_channels(List, Scheduler)
+
+    The list contains tuples of the form:
+
+       <channel_type>(<global_channel_name>, Channel)
+
+2.  Each communication writes RequestChannel
+
+        <type>(<<type>_id>, <<type>_message>, <<type_tag>, <reply>)
+    or
+        dual(<dual_id>, <send_message>, <receive_message>, 
+                        <send_tag>,     <receive_tag>,     <reply>)
+
+    The continuation is selected by <reply>, which is either a positive
+    integer (for send) or a tuple of a positive integer and the received
+    message (for receive).  The positive integer is used to select the
+    guard of the continuation clause.
+
+3.  Each (non-pre-communication) process:
+
+    a. closes the ShortCircuit for each Channel parameter which it does
+       not pass to a continuation process.
+
+    b. extends the ShortCircuit for each channel which it passes to more
+       than one continuation process.
+
+    Special provision must be made for logix variables, which appear to
+    be channels.  Maybe they must be declared (e.g. Only capitalized
+    arguments can be logix variable - they are neither initialized nor
+    closed/extended.)
+
+4.  A receive guard generates an extra argument to its suffix procedure,
+    whose value is the Message argument of the receive offer.  The suffix
+    procedure unifies this argument with its primed received mesage_list
+    in the clause which is selected by the choice variable.
+
+5.  In a multi-offer communication, each generated guard must send all
+    channels except its own a withdraw(N) message, where N is the
+    multiplier of the corresponding channel.
+
+6.  If a channel is passed to a remote procedure, it is like a fork
+    (or preserve - i.e. do nothing), but never a close short-circuit.
+
+    When a channel appears (multiply) in a Logix guard/body, it counts
+    once for that clause as a passed channel.
+
+    See 3. above.  Note that the user must have a convenient means of
+    forking/closing a channel within a Logix guard/body.

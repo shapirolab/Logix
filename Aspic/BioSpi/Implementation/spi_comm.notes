@@ -1,0 +1,68 @@
+Tell Guard:
+----------
+
+The "execute" guard effectively calls the c-module (see examples
+interface.c and freeze_term.c for entry considerations.
+
+SPI_OFFSET is a magic number needed to select the c-coded foreign kernel.
+
+  Execution - general:
+  -------------------
+
+  Arguments  are FCP items - extract them (and check) the tuple'slength.
+  One-time arguments (e.g. Pid, Type, Mslist) should also be verified as to
+  type (and range where appropriate).
+
+  Verification of an input argument tests it to determine if it is a
+  variable - if so, add it to the "suspension list" and return FALSE.
+  If it is not a variable, test it for the correct type(s) - if incorrect,
+  simply return FALSE.  This applies to EVERY input argument at every
+  level of the data.
+
+  Functions should return TRUE or FALSE.  TRUE means that the function
+  has succeeded (whatever that means, for that function).  FALSE means
+  that the function has failed or added to the suspension table - in
+  that case, the calling function should also return FALSE.  In some
+  cases, a function may return a third value.  Additional return values
+  may be needed for some functions.
+
+  To test an argument, it must first be dereferenced (It may be accessed
+  through a chain of pointer -> pointer -> ... -> argument.)  Every
+  argument begins as a heapP (see fcp.h), which is ALWAYS an FCP pointer -
+  i.e. it is call-by-reference.  If an argument is saved internally, it
+  should be forgotten at the end of the process.
+
+  Macros:
+  ------
+
+    writable(P, T) tests an output argument, T.  The dereferenced argument,
+    P, is a pointer to the writable variable and is returned.
+
+    string_var(T_Save, T) tests an input argument. The dereferenced argument,
+    T_Save, is a pointer to an FCP string and is returned.
+
+    integer_var(P, T) tests an input argument, T.  A pointer to the FCP
+    integer, P, is returned.
+
+    real_var(T_Save, T) tests an input argument.  The dereferenced argument,
+    T_Save, is a pointer to an FCP real (which points to the actual real
+    avlue) and is returned.
+
+    vctr_var(T_Save, T) tests an input argument, T.  The dereferenced argument,
+    T_Save, is a pointer to an FCP vector, and is returned.  The size of the
+    vector should be checked independantly.  Alternatively, we can define
+    a macro which checks the size as well - e.g.vctr_var11(T_Save, T) or
+    vctr_var(T_Save, T, Size).
+
+?   Other macros should be defined to test for [] or a Car of a list (see
+    set_to_car(V) in emulate.h, Off_List(V) in fcp.h) ?
+
+  Data Access:
+  -----------
+
+    It should not be necessary to trail changes - verify all values and
+    variables before making any changes.  This can be done by a 2-pass
+    approach.
+
+    Always use the appropriate macro to verify the type of an argument,
+    since you will usually need its "value".

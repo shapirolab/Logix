@@ -1,0 +1,53 @@
+\contentsline {chapter}{\numberline {1}Introduction}{3}
+\contentsline {chapter}{\numberline {2}Processes, Channels and Communication: The $\Pi $-calculus in PSI Syntax}{4}
+\contentsline {section}{\numberline {2.1}Simple Processes}{4}
+\contentsline {section}{\numberline {2.2}Channels and communication}{5}
+\contentsline {subsection}{\numberline {2.2.1}Global Channels}{5}
+\contentsline {subsection}{\numberline {2.2.2}Choice}{6}
+\contentsline {subsection}{\numberline {2.2.3}Scopes and Local Channels}{7}
+\contentsline {subsection}{\numberline {2.2.4}Comparison}{9}
+\contentsline {section}{\numberline {2.3}Parametric and Recursive Processes}{10}
+\contentsline {chapter}{\numberline {3}Getting Started with PSI}{11}
+\contentsline {section}{\numberline {3.1}Hello}{11}
+\contentsline {section}{\numberline {3.2}Which}{12}
+\contentsline {section}{\numberline {3.3}Boolean And}{13}
+\contentsline {section}{\numberline {3.4}Modular Boolean And}{15}
+\contentsline {chapter}{\numberline {4}Stochastic Programs}{18}
+\contentsline {section}{\numberline {4.1}Stochastic $\Pi $-calculus}{18}
+\contentsline {section}{\numberline {4.2}Simple stochastic programs}{19}
+\contentsline {chapter}{\numberline {5}Testing, Tracing and Debugging}{20}
+\contentsline {section}{\numberline {5.1}Debugging}{21}
+\contentsline {subsection}{\numberline {5.1.1}Trace a Computation}{21}
+\contentsline {subsection}{\numberline {5.1.2}Interrupt and Inspect a Computation}{23}
+\contentsline {section}{\numberline {5.2}Tree trace}{24}
+\contentsline {chapter}{\numberline {6}Using FCP in PSI modules}{27}
+\contentsline {chapter}{\numberline {A}BNF}{29}
+\contentsline {chapter}{\numberline {B}PSI commands}{38}
+\contentsline {section}{\numberline {B.1}Channel Management and Message Transmission Macros}{38}
+\contentsline {subsection}{\numberline {B.1.1}Create Channel - pc}{38}
+\contentsline {subsection}{\numberline {B.1.2}Send Message - ps}{39}
+\contentsline {subsection}{\numberline {B.1.3}Receive Message - pr}{39}
+\contentsline {subsection}{\numberline {B.1.4}Set Default Weighter - weighter}{39}
+\contentsline {section}{\numberline {B.2}Program Execution Macros}{39}
+\contentsline {subsection}{\numberline {B.2.1}Execute Goals - run}{40}
+\contentsline {subsection}{\numberline {B.2.2}Execute Goals - record}{40}
+\contentsline {subsection}{\numberline {B.2.3}Suspend Execution - suspend}{40}
+\contentsline {subsection}{\numberline {B.2.4}Resume Execution - resume}{41}
+\contentsline {subsection}{\numberline {B.2.5}Abort Execution - abort}{41}
+\contentsline {section}{\numberline {B.3}Debugging}{41}
+\contentsline {subsection}{\numberline {B.3.1}Set Display Options - options}{41}
+\contentsline {subsection}{\numberline {B.3.2}Show Goal - spg}{42}
+\contentsline {subsection}{\numberline {B.3.3}Show Resolvent - spr}{42}
+\contentsline {subsection}{\numberline {B.3.4}Show a Channel - spc}{42}
+\contentsline {subsection}{\numberline {B.3.5}Show Global Channels - spgcs}{42}
+\contentsline {subsection}{\numberline {B.3.6}Debug a Goal - pdb}{43}
+\contentsline {subsection}{\numberline {B.3.7}Create an Execution Tree - vtree}{43}
+\contentsline {section}{\numberline {B.4}Miscellaneous Macros}{44}
+\contentsline {subsection}{\numberline {B.4.1}Reset the System - reset}{44}
+\contentsline {subsection}{\numberline {B.4.2}Input Commands - input}{44}
+\contentsline {subsection}{\numberline {B.4.3}Call a UNIX Command - \@lb $\mathinner {\cdotp \cdotp \cdotp }$\@rb }{44}
+\contentsline {subsection}{\numberline {B.4.4}Display Named Variables {\accent 94 \ }}{44}
+\contentsline {chapter}{\numberline {C}Auxilliary LOGIX Procedures}{45}
+\contentsline {section}{\numberline {C.1}record}{45}
+\contentsline {section}{\numberline {C.2}repeat}{47}
+\contentsline {section}{\numberline {C.3}Weight Computation for a Channel}{48}

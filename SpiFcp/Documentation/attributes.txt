@@ -1,0 +1,84 @@
+Logix attributes are specified at the head of each module in the form:
+
+    -<attribute name>.
+or
+    -<attribute name>(<arguments>).
+
+
+A required attribute for Stochastic Pi Calculus modules is:
+
+    -language(spifcp).
+
+The names in the list specify transformations to be applied to the
+module as part of compilation.  The transformation, spifcp, transforms
+modules written in Stochastic Pi Calculus into modules in the
+compound dialect of LOGIX.
+
+
+An optional attribute is:
+
+    -mode(<execution mode>).
+
+where <execution mode> is one of:
+
+    interpret
+    interrupt
+    failsafe
+    trust
+
+To debug a module, it must be compiled in interpret mode - this is
+the default mode.
+
+To inspect the process resolvent during execution, or to suspend
+execution of its processes, or to abort the execution of its
+processes, a module must be compiled in interpret or interrupt
+mode.  Mode interrupt is substantially faster than mode interpret.
+Modes failafe and trust are somewhat faster than interrupt, but
+should only be used for modules whose processes are self-terminating.
+
+
+An optional attribute is:
+
+    -include(<module name>).
+
+The content of the named module is inserted following the attributes.
+This is useful primarily for including definitions of named values.
+See the modules in Examples/circadian, some of which include module
+rates.
+
+
+Spi attributes (see BNF <spi_attributes>)are specified after the Logix
+attributes.  All Spi attributes are optional.
+
+
+The attribute:
+
+    export(<process_name_list>).
+
+specifies that the named first-level processes may be called externally.
+
+
+The attribute:
+
+    global(<communicator_list>).
+
+specifies that the named channels are shared by name between all processes
+in a Spi session.  See Documentation/global.txt.
+
+
+The attribute:
+
+    baserate(<base_rate>).
+
+specifies a positive integer rate which is used for all bimolecular and
+homodimerized channels in the module which do not declare a rate
+explicitly.
+
+
+The attribute:
+
+    weighter(<weighter_declaration>).
+
+specifies a default weight computation which is used for all bimolecular and
+homodimerized channels in the module which do not declare a computation
+explicitly.  See Documentation/weighter.txt for details.
