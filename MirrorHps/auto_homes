@@ -1,0 +1,63 @@
+#!/usr/local/bin/perl
+
+# Send a command to every home directory server.
+# Call: auto_homes [-e<excluded hosts> | -s<surrogate hosts>] [command]
+
+$| = 1;
+
+my %Dirs = ();
+my %Exclude = (usr => 'not');
+my %Surrogate = ();
+my $Instead = 0;
+
+# Initialization and argument handling
+
+my $firstarg = $ARGV[0];
+if ($firstarg =~ s/^-e(.*)/$1/) {
+  my @excludes = split /,/, $firstarg;
+  foreach (@excludes) {
+    $Exclude{$_} = 'exclude';
+  }
+  shift @ARGV;
+}
+elsif ($firstarg =~ s/^-s(.*)/$1/) {
+  $Instead = 1;
+  my @surrogates = split /,/, $firstarg;
+  foreach (@surrogates) {
+    $Surrogate{$_} = 'instead';
+  }
+  shift @ARGV;
+}
+my $command = "@ARGV";
+
+my @keys = keys(%Exclude);
+
+my $rsh = $command ? "rsh" : "echo";
+
+my @auto = `ypcat auto.home`;
+
+# Main loop
+
+foreach $auto (@auto) {
+  my ($home, $rest) =
+    split(/:/, $auto);
+  $Dirs{$home} = $home;
+}
+
+my @hosts = keys(%Dirs);
+my $host;
+foreach $host (@hosts) {
+  if ($Instead) {
+    if ($Surrogate{$host}) {
+    (print "do: $command $host\n");
+      `$command $host`;
+    }
+  }
+  else {
+    (print "send: $host $command\n") unless $Exclude{$host};
+    my $reply = `$rsh $host -n $command` unless $Exclude{$host};
+  }
+}
+
+# The End
+

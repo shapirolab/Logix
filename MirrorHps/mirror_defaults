@@ -1,0 +1,51 @@
+# This is the default mirror settings used by my site:
+# sunsite.org.uk (193.63.255.4)
+# This is home of SunSITE Northern Europe.
+#
+# Lee McLoughlin <lmjm@icparc.ic.ac.uk>
+
+# You should be able to use this at other sites.  You should only have
+# to change bits that reference my site (sunsite).
+
+package=defaults
+        site=bach.wisdom.weizmann.ac.il
+	# The LOCAL hostname - if not the same as `hostname`
+	# (I advertise the name sunsite.org.uk but the machine is
+	#  really swallow.sunsite.org.uk.)
+	hostname=viola.wisdom.weizmann.ac.il
+#	# Keep all local_dirs relative to here
+	# The local_dir must exist FIRST
+	#local_dir_check=false
+        remote_user=www
+	remote_password=4315ZAS
+	# Don't mirror file modes.  Set all dirs/files to these
+	dir_mode=0755
+	file_mode=0644
+	# By defaults files are owned by root.zero
+	user=www
+	group=users
+	# Do not keep a log file
+	update_log=
+	timeout=300
+	# Start Add by me
+        #max_days=2
+        get_newer=false
+	do_deletes=true
+        max_delete_dirs=100%
+        max_delete_files=100%
+        # PASV ftp good for firewalls
+        #passive_ftp=true
+        # check# delete_excl=(^|/)\.(mirror|notar|cache)$
+	# End Add by me
+	#failed_gets_excl=\:\ Permission denied\.$
+        get_file=false
+	compress_patt=
+	#don't update outmail
+	local_ignore=(^|/)(outmail|core|RCS|\.mirror|#.*|\..*BAK|\..*bak|\..*~|.*~)
+	#would also like to ignore core, #*, *.bak, *~
+
+#
+#package=test_public_html
+#	remote_dir=/WWW/www/bill/public_html
+#	local_dir=/users/bill/public_html/
+#

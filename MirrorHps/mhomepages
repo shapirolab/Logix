@@ -1,0 +1,88 @@
+#!/usr/local/bin/perl
+
+# Create a distfile for rdist and copy home pages of users.
+# Call: homepages [client]
+
+my $TmpDir = "/tmp";
+my $Target = "bach";
+my $TargetDir = "/DataBase/users";
+# temporary
+my $Rmirror = "/home/www/mirror-2.9/mirror.pl";
+
+my $client = shift;
+my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
+
+# Initialization and argument handling
+
+#temporary
+my $defaults = "/home/www/mirror_defaults";
+my $distfile = "$TmpDir/mirror-" . getppid();
+`/usr/bin/rm -f $distfile`;
+open(DISTFILE, ">$distfile") or die "Can't open $distfile";
+open(DEFAULTS, "$defaults") or die "Can't open $defaults";
+while (<DEFAULTS>) {
+  print DISTFILE $_;
+}
+close DEFAULTS;
+
+my $only = $< eq "root" ? "" : $< ;
+if ($only) {
+  $only = getpwuid($only);
+}
+
+my ($system, $name) =
+  split(/\s/, `$sysname`);
+if ($client) {
+  $system = `uname -s`;
+  chomp $system;
+}
+#print "system = '$system', name = '$name'\n";
+
+my @Auto = `ypcat -k auto.home`;
+
+# Main loop
+
+my $auto;
+foreach $auto (@Auto) {
+  my ($uid, $rest) =
+    split(/\s/, $auto);
+  my ($home, $sdir, $udir) =
+    split(/:/, $rest);
+  my $homedir = ($only || $client) ? "/home/$uid" : "$sdir/$udir";
+  if (($only eq $uid || (!$only && $home eq $name))
+       && -r "$homedir/public_html/index.html") {
+#  my $homedir = $client ? "/home/$uid" : "$sdir/$udir";
+#  if ($home eq $name && -r "$homedir/public_html/index.html") {
+    my $pubdir = "$homedir/public_html";
+    if (-l $pubdir && (!$only || $only eq $uid)) {
+#    if (-l $pubdir) {
+      my $redir = readlink($pubdir);
+      if ($redir) {
+	if ($redir =~ /^\//) {
+	  $pubdir = $redir;
+	}
+	else {
+	  $pubdir = "$homedir/$redir";
+	}
+      }
+      else {
+	next;
+      }
+    }
+    print DISTFILE "package=$uid\n"
+                 . "\tremote_dir=$TargetDir/$uid/public_html\n"
+                 . "\tlocal_dir=$homedir/public_html/\n";
+  }
+}
+close DISTFILE or die "Can't close $distfile";
+
+# Now call mirror and remove the distfile.
+
+my $result = `$Rmirror $distfile`;
+if ($only) {
+  print $result;
+}
+`/usr/bin/rm -f $distfile`;
+
+# The End
+

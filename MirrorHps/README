@@ -1,0 +1,36 @@
+The script "mhomepages" uses mirror to copy home
+pages to bach.  It must be run as root, in order 
+to mirror the homepages of specific machines.
+It should be run on the machine whose disk is
+is to have its home pages mirrored.
+
+However, it can be run:
+
+    mhomepages <machine name>
+
+when the machine in question does not support perl
+or mirror correctly (cymbal, harp, horn, lachesis,
+bina, wisdom); the last two machines do not have
+any real user home directories, so they should be
+excluded in any case.
+
+The script "auto_homes" may be called to spawn
+instances of mhomepages.  The remaining machines
+are called remotely to perform the specified
+action.  When called with the option:
+
+   -e<machine name list>
+
+the named machines are excluded.  When called
+with the option:
+
+   -s<machine name list>
+
+the named machines are served locally by the
+machine running the script.  The action must be
+named.  See mupdate for examples. 
+
+The file mirror_defaults contains the common data
+required for mirroring.  See the man page of mirror
+for details.
+
