@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.3 2002/06/05 18:32:59 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.4 2004/06/22 12:00:52 bill Exp $ */
 /*
  *  Transform the hierarchical tree into a graph.
  */
@@ -280,7 +280,7 @@ format_rpc(Call, Graph, Goal) :-
 
 cumulate_entries(Graph)  :-
 
-    Graph = {_, "", [], EntriesTuple, _, SubGraphs} :
+    Graph = {_, "", _, EntriesTuple, _, SubGraphs} :
       EntriesTuple = Entries(_) |
 	cumulate_sub_entries(SubGraphs, Entries, []);
 
