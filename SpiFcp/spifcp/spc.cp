@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/13 14:01:35 $
+		       	$Date: 2002/10/13 10:05:51 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -490,9 +490,10 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
     RHSS ? RHS,
     ChannelTables ? Table :
       Table ! entries(Entries),
-      Rhss ! (NewAsk'? : NewTell'? | Body?) |
+      Rhss ! (NewAsk'? : NewTell'? | NewBody?) |
 	partition_rhs(RHS, Ask, Tell, Body),
-	reduce_channel_table(Entries, AddAsk, AddTell, Table'),
+	reduce_channel_table(Entries, ForkAsk, ForkTell, Close, Table'),
+	fork_and_close,
 	utilities#untuple_predicate_list(',', Ask, NewAsk, AddAsk?),
 	utilities#untuple_predicate_list(',', Tell, NewTell, AddTell?),
 	utilities#make_predicate_list(',', NewAsk?, NewAsk'),
@@ -510,42 +511,86 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
     Body =\= (_ | _) | true.
 
 
-reduce_channel_table(Entries, AddAsk, AddTell, Table) +
-			(Close = Closes?, Closes, NC = 0) :-
+  reduce_channel_table(Entries, AddAsk, AddTell, Close, Table) +
+			(CloseList, Closes = CloseList) :-
 
     Entries ? entry(Name, {1, _}) :
       Table ! delete(Name, _, _) |
 	self;
 
-    Entries ? entry(Name, {0, _}),
-    NC++ :
+    Entries ? entry(Name, {0, _}) :
       Table ! delete(Name, _, _),
       Closes ! `Name |
 	self;
 
-    Entries ? entry(Name, {N, PName}),
-     N-- > 1 :
-      Table ! replace(Name, {1, PName}, _Old, _Ok),
-      AddAsk ! read_vector(SPI_CHANNEL_REFS, `PName, `spirefs(PName)),
-      AddAsk' ! (`spirefs'(PName) := `spirefs(PName) + N'),
-      AddTell ! store_vector(SPI_CHANNEL_REFS, `spirefs'(PName), `PName) |
+    Entries ? entry(Name, {N, ChName}),
+      N-- > 1 :
+      Table ! replace(Name, {1, ChName}, _Old, _Ok),
+      AddAsk ! read_vector(SPI_CHANNEL_REFS, `ChName, `spirefs(ChName)),
+      AddAsk' ! (`spirefs'(ChName) := `spirefs(ChName) + N'),
+      AddTell ! store_vector(SPI_CHANNEL_REFS, `spirefs'(ChName), `ChName) |
 	self;
 
     Entries =?= [] :
       AddAsk = [],
+      AddTell = [],
       Closes = [],
       Table = [] |
 	close_channels.
 
-  close_channels(NC, Close, AddTell) :-
+  close_channels(CloseList, Close) :-
 
-    NC =?= 0 :
-      Close = _,
-      AddTell = [];
+    CloseList = [] :
+      Close = [];
 
-    NC =\= 0 :
-      AddTell = [write_channel(close(Channels?), `"Scheduler.")] |
-	list_to_tuple(Close, Channels).
+    CloseList =\= [] :
+      Close = close(Channels?) |
+	list_to_tuple(CloseList, Channels).
+
+  fork_and_close(ForkAsk, ForkTell, Close, Body, AddAsk, AddTell, NewBody) :-
+
+    ForkTell =?= [],
+    Close =?= [] :
+      ForkAsk = _,
+      AddAsk = [],
+      AddTell = [],
+      NewBody = Body;
+
+    ForkTell =?= [],
+    Close =\= [] :
+      ForkAsk = _,
+      AddAsk = [],
+      AddTell = [write_channel(Close?, `"Scheduler.")],
+      NewBody = Body;
+
+    ForkTell =?= [_],
+    Close =?= [] :
+      AddAsk = ForkAsk,
+      AddTell = ForkTell,
+      NewBody = Body;
+
+    otherwise :
+      ForkTell = _,
+      AddAsk = [],
+      AddTell = [],
+      NewBody = (spi_update_channel_refs(List?, `"Scheduler.", `"Scheduler.'"),
+		 Body) |
+	make_update_channel_refs_list.
+
+  make_update_channel_refs_list(ForkAsk, Close, List) :-
+
+    ForkAsk ? _,
+    ForkAsk' ? (`spirefs'(ChName) := `spirefs(ChName) + N) :
+      List ! {N, `ChName} |
+	self;
+
+    ForkAsk =?= [],
+    Close =?= [] :
+      List = [];
+
+    ForkAsk =?= [],
+    Close =\= [] :
+      List = [Close].
 
 
 dimerize_requests(Tell, NewTell) :-
