@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/07/07 17:28:45 $
+		       	$Date: 2002/08/13 14:01:35 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -84,10 +84,10 @@ output(In, ProcessTable, Terms) :-
 	kluge_globals,
 	self;
 
-    /* We could add a check here for unused channels, i.e. ones
-       that are not needed by the derived procedure. */
-    In ? outer(Atom, RHSS, _Procedure) :
-      Terms ! (Atom :- NewRHSS?) |
+    In ? outer(Atom, RHSS, _Procedure),
+    RHSS =?= (Asks : Tells | Body) :
+      ProcessTable ! member(Body, Channels, Ok),
+      Terms ! (Atom :- NewAsks? : NewTells? | Body) |
 	kluge_news,
 	self;
 
@@ -127,8 +127,7 @@ stochastic(In, ProcessTable, Terms, ProcessId, RHSS, Prototype, Procedure,
       ProcessId = _ |
 	analyze_rhss(RHSS, Prototype, [], ChannelTables,
 			ProcessTable, ProcessTable'?),
-	update_rhss(false, RHSS, ChannelTables,
-			ProcessTable', ProcessTable''?, Rhss),
+	update_rhss(RHSS, ChannelTables?, Rhss),
 	utilities#make_predicate_list(';', Rhss, NewRHSS),
 	output;
 
@@ -153,8 +152,7 @@ stochastic(In, ProcessTable, Terms, ProcessId, RHSS, Prototype, Procedure,
 	utils#binary_sort_merge(Requests''?, Communications),
 	rewrite_clauses,
 	communication_to_operations,
-	update_rhss(true, Communicate2''?, ChannelTables,
-			ProcessTable', ProcessTable''?, Communicate2'),
+	update_rhss(Communicate2''?, ChannelTables?, Communicate2'),
 	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
 	output.
 
@@ -290,25 +288,25 @@ analyze_rhss(RHSS, Prototype, Requests, ChannelTables,
 
  update_prototype(Code, Channels, Prototype, NewPrototype) :-
 
-    Channels ? Channel,
+    Channels ? ChannelName,
     Code =?= send |
-	update_prototype_send(Channel, Prototype, Prototype'),
+	update_prototype_send(ChannelName, Prototype, Prototype'),
 	self;
 
-    Channels ? Channel,
+    Channels ? ChannelName,
     Code =?= receive |
-	update_prototype_receive(Channel, Prototype, Prototype'),
+	update_prototype_receive(ChannelName, Prototype, Prototype'),
 	self;
 
     Channels = [] :
       Code = _,
       Prototype = NewPrototype.
 
-  update_prototype_send(Channel, Prototype, NewPrototype) :-
+  update_prototype_send(ChannelName, Prototype, NewPrototype) :-
 
-    Prototype ? Channel(Refs, PrimeName),
+    Prototype ? ChannelName(Refs, PrimeName),
     Refs++ :
-      NewPrototype = [Channel(Refs', PrimeName) | Prototype'];
+      NewPrototype = [ChannelName(Refs', PrimeName) | Prototype'];
 
     Prototype ? Other,
     otherwise :
@@ -317,15 +315,15 @@ analyze_rhss(RHSS, Prototype, Requests, ChannelTables,
 
     Prototype = [] :
       NewPrototype = [] |
-	screen#display("Can't find in Prototype" - Channel).
+	screen#display("Can't find in Prototype" - ChannelName).
 
-  update_prototype_receive(Channel, Prototype, NewPrototype) :-
+  update_prototype_receive(ChannelName, Prototype, NewPrototype) :-
 
-    /* Primed Channel */
-    Prototype ? Channel(Refs, PrimeName),
-    string_to_dlist(Channel, CL, Prime) :
-      Prime = [39],
-      NewPrototype = [Channel(Refs, PrimeName?), PrimeName?(0, PrimeName?)
+    /* Primed Channel Name */
+    Prototype ? ChannelName(Refs, PrimeName),
+    string_to_dlist(ChannelName, CL, Prime) :
+      Prime = [CHAR_PRIME],
+      NewPrototype = [ChannelName(0, PrimeName?), PrimeName?(Refs, PrimeName?)
 		     | Prototype'] |
 	list_to_string(CL, PrimeName);
 
@@ -336,7 +334,7 @@ analyze_rhss(RHSS, Prototype, Requests, ChannelTables,
 
     /* Add Local channel */
     Prototype = [] :
-      NewPrototype = [Channel(0, Channel)].
+      NewPrototype = [ChannelName(0, ChannelName)].
 
   initialize_channel_table(Prototype, ChannelTable, Initialized) :-
 
@@ -439,15 +437,42 @@ body_channel_usage2(ChannelTable, NewChannelTable, Body,
 		ProcessTable, NextProcessTable, Channels) :-
 
     /* This will fail for library processes. */
-    Channels ? ChannelName :
+    Channels ? ChannelName,
+    L := string_length(ChannelName),
+    nth_char(L, ChannelName, CHAR_PRIME) :
       Old = {Refs, ChannelName},
       ChannelTable ! lookup(ChannelName, New, Old, Found),
       New = {NewRefs?, ChannelName} |
 	body_channel_usage3,
 	self;
 
+    Channels ? ChannelName,
+    L := string_length(ChannelName),
+    nth_char(L, ChannelName, C),
+    C =\= CHAR_PRIME,
+    string_to_dlist(ChannelName, CN, Prime) :
+      Prime = [CHAR_PRIME],
+      ChannelTable ! member(PrimeName?, _Value, Ok),
+      Old = {Refs, Name?},
+      ChannelTable' ! lookup(Name?, New, Old, Found),
+      New = {NewRefs?, Name?} |
+	list_to_string(CN, PrimeName),
+	body_channel_usage_name,
+	body_channel_usage3,
+	self;
+
     Channels =?= [] |
 	body_channel_usage.
+
+  body_channel_usage_name(Ok, ChannelName, PrimeName, Name) :-
+
+    Ok = false :
+      PrimeName = _,
+      Name = ChannelName;
+
+    Ok = true :
+      ChannelName = _,
+      Name = PrimeName.
 
   body_channel_usage3(Found, Refs, NewRefs) :-
 
@@ -460,7 +485,7 @@ body_channel_usage2(ChannelTable, NewChannelTable, Body,
       NewRefs = 1.
 
 
-update_rhss(Comm, RHSS, ChannelTables, ProcessTable, NextProcessTable, Rhss) :-
+update_rhss(RHSS, ChannelTables, Rhss) :-
 
     RHSS ? RHS,
     ChannelTables ? Table :
@@ -475,10 +500,8 @@ update_rhss(Comm, RHSS, ChannelTables, ProcessTable, NextProcessTable, Rhss) :-
 	self;
 
     RHSS =?= [] :
-      Comm = _,
       ChannelTables = [],
-      Rhss = [],
-      ProcessTable = NextProcessTable.
+      Rhss = [].
 
   partition_rhs((Ask : Tell | Body), Ask^, Tell^, Body^).
   partition_rhs((Ask  | Body), Ask^, true^, Body^) :-
@@ -522,57 +545,7 @@ reduce_channel_table(Entries, AddAsk, AddTell, Table) +
 
     NC =\= 0 :
       AddTell = [write_channel(close(Channels?), `"Scheduler.")] |
-	catch_primed_channels(Close, Close'),
-	list_to_tuple(Close'?, Channels).
-
-  catch_primed_channels(Channels, NewChannels) + (List = Channels) :-
-
-    Channels ? `PrimedName,
-    string(PrimedName),
-    string_to_dlist(PrimedName, CNL,[]) :
-      NewChannels ! `CloseName? |
-	catch_primed_channel + (CNLnp = L, CNLL = L),
-	self;
-
-    Channels ? `InterChannel,
-    tuple(InterChannel) :
-      NewChannels ! `InterChannel |
-	self;
-
-    Channels = [] :
-      List = _,
-      NewChannels = [].
-
-  catch_primed_channel(CNL, PrimedName, List, CloseName, CNLnp, CNLL) :-
-
-    CNL ? CHAR_PRIME :
-      CNL' = [],
-      CNLL = [] |
-	list_to_string(CNLnp, CNnp),
-	replace_primed_channel;
-
-    CNL ? C, C =\= CHAR_PRIME :
-      CNLL ! C |
-	self;
-
-    CNL = [] :
-      CNLL = _,
-      CNLnp = _,
-      List = _,
-      CloseName = PrimedName.
-
-  replace_primed_channel(CNnp, PrimedName, List, CloseName) :-
-
-    List ? `CNnp :
-      List' = _,
-      CloseName = PrimedName;
-
-    List ? Other, Other =\= `CNnp |
-	self;
-
-    List =?= [] :
-      PrimedName = _,
-      CloseName = CNnp.
+	list_to_tuple(Close, Channels).
 
 
 dimerize_requests(Tell, NewTell) :-
@@ -629,15 +602,54 @@ extract_spi_channels(Variables, Channels) :-
       Channels = [].
 
 
-kluge_news(RHSS, NewRHSS) :-
-    true :
-      NewRHSS = (NewAsks? : NewTells? | Body) |
-	partition_rhs(RHSS, Asks, Tells, Body),
+kluge_news(Asks, Tells, Channels, Ok, NewAsks, NewTells) :-
+
+    Ok =?= true |
 	utilities#untuple_predicate_list(",", Asks, Asks', NewConvert?),
 	utilities#untuple_predicate_list(",", Tells, Tells'),
+	ignore_redundant_news(Channels, Tells'?, Tells''),
 	kluge_new_channels + (Convert = []),
 	utilities#make_predicate_list(",", Asks'?, NewAsks),
-	utilities#make_predicate_list(",", NewTells'?, NewTells).
+	utilities#make_predicate_list(",", NewTells'?, NewTells);
+
+    Ok =\= true :
+      Channels = _,
+      NewAsks = Asks,
+      NewTells = Tells.
+
+  ignore_redundant_news(Channels, Tells, NewTells) :-
+
+    Tells ? Write, Write =?= write_channel(new_channel(_, Channel, _), _) |
+	ignore_redundant_new(Channels, Write, Channel, NewTells, NewTells'),
+	self;
+
+    Tells ? Write, Write =?= write_channel(new_channel(_, Channel, _, _), _) |
+	ignore_redundant_new(Channels, Write, Channel, NewTells, NewTells'),
+	self;
+
+    Tells ? Other, Other =\= write(new_channel(_, _, _, _), _) :
+      NewTells ! Other |
+	self;
+
+    Tells =?= [] :
+      Channels = _,
+      NewTells = [].
+
+  ignore_redundant_new(Channels, Write, Channel, Tells, NewTells) :-
+
+    Channels ? Name,
+    Channel =?= `Name :
+      Channels' = _,
+      Tells = [Write | NewTells];
+
+    Channels ? Name,
+    Channel =\= `Name |
+	self;
+
+    Channels =?= [] :
+      Channel = _,
+      Write = _,
+      Tells = NewTells.
 
   kluge_new_channels(Tells, Convert, NewTells, NewConvert) :-
 
