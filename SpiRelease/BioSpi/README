@@ -6,5 +6,3 @@ which is within your home directory.
 The file ambient_server.bin is the "executable" of the ambient
 management process.  The file user_macros.bin provides useful
 macros for using biospi - try command "ph" for a list of macros.
-Please use the macro "bc" to compile biospi programs.
-
