@@ -4,9 +4,9 @@ Precompiler for Biological Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/09/16 16:28:54 $
+		       	$Date: 2002/10/13 10:08:03 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -824,17 +824,19 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
     RHSS ? RHS,
     ChannelTables ? Table :
       Table ! entries(Entries),
-      Rhss ! (NewAsk'? : NewTell'? | Body?) |
+      Rhss ! (NewAsk'? : NewTell'? | NewBody?) |
 	partition_rhs(RHS, Ask, Tell, Goals),
-	reduce_channel_table(Entries, InterChannels, AddAsk, AddTell, Table'),
+	reduce_channel_table(Entries, InterChannels, ForkAsk, ForkTell,
+				Close, Table'),
+	fork_and_close,	/* Forks -> Asks, Body -> NewBody */
 	utilities#untuple_predicate_list(',', Ask, NewAsk, AddAsk?),
 	utilities#untuple_predicate_list(',', Tell, NewTell, AddTell?),
 	utilities#make_predicate_list(',', NewAsk?, NewAsk'),
 	utilities#make_predicate_list(',', NewTell?, NewTell'),
 	utilities#untuple_predicate_list(',', Goals?, Goals'),
-	ambient_goals(BlockPrefix, Goals'?, Body',
+	ambient_goals(BlockPrefix, Goals'?, NewGoals,
 			SignatureTable, SignatureTable'?),
-	utilities#make_predicate_list(',', Body'?, Body),
+	utilities#make_predicate_list(',', NewGoals?, Body),
 	self;
 
     RHSS =?= [] :
@@ -877,8 +879,8 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
       NextSignatureTable = SignatureTable.
 
 
-reduce_channel_table(Entries, InterChannels, AddAsk, AddTell, Table) +
-			(Close = Closes?, Closes) :-
+  reduce_channel_table(Entries, InterChannels, AddAsk, AddTell, Close, Table) +
+			(CloseList, Closes = CloseList) :-
 
     Entries ? entry(Name, {1, _}) :
       Table ! delete(Name, _, _) |
@@ -889,28 +891,75 @@ reduce_channel_table(Entries, InterChannels, AddAsk, AddTell, Table) +
       Closes ! `Name |
 	self;
 
-    Entries ? entry(Name, {N, PName}),
+    Entries ? entry(Name, {N, ChName}),
      N-- > 1 :
-      Table ! replace(Name, {1, PName}, _Old, _Ok),
-      AddAsk ! read_vector(SPI_CHANNEL_REFS, `PName, `spirefs(PName)),
-      AddAsk' ! (`spirefs'(PName) := `spirefs(PName) + N'),
-      AddTell ! store_vector(SPI_CHANNEL_REFS, `spirefs'(PName), `PName) |
+      Table ! replace(Name, {1, ChName}, _Old, _Ok),
+      AddAsk ! read_vector(SPI_CHANNEL_REFS, `ChName, `spirefs(ChName)),
+      AddAsk' ! (`spirefs'(ChName) := `spirefs(ChName) + N'),
+      AddTell ! store_vector(SPI_CHANNEL_REFS, `spirefs'(ChName), `ChName) |
 	self;
 
     Entries =?= [] :
       AddAsk = [],
+      AddTell = [],
       Closes = InterChannels,
       Table = [] |
 	close_channels.
 
-  close_channels(Close, AddTell) :-
+  close_channels(CloseList, Close) :-
 
+    CloseList =?= [] :
+      Close = [];
+
+
+    CloseList =\= [] :
+      Close = close(Channels?) |
+	list_to_tuple(CloseList, Channels).
+
+  fork_and_close(ForkAsk, ForkTell, Close, Body, AddAsk, AddTell, NewBody) :-
+
+    ForkTell =?= [],
     Close =?= [] :
-      AddTell = [];
+      ForkAsk = _,
+      AddAsk = [],
+      AddTell = [],
+      NewBody = Body;
+
+    ForkTell =?= [],
+    Close =\= [] :
+      ForkAsk = _,
+      AddAsk = [],
+      AddTell = [write_channel(Close?, `"Scheduler.")],
+      NewBody = Body;
+
+    ForkTell =?= [_],
+    Close =?= [] :
+      AddAsk = ForkAsk,
+      AddTell = ForkTell,
+      NewBody = Body;
 
     otherwise :
-      AddTell = [write_channel(close(Channels?), BIO_SCHEDULER)] |
-	list_to_tuple(Close, Channels).
+      ForkTell = _,
+      AddAsk = [],
+      AddTell = [],
+      NewBody = (spi_update_channel_refs(List?, `"Scheduler.", `"Scheduler.'"),
+		 Body) |
+	make_update_channel_refs_list.
+
+  make_update_channel_refs_list(ForkAsk, Close, List) :-
+
+    ForkAsk ? _,
+    ForkAsk' ? (`spirefs'(ChName) := `spirefs(ChName) + N) :
+      List ! {N, `ChName} |
+	self;
+
+    ForkAsk =?= [],
+    Close =?= [] :
+      List = [];
+
+    ForkAsk =?= [],
+    Close =\= [] :
+      List = [Close].
 
 
 dimerize_requests(Tell, NewTell) :-
