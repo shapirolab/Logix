@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 
-my $PERIOD = 1;
+my $Period = 1;
 
 my %Processes = ();
 
@@ -21,6 +21,7 @@ sub normalize {
     $item = $substitute;
   }
 }
+
     
 # MAIN
 
@@ -28,9 +29,10 @@ my $record = shift @ARGV;
 open RECORD, "$record" or die "Can't open input $record\n";
 
 my $substitute;
+
 while ($substitute = shift(@ARGV)) {
   if ($substitute > 0) {
-    $PERIOD = $substitute;
+    $Period = $substitute;
   }
   elsif ($substitute < 0) {
     $rescale = -$substitute;
@@ -58,7 +60,6 @@ open TEMP, ">$temp" or die "Can't open temporary $temp for output\n";
 my $line;
 my $lastitem = 0.0000000;
 my $nexttime = 0;
-my $interval = 0.0001;
 
 while ($line = <RECORD>) {
 
@@ -81,12 +82,12 @@ while ($line = <RECORD>) {
   elsif ($line =~ /^\s*\d+\.\d+\s*$/) {
     next if $type eq "00";
     next if $line < $nexttime;
-    $item = substr($line+0.0000001, 0, 7);
+    $item = substr(($line < 10 ? (sprintf "%8.7f", $line) : $line), 0, 7);
     next if $item == $lastitem;
     $lastitem = $item;
-    $nexttime = int($lastitem) + $PERIOD;
+    $nexttime = int($lastitem) + $Period;
     if ($nexttime <= $lastitem) {
-      $nexttime = $lastitem + $PERIOD;
+      $nexttime = $lastitem + $Period;
     }
     $type = "00";
   }
@@ -96,9 +97,6 @@ while ($line = <RECORD>) {
   else {die "Illegal input $line\n"};
 
   print TEMP "$type$item\n";
-}
-if ($type ne "00") {
-  print TEMP "00" . substr($nexttime + 0.0000001, 0, 7) . "\n";
 }
 
 close TEMP or die "Can't close temporary $temp output\n";
