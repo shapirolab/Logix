@@ -1,8 +1,7 @@
 -monitor(serve).
 -language([evaluate,compound,colon]).
 -export([get_global_channels/1, global_channels/1, global_channels/2,
-	 debug/1, record/1, scheduler/1,
-	 options/2, reset/1]).
+	 options/2, reset/0, scheduler/1]).
 
 /*
 SORT(Merger, List, Sorted) => 
@@ -23,21 +22,22 @@ MERGE(Merger, Sorted, List1, List2, Pair) =>
 RAN =>  4.					/* random real number */
 LN  =>  9.					/* natural logarithm */
 
+DASH => 45.
+
 serve(In) :-
 
     In =?= [] |
 	true;
 
-    In =\= [],
-    Dash := ascii('-') |
-	server(In, 1, Dash, nil, [], [{0, _}, {[], _}], Scheduler),
+    In =\= [] |
+	server(In, 1, nil, [], [{0, _}, {[], _}], Scheduler),
 	processor#link(lookup(math, Offset), Ok),
 	start_scheduling(Scheduler, Offset, Ok).
 
-server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
+server(In, UID, Tree, Options, Global, Scheduler) :-
 
     In ? unique_sender(String, Name),
-    string_to_dlist(String, Head, [Dash | Tail]),
+    string_to_dlist(String, Head, [DASH | Tail]),
     convert_to_string(UID++, Suffix),
     string_to_dlist(Suffix, Tail, []),
     list_to_string(Head, Concatenated) :
@@ -58,11 +58,13 @@ server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
 	copy_global(Global, List', _),
 	self;
 
-    In ? reset(List),
-    we(List) :
-      List = List'? |
-	copy_global(Global, List', Global'),
-	self;
+    In ? reset :
+      UID = _,
+      Tree = _,
+      Options = _,
+      Global = _,
+      close_channel(Scheduler) |
+	serve;
 
     In ? options(New, Old) :
       Options' = New? |
@@ -72,14 +74,6 @@ server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
     In ? scheduler(Scheduler^) |
 	self;
 
-    In ? debug(Stream?) :
-      write_channel(debug(Stream), Scheduler) |
-	self;
-
-    In ? record(Stream?) :
-      write_channel(record(Stream), Scheduler) |
-	self;
-
     In ? Other,
     otherwise |
 	self,
@@ -87,7 +81,6 @@ server(In, UID, Dash, Tree, Options, Global, Scheduler) :-
 
     In = [] :
       UID = _,
-      Dash = _,
       Tree = _,
       Options = _,
       Global = _,
@@ -325,7 +318,9 @@ scheduling(Schedule, Offset, NegativeExponential,
       Stream = Record? |
 	self;
 
-    Schedule ? end_record(Stream) :
+    Schedule ? end_record(Stream),
+    convert_to_real("0.0", Now') :
+      Now = _,
       Record = [],
       Stream = Record'? |
 	self;
@@ -337,8 +332,7 @@ scheduling(Schedule, Offset, NegativeExponential,
 
 /**************************** Debuging code ********************************/
 
-    Schedule ? input(Stream) :
-      Stream = Schedule'? |
+    Schedule ? input(Schedule'', Schedule'^) |
 	self;
 
     Schedule ? debug(Stream) :
