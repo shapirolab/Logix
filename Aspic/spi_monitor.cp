@@ -365,10 +365,10 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 	make_channel_anchor(instantaneous, InstantaneousAnchor),
 	processor#Waiter?,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-				BasedAnchor, InstantaneousAnchor,
 				Scheduler, _Recording, _Debug,
 				Zero, false, _Wakeup,
-				DefaultWeighter, MaxTime, Start_real_time).
+				DefaultWeighter, MaxTime, Start_real_time,
+				BasedAnchor, InstantaneousAnchor).
 
   make_channel_anchor(Name, Anchor) :-
 
@@ -474,10 +474,10 @@ STATUS => [anchors([BasedAnchor, InstantaneousAnchor]),
 
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
-		DefaultWeighter, Cutoff, Start_real_time) :-
+		DefaultWeighter, Cutoff, Start_real_time,
+		BasedAnchor, InstantaneousAnchor) :-
 
     Schedule =?= [] :
       Cutoff = _,
@@ -895,10 +895,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self#reset(DefaultWeighter, SpiOffsets, Ordinal).
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
-		DefaultWeighter, Cutoff, Start_real_time, Reply) :-
+		DefaultWeighter, Cutoff, Start_real_time,
+		BasedAnchor, InstantaneousAnchor,
+		Reply) :-
 
     /* Reply for spifcp transmission */
     Reply =?= true(PId1, RCId1, CH1, PId2, RCId2, CH2),
