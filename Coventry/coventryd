@@ -185,11 +185,11 @@ if ($debug) {# debug
 	    if (!defined($low_priority_class{$user})) {
 		setnice($process,
 			($class eq "gb" || $class eq "gn") ? 0 : $nice);
-	    }
-	}
 if ($debug) {# debug
   print_refed_process("returned to society", $process);
 }# endebug
+	    }
+	}
     }
     exit 0;
 }
