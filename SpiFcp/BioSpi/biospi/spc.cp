@@ -4,9 +4,9 @@ Precompiler for Biological Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/10/13 10:08:03 $
+		       	$Date: 2002/11/16 12:33:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -476,8 +476,9 @@ generate_inter_comm(Signature, InterChannels,
       Terms1 = [(Completer? :- known(BIO_READY) | Body) | Terms2] |
 	utilities#untuple_predicate_list(',', Tell, Tell'),
 	closed_channels(Tell'?, Closed),
-	utils#tuple_to_dlist(Signature, [_Functor | Arguments],
-				[BIO_SCHEDULER, BIO_READY]),
+	continue_with_scheduler,
+	continue_with_args,
+	utils#tuple_to_dlist(Signature, [_Functor | Arguments], Args),
 	utilities#subtract_list(Arguments?, Closed?, Arguments'),
 	utils#list_to_tuple([Complete | Arguments'?], Completer);
 
@@ -495,10 +496,19 @@ generate_inter_comm(Signature, InterChannels,
 				    Tell''),
 	utilities#make_predicate_list(',', Tell''?, Tell'''),
 	closed_channels(Tell'?, Closed),
-	utils#tuple_to_dlist(Signature, [_Functor | Arguments],
-				[BIO_SCHEDULER, BIO_READY]),
+	continue_with_scheduler,
+	continue_with_args,
+	utils#tuple_to_dlist(Signature, [_Functor | Arguments], Args?),
 	utilities#subtract_list(Arguments?, Closed?, Arguments'),
 	utils#list_to_tuple([Complete | Arguments'?], Completer).
+
+  continue_with_args(AddTell, Args) :-
+
+    AddTell = [] :
+      Args = [BIO_SCHEDULER, BIO_READY];
+
+    AddTell =\= [] :
+      Args = [BIO_READY].
 
   closed_channels(Tell, Closed) :-
 
@@ -834,7 +844,7 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
 	utilities#make_predicate_list(',', NewAsk?, NewAsk'),
 	utilities#make_predicate_list(',', NewTell?, NewTell'),
 	utilities#untuple_predicate_list(',', Goals?, Goals'),
-	ambient_goals(BlockPrefix, Goals'?, NewGoals,
+	ambient_goals(BlockPrefix, Goals'?, Scheduler?, NewGoals,
 			SignatureTable, SignatureTable'?),
 	utilities#make_predicate_list(',', NewGoals?, Body),
 	self;
@@ -852,16 +862,15 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
   partition_rhs(Body, true^, true^, Body^) :-
     Body =\= (_ | _) | true.
 
-  ambient_goals(BlockPrefix, Goals, Body,
+  ambient_goals(BlockPrefix, Goals, Scheduler, Body,
 	SignatureTable, NextSignatureTable ):-
 
     Goals =?= [new_ambient(Name, Id, ServiceId), Id | Goals'] :
       SignatureTable ! lookup(Id, Signature, Signature, _Status),
       Body = [self#service_id(ServiceId),
-	      write_channel(new_ambient(Name, ServiceId, Goal?),
-			    BIO_SCHEDULER)
+	      write_channel(new_ambient(Name, ServiceId, Goal?), Scheduler)
 	     | Body'?] |
-	utils#tuple_to_dlist(Signature, [Functor|ArgList], [BIO_SCHEDULER]),
+	utils#tuple_to_dlist(Signature, [Functor|ArgList], [Scheduler]),
 	string_to_dlist(Functor, FL, []),
 	string_to_dlist(BlockPrefix, LL, FL?),
 	list_to_string(LL?, Functor'),
@@ -875,6 +884,7 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
 
     Goals = [] :
       BlockPrefix = _,
+      Scheduler = _,
       Body = [],
       NextSignatureTable = SignatureTable.
 
@@ -916,35 +926,60 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
       Close = close(Channels?) |
 	list_to_tuple(CloseList, Channels).
 
-  fork_and_close(ForkAsk, ForkTell, Close, Body, AddAsk, AddTell, NewBody) :-
+  fork_and_close(ForkAsk, ForkTell, Close, Body, AddAsk, AddTell, NewBody,
+			Scheduler) :-
 
     ForkTell =?= [],
     Close =?= [] :
       ForkAsk = _,
       AddAsk = [],
-      AddTell = [],
-      NewBody = Body;
+      NewBody = Body,
+      Scheduler = BIO_SCHEDULER |
+	continue_with_scheduler;
 
     ForkTell =?= [],
     Close =\= [] :
       ForkAsk = _,
       AddAsk = [],
-      AddTell = [write_channel(Close?, `"Scheduler.")],
-      NewBody = Body;
+      AddTell = [write_channel(Close?, Scheduler)],
+      NewBody = Body,
+      Scheduler = BIO_SCHEDULER;
 
     ForkTell =?= [_],
     Close =?= [] :
       AddAsk = ForkAsk,
       AddTell = ForkTell,
-      NewBody = Body;
+      NewBody = Body,
+      Scheduler = BIO_SCHEDULER;
 
     otherwise :
       ForkTell = _,
       AddAsk = [],
       AddTell = [],
-      NewBody = (spi_update_channel_refs(List?, `"Scheduler.", `"Scheduler.'"),
-		 Body) |
+      NewBody = (spi_update_channel_refs(List?, BIO_SCHEDULER, Scheduler),
+		 Body),
+      Scheduler = BIO_SCHEDULER_PRIME |
 	make_update_channel_refs_list.
+
+
+/* A little kluge for lint */
+continue_with_scheduler(Body, AddTell) :-
+
+    Body =?= (Goal, _),
+    Goal =\= (_ # _), Goal =\= true :
+      AddTell = [];
+
+    Body =?= (_, Body'),
+    otherwise |
+	self;
+
+    Body =\= (_, _),
+    Body =\= (_ # _), Body =\= true :
+      AddTell = [];
+
+    Body =\= (_, _),
+    otherwise :
+      AddTell = [(BIO_SCHEDULER = `"_")].
 
   make_update_channel_refs_list(ForkAsk, Close, List) :-
 
