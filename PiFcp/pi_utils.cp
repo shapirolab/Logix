@@ -1,7 +1,7 @@
 -language(compound).
 -mode(failsafe).
 -export([make_channel/1, make_channel/4,
-	 show_channel/3, show_goal/3, show_resolvent/3,
+	 show_channel/3, show_goal/3, show_goals/3, show_resolvent/3,
 	 show_tree/3, close_tree/1,
 	 receive/2, send/2]).
 
@@ -194,12 +194,12 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Left = Right;
 
     Which =\= none,
-    Stream ? Id(Message, _Tag, Choice) |
+    Stream ? Id(Message, Tag, Choice) |
 	show_message;
 
     Which =\= none,
     Stream ? Other, Other =\= _(_, _, _) :
-      Content ! "invalid message"/*(Other)*/ |
+      Content ! "invalid message"(Other) |
 	self;
 
     Which =?= none,
@@ -210,11 +210,12 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Content = "?",
       Left = Right.
 
-show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content,
+show_message(Id, Message, Tag, Choice, Stream, Which, Depth, Sender, Content,
 		Left, Right) :-
 
     Which =?= active,
     we(Choice) :
+      Tag = _,
       Type = active,
       Content ! Condensed? |
 	condense_message,
@@ -229,22 +230,30 @@ show_message(Id, Message, Choice, Stream, Which, Depth, Sender, Content,
     otherwise :
       Id = _,
       Message = _,
+      Tag = _,
       Choice = _ |
 	show_channel_content.
 
-  type_of_choice(Choice, Type) :-
+  type_of_choice(Tag, Choice, Type) :-
 
     we(Choice) :
+      Tag = _,
       Type = active;
 
     ro(Choice) :
+      Tag = _,
       Type = suspended;
 
     not_we(Choice), Choice =?= 0 :
+      Tag = _,
       Type = withdrawn;
 
-    not_we(Choice), Choice =\= 0 :
-      Type = consumed.
+    not_we(Choice), Choice =\= 0, Tag =?= Choice :
+      Type = consumed;
+
+    not_we(Choice), Choice =\= 0, Tag =\= Choice :
+      Type = cancelled.
+    
 
 condense_message(Type, Id, Message, Which, Depth, Sender, Condensed,
 			Left, Right) :-
@@ -707,6 +716,25 @@ sort_on_time(List, Sorted) + (Tail =[]) :-
       Large = [].
 
 
+show_goals(Goals, Options, Output) :-
+
+    true :
+      make_channel(BadOption, _) |
+	parse_options(Options, Depth(1), BadOption(BadOption),
+		      Sender(no_sender), Which(active)),
+	show_goals(Goals, [Depth?, Sender?, Which?], Result, Output, Result?).
+
+  show_goals(Goals, Options, Result, Left, Right) :-
+
+    Goals =?= (Goal, Goals') :
+      Result = (Goal'?, Result') |
+	show_goal(Goal, Options, Goal', Left, Left'),
+	self;
+
+    Goals =\= (_, _) |
+	show_goal(Goals, Options, Result, Left, Right).
+
+
 show_resolvent(Resolvent, Options, Stream) :-
 
     true :
@@ -719,11 +747,21 @@ show_resolvent(Resolvent, Options, Stream) :-
 
     Resolvent ? Call,
     Call = call(_, _) :
-      Stream ! call /* Call ? */ |
+      Stream ! Call |
 	self;
 
     Resolvent ? [Name | _] # Goals |
 	show_resolvent_goals(Name, Options, Goals, Stream, Stream'),
+	self;
+
+    Resolvent ? Name # Goals,
+    Name =\= [_|_] |
+	show_resolvent_goals(Name, Options, Goals, Stream, Stream'),
+	self;
+
+    Resolvent ? Goals,
+      Goals =\= (_#_) |
+	show_resolvent_goals([], Options, Goals, Stream, Stream'),
 	self;
 
     Resolvent = [] :
@@ -733,9 +771,24 @@ show_resolvent(Resolvent, Options, Stream) :-
 
   show_resolvent_goals(Name, Options, Goals, Stream, NextStream) :-
 
-    Goals ? Goal |
+    Goals ? Goal,
+    Name =\= [] |
 	show_goal(Goal, Options, PiFcp, Stream, [(Name # PiFcp?) | Stream'?]),
 	self;
+
+    Goals ? Goal,
+    Name =?= [] |
+	show_goal(Goal, Options, PiFcp, Stream, [PiFcp? | Stream'?]),
+	self;
+
+    Goals =\= [_|_], Goals =\= [],
+    Name =\= [] |
+	show_goal(Goals, Options, PiFcp, Stream,
+	    [(Name # PiFcp?) | NextStream]);
+
+    Goals =\= [_|_], Goals =\= [],
+    Name =?= [] |
+	show_goal(Goals, Options, PiFcp, Stream, [PiFcp? | NextStream]);
 
     Goals =?= [] :
       Name = _,
