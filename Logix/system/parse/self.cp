@@ -4,9 +4,9 @@ FCP parser
 Michael Hirsch, Marc Rosen, Muli Safra, Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/11/28 12:41:29 $
+		       	$Date: 2000/05/03 10:41:37 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Logix/system/parse/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -788,7 +788,7 @@ procedure infix_operator_1(Op, PLeft, Pop, PRight, Reply).
 infix_operator_1( ';' ,1069^, 1070^, 1070^, true^).
 infix_operator_1( '|' ,1059^, 1060^, 1060^, true^).
 infix_operator_1( ':' ,1049^, 1050^, 1049^, true^).
-infix_operator_1( '&' , 999^, 1000^, 1000^, true^).	 
+infix_operator_1( '&' , 989^,  990^,  990^, true^).	 
 infix_operator_1( ',' , 999^, 1000^, 1000^, true^).	 
 infix_operator_1( '!' , 899^,  900^,  900^, true^).	 
 infix_operator_1( '?' , 900^,  900^,  899^, true^).	 
