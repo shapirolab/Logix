@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.2 2003/12/22 09:09:42 bill Exp $ */
 /*
 **  fcp.c  -  emulator startup
 */
@@ -9,7 +9,6 @@
 #include	<sys/fcntl.h>
 #endif
 #include	<string.h>
-#include	<ctype.h>
 #include	<sys/file.h>
 
 #include	"fcp.h"

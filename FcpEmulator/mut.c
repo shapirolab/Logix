@@ -1,10 +1,8 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mut.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mut.c,v 1.2 2003/12/22 09:09:42 bill Exp $ */
 
 #include	<stdio.h>
 #include	<string.h>
-#include	<ctype.h>
 #include	<sys/file.h>
-#include	<sys/vadvise.h>
 
 #include	"fcp.h"
 
