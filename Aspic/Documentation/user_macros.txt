@@ -54,7 +54,21 @@ The user macro:
 
     weighter(W)
 
-sets the default weight computation.  W  is a <weighter_decaration>.
+alters the system's default weight computation, where the new default
+weight  W  is a <weighter_declaration>.  The initial default weight is 1.
+
+
+The user macros:
+
+    randomize
+    serialize
+
+alter the system's state to set the status of each subsequently
+created file so that messages for transmision by that file are
+selected randomly or on a first-come-first-served basis.  The initial
+system state is  serialize .  The program macros  randomize_messages 
+and  serialize_messages  may be used to change the status of specified
+files (see program_macros.txt: M2 and M3)
 
 
 Program Execution
@@ -62,7 +76,7 @@ Program Execution
 
 The basic Logix command to execute a program has the form:
 
-    <directory path>#<goal>
+    <logix_path>#<goal>
 
 The system creates a computation, uniquely identified by a positive
 integer, its "computation number", throughout the session.  The command
@@ -75,31 +89,37 @@ in directory boolean, call:
 
     boolean#booland#"RunTT"
 
-The call above is an example of a Remote Process Call (RPC).
+The call above is an example of a Remote Process Call (RPC), similarly
+defined as an  <external_call>  in  BNF.txt .
 
 The quotation marks around RunTT are necessary, since the Logix system
-treats names beginning with a capital letter or an underscore as logic
-variables.
+treats  a name which begins with a capital letter or an underscore as
+a  <logix_variable> .
 
 
 The user macros:
 
-    run(<goals>)
-    run(<goals>, <limit>)
+    run(<quantified process set>)
+    run(<quantified process set>, <limit>)
 
-execute all of the goals as a single computation: the first form continues
-indefinitely; the second continues until <limit> units of internal time have 
-elapsed.  See  repeat.txt  for details on specification of multiple goals.
+execute all of the RPCs in the  <quantified process set>  as a single
+computation: the first form continues indefinitely; the second continues 
+until  <limit>  units of internal time have elapsed.  See  repeat.txt  for 
+details on specification of multiple RPCs by a  <quantified process set> .
+The simplest form of a  <quantified process set>  is a single RPC, as in
+the example above.
 
 
 The user macro:
 
-    record(<goals>, <file name>, <limit>)
+    record(<quantified process set>, <file name>, <limit>)
 
-also executes all of the goals until <limit>, and records their behavior
-on the named file.  See  repeat.txt  for details on specification of
-multiple goals.  See  record.txt  for details about the file and about
-the arguments of the user macro.
+executes all of the RPCs in the  <quantified process set>  as a single
+computation and records their activity on the named file until  <limit>
+units of internal time have elapsed.  See  repeat.txt  for details on
+specification of multiple RPCs by a <quantified process set>.  See
+record.txt  for details about the file and about the other arguments
+of this user macro.
 
 
 A computation may be  suspended ,  resumed  or  aborted.  You may also
@@ -116,7 +136,7 @@ The user macros:
     suspend(N)
 
 suspend the current or the specified computation(s) (N or all).  The last
-two forms also reset the current computation number.
+two forms also set the current computation number.
 
 
 The user macros:
@@ -141,6 +161,17 @@ The user macros:
     abort(N)
     
 abort the current or the specified computation(s), as above.
+
+
+
+The user macro:
+
+    reset
+
+discards all channels, private and public; it preserves the states of
+randomize/serialize and the default weighter, but resets the private
+channel ordinal to 1.  To complete entire system  reset, use the
+commands abort(all) and forward(reset).
 
 
 Debugging
@@ -185,7 +216,7 @@ The user macros:
    spg(N,Options)
 
 display the goals of the current or of the specified computation.  The last
-two forms also reset the current computation number.
+two forms also set the current computation number.
 
 
 The user macros:
