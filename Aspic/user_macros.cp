@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/11/10 09:30:50 $
+		       	$Date: 2003/04/30 06:36:30 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -84,13 +84,13 @@ expand(Command, Cs) :-
 		" pdb(RPC)           - debug(RPC)",
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from spi channel C",
-		" prgcs              - reset Spi global channels",
+		" prgcs              - reset Spi public channels",
 		" ps(M,C)            - send M on spifcp channel C",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
 		" spc(C)             - Spi channel",
 		" spg / spg(No)      - Spi goal of computation No",
-		" spgcs              - Spi global channels",
+		" spgcs              - Spi public channels",
 		" spr / spr(No)      - Spi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Spi execution tree",
@@ -167,14 +167,14 @@ expand(Command, Cs) :-
 	   | Commands]\Commands;
 
     Command = spgcs :
-      Cs = [to_context([spi_monitor # [options(O, O),get_global_channels(Gs)], 
+      Cs = [to_context([spi_monitor # [options(O, O),get_public_channels(Gs)], 
 			spi_utils # show_value(Gs, O?, Gs'),
 			computation # display(stream, Gs', [])]) 
 	   | Commands]\Commands;
 
     Command = spgcs(Options) :
       Cs = [to_context([computation # display(stream, Gs', []),
-			spi_monitor # get_global_channels(Gs),
+			spi_monitor # get_public_channels(Gs),
 			spi_utils # show_value(Gs, Options, Gs')]) 
 	   | Commands]\Commands;
 
