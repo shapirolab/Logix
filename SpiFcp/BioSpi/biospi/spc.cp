@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/29 06:20:04 $
+		       	$Date: 2002/07/01 07:40:35 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -826,18 +826,17 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
   ambient_goals(BlockPrefix, Goals, Body,
 	SignatureTable, NextSignatureTable ):-
 
-    Goals =?= [new_ambient(Name, Id, ServiceId, AmbientCh), Id | Goals'] :
+    Goals =?= [new_ambient(Name, Id, ServiceId), Id | Goals'] :
       SignatureTable ! lookup(Id, Signature, Signature, _Status),
       Body = [self#service_id(ServiceId),
-	      write_channel(new_ambient(Name, ServiceId, Goal?, AmbientCh),
+	      write_channel(new_ambient(Name, ServiceId, Goal?),
 			    BIO_SCHEDULER)
 	     | Body'?] |
-	utils#tuple_to_dlist(Signature, [Functor|SignatureList], [AmbientCh]),
+	utils#tuple_to_dlist(Signature, [Functor|ArgList], [BIO_SCHEDULER]),
 	string_to_dlist(Functor, FL, []),
 	string_to_dlist(BlockPrefix, LL, FL?),
 	list_to_string(LL?, Functor'),
-	utilities#subtract_list(SignatureList, [`"Scheduler"], GoalList),
-	utils#list_to_tuple([Functor'? | GoalList?], Goal),
+	utils#list_to_tuple([Functor'? | ArgList?], Goal),
 	self;
 
     Goals ? Goal,

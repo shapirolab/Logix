@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/06/07 12:33:09 $
+		       	$Date: 2002/07/01 07:40:35 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -894,12 +894,10 @@ transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
 
   new_ambient(Name, Body, Scope, NextScope) :-
 
-    string_to_dlist(AMBIENT, AmbientChL, [CHAR_MINUS | IdL?]),
     string_to_dlist(SERVICE, ServiceIdL, [CHAR_MINUS | IdL?]) :
       Scope = [next_scope_id(Id), ambient(Id?) | NextScope],
-      Body = {new_ambient(Name, Id, `ServiceId?, `AmbientCh?)} |
+      Body = {new_ambient(Name, Id, `ServiceId?)} |
 	string_to_dlist(Id?, IdL, []),
-	list_to_string(AmbientChL, AmbientCh),
 	list_to_string(ServiceIdL, ServiceId).
 
   new_scope(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
