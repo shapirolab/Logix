@@ -6,9 +6,9 @@ Yossie Lichentenstein, Bill Silverman
 28/05/86
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:37 $
+		       	$Date: 2004/06/22 12:12:33 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/profile/interpret.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -340,12 +340,6 @@ execute(Clause, Channel) :-
 
     Clause = _(clause(UserGoal, UserBody), true^, _Id, Time^) :
       write_channel(clause(UserGoal, UserBody, _, Time), Channel) ;
-
-    Clause = _(Clause3, true^, _Id, Time),
-    Clause3 = clause(_UserGoal, _UserBody, Control) :
-      Time = UserTime?,
-      Control = _Suspense(_UserId, UserTime) |
-      write_channel(Clause3, Channel) ;
 
     Clause = _(Clause4, true^, _Id, Time),
     Clause4 = clause(_UserGoal, _UserBody, _UserId, UserTime) :
