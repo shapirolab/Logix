@@ -1,0 +1,4 @@
+#! /bin/sh
+psi2t $1
+t2xys $1
+gnuplot
