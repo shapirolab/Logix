@@ -4,9 +4,9 @@ User interface of Stochastic Pi Calculus algoritmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 
 Last update by          $Author: bill $
-			$Date: 2003/04/01 13:02:34 $
+			$Date: 2003/04/30 07:09:06 $
 Currently locked by     $Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/user.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,8 +14,9 @@ Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export([monitor/1/*,pre/7,post/7*/]).
--language(compound).
+-language([evaluate, compound, colon]).
 -mode(trust).
+-include(spi_constants).
 
 Command ::= pre(Signals,Goal_In,Debug_Info,NewDebug_Info,Id,Done) ;
 	    post(Signals,Execute_Info,Goal_In,Debug_Info,NewDebug_Info,Done).
@@ -119,12 +120,11 @@ post(Signals, Execute_Info, Goal_In, Debug_Info, NewDebug_Info, Done) :-
 		ask(Signals, Answer, post, Goal, Debug_Info, NewDebug_Info,
 			Execute_Info, Done);
 
-
 	Execute_Info = {Body, _Id, Time},
-	Time = failed(Clause,RealTime), integer(RealTime) :
+	Time = Diag(Clause,RealTime), string(Diag), integer(RealTime) :
 	    Goal_In = _,
 	    Body = true |
-		ask(Signals, query, post, failed(Clause), Debug_Info,
+		ask(Signals, query, post, Diag(Clause), Debug_Info,
 			NewDebug_Info, Execute_Info, Done). 
 
 /***********************************************************************/
@@ -136,6 +136,7 @@ pre(Signals, Goal_In, Debug_Info, NewDebug_Info, Id, Done) :-
 		ask(Signals, query, pre, Goal, Debug_Info, NewDebug_Info,
 			 Execute_Info, Done);
 
+	otherwise,
 	Goal_In = {Goal,_OpenContext},
 	Debug_Info = {Breaks, _Depth, _Execute_or_Interpret, _Channels} :
 	    Execute_Info = {'?', Id, _Time} |
@@ -167,7 +168,7 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 	    NewDebug_Info = Debug_Info |
 		write(" goal "(Goal, Goal'), Spi),
 		exclude_stochastic_aids(Goal'?, Goal''),
-		write_user_goal(Goal''?, " :- ?.", Done, IO);
+		write_user_goal(Goal''?, " ::= ?.", Done, IO);
 
 	Answer     = print,
 	Location   = post,
@@ -191,7 +192,7 @@ ask(Signals, Answer, Location, Goal, Debug_Info, NewDebug_Info,
 		write(" goal "(Goal, Goal'), Spi),
 		write(" goal "(Body, Body'), Spi),
 		exclude_stochastic_aids(Body'?, Body''),
-		write(display([Goal'?, " :- 
+		write(display([Goal'?, " ::= 
 	",	Body''?, '.' | Q] \ Q, [list,close(done,Done)]), IO);
 
 	Answer     = query,
@@ -224,7 +225,7 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 		write(" goal "(Goal, Goal'), Spi),
 		write(" goal "(Body, Body'), Spi),
 		exclude_stochastic_aids(Body'?, Body''),
-		write(ask([Goal'?, " :- 
+		write(ask([Goal'?, " ::= 
 	", Body''?, '.
 query ->'],Ans,[list,read(chars)], Print_Requests),IO),
 		read(Signals, Ans, Print_Requests,{Goal,Location,Execute_Info},
@@ -233,25 +234,28 @@ query ->'],Ans,[list,read(chars)], Print_Requests),IO),
   exclude_stochastic_aids(BodyIn, BodyOut) :-
 
     BodyIn =?= (Goal, BodyIn'),
-    Goal =\= (spi_monitor#_),
-    Goal =\= (spi_update_channel_refs(_,_,_)),
-    Goal =\= (_ = _) :
-	BodyOut = (Goal, BodyOut') |
+    Goal =\= (_ = _) |
+	exclude_stochastic_aid(Goal, (Goal | BodyOut'), BodyOut', BodyOut),
 		self;
 
-    BodyIn =?= (_Exclude, BodyIn'),
-    otherwise |
+    BodyIn =?= (_ = _, BodyIn') |
 		self;
 
     BodyIn =\= (_, _),
-    BodyIn =\= (spi_monitor#_),
-    BodyIn =\= (spi_update_channel_refs(_,_,_)),
-    BodyIn =\= (_ = _) :
-	BodyOut = BodyIn;
+    BodyIn =\= (_ = _) |
+	exclude_stochastic_aid(BodyIn, BodyIn, 0, BodyOut);
 
-    BodyIn =\= (_, _),
-    otherwise :
+    BodyIn =?= (_ = _) |
 	    BodyOut = 0.
+
+  exclude_stochastic_aid(Goal, GoalOut, NoGoalOut, BodyOut) :-
+
+    EXCLUDE_CLAUSE_TESTS(Goal, (GoalOut = _, BodyOut = NoGoalOut));
+
+    otherwise :
+      Goal = _,
+      NoGoalOut = _,
+      BodyOut = GoalOut.
 
   write_user_goal(Goal, Notation, Done, IO) :-
 
