@@ -761,17 +761,17 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	fail("unrecognized request" - Other),
 	self;
 
-    Wakeup = done,
+    Wakeup =?= done,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     arg(SPI_RATE, SpiOffsets, RateOffset) :
       Waiting = _,
       Waiting' = false |
 	sum_weights(BasedAnchor, RateOffset, 0, Total),
-	logix_total_weight(MathOffset, BasedAnchor, Now, RateOffset,
-			   Total, Wakeup', Now',
-			   Uniform, NegativeExponential,
-			   Uniform', NegativeExponential'),
+	logix_transmit( MathOffset, BasedAnchor, Now, RateOffset,
+			Total, Wakeup', Now',
+			Uniform, NegativeExponential,
+			Uniform', NegativeExponential'),
 	self;
 
     Wakeup =?= done,
@@ -1828,8 +1828,8 @@ total_weight(MathOffset, Anchor, Now, Total, Reply, NewNow) :-
 	NewNow := Now - NegativeExponential/Total.
 */
 
-logix_total_weight(MathOffset, Anchor, Now, RateOffset, Total,
-		   Reply, NewNow, U, NE, NU, NNE) :-
+logix_transmit(MathOffset, Anchor, Now, RateOffset, Total,
+	       Reply, NewNow, U, NE, NU, NNE) :-
 
     Total =< 0 :
       Anchor = _,
