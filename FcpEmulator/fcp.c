@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.4 2003/12/22 09:09:50 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.5 2004/10/12 16:37:37 bill Exp $ */
 /*
 **  fcp.c  -  emulator startup
 */
@@ -37,6 +37,8 @@ char	*FileName = (char *) Null;
 int	BootType = WarmBoot;
 char	*Parent_Addr = (char *) Null;
 
+char    *PMem, *MemEnd;
+
 #ifdef	DEBUG
 int	ReductionsDebug = 0;
 int	GCDebug = 0;
@@ -49,12 +51,14 @@ fcp(argc, argv)
   heapT Prcdr;
 
   register int	Fd;
-  register char *PMem, *MemEnd;
 
   char *Base;
   int Size;
 
   extern char *malloc();
+  extern void *memalign();
+
+  void fcp_debug(char *);
 
   DbgFile = stderr;
   OutFile = stdout;
@@ -106,7 +110,7 @@ fcp(argc, argv)
     return(False);
   }
   if (BootType != WarmBoot) {
-    PMem = malloc(RsrvSize+LinkSize+HeapSize);
+    PMem = (char *) memalign(HOPage, RsrvSize+LinkSize+HeapSize);
     if (PMem == NULL) {
       fprintf(DbgFile, "fcp: not enough core for link/heap area\n");
       return(False);
@@ -114,18 +118,27 @@ fcp(argc, argv)
     LinkBase = (linkP) (PMem+RsrvSize);
     LinkEnd = LinkBase + (LinkSize / sizeof(linkT));
     HeapBase = (heapP) LinkEnd;
-    HeapEnd = HeapBase + (HeapSize / sizeof(heapT));
-    if (((((int) HeapBase) & HOByteMask) != HOByte) ||
-	((((int) HeapBase) & HOByteMask) != HOByte)) {
-      fprintf(DbgFile, "fcp: Unexpected address format.\n");
+    HeapEnd = HeapBase + (HeapSize / sizeof(heapT) - 1);
+    MemEnd = (char *) HeapEnd;
+
+    HOByte = HOByteMask & ((int) HeapBase);
+    if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
+      fprintf(DbgFile, "fcp: Heap size too large.\n");
+      fcp_debug("Cold");
       return(False);
     }
+
+    if(SpecRsrv) {
+      fcp_debug("Reserve");
+    }
+
     HeapStart = HeapBase;
     HP = HeapStart;
     CurHeapLimit = HeapEnd;
     PMem = malloc(TrlsSize+TblsSize);
     if (PMem == NULL) {
-      fprintf(DbgFile, "fcp: not enough core for trails/tables\n");
+      fprintf(DbgFile, "fcp: not enough core for trails/tables(%u)\n",
+	      TrlsSize+TblsSize);
       return(False);
     }
     AsgnTrl = (trailP) PMem;
@@ -136,6 +149,7 @@ fcp(argc, argv)
     chng_trl_reset();
     sus_tbl_reset();
     err_tbl_reset();
+
     if (!produce_constants()) {
       fprintf(DbgFile, "fcp: not enough space for constants\n");
       return(False);
@@ -218,7 +232,8 @@ fcp(argc, argv)
     }
     read(Fd, &Size, sizeof(Size)); /* Saved LinkSize */
     if (SpecLink && (LinkSize != Size)) {
-      fprintf(DbgFile, "fcp: can not change saved link size\n");
+      fprintf(DbgFile, "fcp: can not change saved link size(%u)\n",
+	      Size);
       close(Fd);
       return(False);
     }
@@ -234,17 +249,20 @@ fcp(argc, argv)
     if (!SpecTbls) {
       TblsSize = Size;
     }
-    PMem = malloc(RsrvSize+LinkSize+HeapSize);
+    PMem = (char *)memalign(HOPage, RsrvSize+LinkSize+HeapSize);
     if (PMem == NULL) {
-      fprintf(DbgFile, "fcp: not enough core for link/heap area\n");
+      fprintf(DbgFile, "fcp: not enough core for link/heap area(%u)\n",
+	      RsrvSize+LinkSize+HeapSize);
       close(Fd);
       return(False);
     }
+
     MemEnd = PMem + (RsrvSize+LinkSize+HeapSize);
     /* Load Link */
     read(Fd, &Base, sizeof(Base)); /* Saved LinkBase */
     if ((Base < PMem) || ((Base+LinkSize) > MemEnd)) {
-      fprintf(DbgFile, "fcp: restoring link to different location\n");
+      fprintf(DbgFile, "fcp: restoring link to different location(%x,%x,%x,%x)\n",
+	      Base, PMem, Base+LinkSize, MemEnd);
       close(Fd);
       return(False);
     }
@@ -252,19 +270,34 @@ fcp(argc, argv)
     LinkEnd = LinkBase + (LinkSize / sizeof(linkT));
     read(Fd, &Size, sizeof(Size)); /* Size of Saved Link */
     if (read(Fd, LinkBase, Size) != Size) {
-      fprintf(DbgFile, "fcp: file %s is not in correct format\n", FileName);
+      fprintf(DbgFile, "fcp: file %s is not in correct format(%u)\n",
+	      Size, FileName);
       close(Fd);
       return(False);
     }
     /* Load Heap */
     read(Fd, &Base, sizeof(Base)); /* Saved HeapBase */
     if ((Base < ((char *) LinkEnd)) || ((Base+HeapSize) > MemEnd)) {
-      fprintf(DbgFile, "fcp: restoring heap to different location\n");
+      fprintf(DbgFile, "fcp: restoring heap to different location(%x,%x,%x,%x)\n",
+	      Base, LinkEnd, Base+HeapSize, MemEnd);
       close(Fd);
       return(False);
     }
     HeapBase = (heapP) Base;
+
+    HOByte = HOByteMask & ((int) HeapBase);
+
     HeapEnd = HeapBase + (HeapSize / sizeof(heapT));
+    if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
+      fprintf(DbgFile, "fcp: Heap size too large.\n");
+      fcp_debug("Warm");
+      return(False);
+    }
+
+    if(SpecRsrv) {
+      fcp_debug("Reserve");
+    }
+
     read(Fd, &HeapStart, sizeof(HeapStart));  /* Saved HeapStart */
     read(Fd, &CurHeap, sizeof(CurHeap));  /* Saved CurHeap */
     CurHeapEnd = CurHeap + (HeapEnd - CurHeap)/2;
@@ -273,19 +306,23 @@ fcp(argc, argv)
     OtherHeapEnd = HeapEnd;
     read(Fd, &Size, sizeof(Size)); /* Size of actually Saved Heap */
     if (HeapBase + (Size / sizeof(heapT)) > CurHeapLimit) {
-      fprintf(DbgFile, "fcp: heap smaller then saved\n");
+      fprintf(DbgFile, "fcp: heap smaller then saved(%i,%1)\n",
+	      Size/sizeof(heapT), CurHeapLimit);
       close(Fd);
+      
       return(False);
     }
     if (read(Fd, HeapBase, Size) != Size) {  /* read the saved heap */
-      fprintf(DbgFile, "fcp: file %s is not in correct format\n", FileName);
+      fprintf(DbgFile, "fcp: file %s is not in correct format(%u)\n",
+	      FileName, Size);
       close(Fd);
       return(False);
     }
     HP = HeapBase + (Size/sizeof(heapT));
     PMem = malloc(TrlsSize+TblsSize);
     if (PMem == NULL) {
-      fprintf(DbgFile, "fcp: not enough core for trails/tables\n");
+      fprintf(DbgFile, "fcp: not enough core for trails/tables(%u)\n",
+	      TrlsSize+TblsSize);
       return(False);
     }
     AsgnTrl = (trailP) PMem;
@@ -392,6 +429,9 @@ get_user_args(argc, argv)
 	RsrvSize = 0;
 	while(isdigit(*s)) {
 	  RsrvSize = RsrvSize*10 + *s++ - '0';
+	}
+	if ( RsrvSize % 8 ) {
+	  RsrvSize = RsrvSize + (8 - (RsrvSize % 8));
 	}
 	SpecRsrv = True;
 	break;
@@ -505,7 +545,6 @@ produce_constants()
   *HP++ = Word(0, NilTag);
   SVRMarker = HP;
   *HP++ = Word(0, NilTag);
-
   Constants[FailedC] = produce_string("failed");
   Constants[GCC] = produce_string("gc_done");
   Constants[IdleC] = produce_string("idle");
@@ -591,4 +630,26 @@ init_stats()
   CopiedAverage = 0;
   GCMinFlt = 0;
   GCMajFlt = 0;
+}
+
+void fcp_debug(char *String)
+{
+  fprintf(DbgFile, "\n**%s**\n", String);
+  fprintf(DbgFile, "RsrvSize = %d, LinkSize = %d, HeapSize = %d\n",
+	  RsrvSize, LinkSize, HeapSize);
+  if ( PMem < ((char *) LinkBase) ) {
+    fprintf(DbgFile, "PreRsrv = %x, PreRsrvEnd = %x\n",
+	    PMem, LinkBase);
+  }
+  fprintf(DbgFile, "LinkBase = %x, LinkEnd = %x\n",
+	  LinkBase, LinkEnd);
+  fprintf(DbgFile, "HeapBase = %x, HeapEnd = %x, HOByte = %x\n",
+	  HeapBase, HeapEnd, HOByte);
+  if ( ((char *) HeapEnd) < MemEnd ) {
+    fprintf(DbgFile, "PostRsrv = %x, PostRsrvEnd = %x\n",
+	    LinkEnd, MemEnd);
+  }
+  if ( BootType != WarmBoot ) {
+    fprintf(DbgFile, "\n");
+  }
 }

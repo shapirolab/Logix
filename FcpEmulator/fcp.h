@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.2 2000/01/16 06:55:14 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.3 2004/10/12 16:37:37 bill Exp $ */
 /*
  **	fcp.h  -  defines data structures, machine word format
  **		  and various macros
  **	NOTE when changing macros, to leave things as single occurence.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 2000/01/16 06:55:14 $
+ **		       	     $Date: 2004/10/12 16:37:37 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.2 $
+ **			     $Revision: 1.3 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/fcp.h,v $
  */
 
@@ -182,31 +182,8 @@ typedef trailT	*trailP;
 
 #define HOByteMask	0xf0000000
 
-#ifdef	ULTRIX
- #ifndef LINUX
-#define	HOByte	0x10000000
- #endif
-#endif
-
-#ifdef	SGI
-#define	HOByte	0x10000000
-#endif
-
-#ifdef	HPUX
-#define	HOByte	0x40000000
-#endif
-
-#ifdef	LINUX
-#define	HOByte	0x40000000
-#endif
-
-#ifdef	SUNOS5d3
-#define	HOByte	0x00000000
-#endif
-
-#ifdef	SUNOS4d1d3
-#define	HOByte	0x00000000
-#endif
+unsigned int HOByte;
+#define	HOPage	0x10000000
 
 #define Var_Val(V)	((heapP) ((((V) >> VarShift) & VarValMask) | HOByte))
 
