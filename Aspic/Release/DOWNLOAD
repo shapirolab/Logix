@@ -1,0 +1,27 @@
+The most recent release of the system is in this directory, named:
+
+    aspic-release.tar.gz
+
+To copy the file, right-click on it and select "Save Link (Target) as ..."
+in Netscape or "Save Target as ..." in Microsoft Internet Explorer.  Then
+browse to the directory to which it is to be copied, and click "Save" (or
+"Save as").
+
+To expand the release:
+
+    zcat aspic-release.tar.gz | tar -xf -
+
+A directory named Aspic-release and a system of sub-directories will be
+expanded in the current directory.
+
+A release includes emulators for linux, sgi and solaris platforms.
+To install it on one or more of those processors, see the README file in
+Aspic-release.
+
+Additional documentation for the Logix system is in LogixDocs.  This
+includes:
+
+    logix.ps       The Logix System User Manual Version 2.0
+    supplement.ps  Supplement to User Manual for System 2.2
+    Course.tar.gz  Material from a course given in 1986 and 1987
+
