@@ -48,8 +48,7 @@ make_channel(Channel, Creator, BaseRate) :-
     Reply = new,
     string_to_dlist(Creator, CL, CT),
     string_to_dlist(Name, Cl, []) :
-      ascii('.', Dot),
-      CT = [Dot | Cl] |
+      CT = [CHAR_DOT | Cl] |
 	list_to_string(CL, Creator'),
 	spi_monitor#new_channel(Creator'?, Channel, BaseRate);
 
@@ -92,8 +91,7 @@ make_channel(Channel, Creator, BaseRate, ComputeWeight) :-
     Reply = new,
     string_to_dlist(Creator, CL, CT),
     string_to_dlist(Name, Cl, []) :
-      ascii('.', Dot),
-      CT = [Dot | Cl] |
+      CT = [CHAR_DOT | Cl] |
 	list_to_string(CL, Creator'),
 	make_channel_with_weight;
 
@@ -625,8 +623,8 @@ format_channel_name(Name, Format, FormattedName) :-
     Name = ChannelName(Ordinal),
     string_to_dlist(ChannelName, CCN, Tail),
     convert_to_string(Ordinal, OS),
-    string_to_dlist(OS, COS, [CHAR_RIGHT_BRACKET]) :
-      Tail = [CHAR_LEFT_BRACKET | COS] |
+    string_to_dlist(OS, COS, [CHAR_RIGHT_PAREN]) :
+      Tail = [CHAR_LEFT_PAREN | COS] |
 	list_to_string(CCN, FormattedName);
 
     Format =\= full, Format =\= creator,
@@ -785,16 +783,16 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
     ProcessName =?= Functor(GlobalName),
     string(Functor),
     string(GlobalName),
-    string_to_dlist(GlobalName, GNL, [CHAR_RIGHT_BRACKET | Suffix]),
-    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | GNL]) |
+    string_to_dlist(GlobalName, GNL, [CHAR_RIGHT_PAREN | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_PAREN | GNL]) |
 	list_to_string(FL, Creator);
 
     ProcessName =?= Functor(LocalName(N)),
     string(Functor),
     string(LocalName),
     number(N),
-    string_to_dlist(LocalName, LNL, [CHAR_RIGHT_BRACKET | Suffix]),
-    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | LNL]) |
+    string_to_dlist(LocalName, LNL, [CHAR_RIGHT_PAREN | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_PAREN | LNL]) |
 	list_to_string(FL, Creator);
 
     otherwise :
@@ -812,8 +810,8 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
     constant(Argument),
     Argument @< [],
     convert_to_string(Argument, As),
-    string_to_dlist(As, AL, [CHAR_RIGHT_BRACKET | Suffix]),
-    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | AL] ) |
+    string_to_dlist(As, AL, [CHAR_RIGHT_PAREN | Suffix]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_PAREN | AL] ) |
 	list_to_string(FL, Creator);
 
     ProcessName =?= Functor(LocalName(Argument)),
@@ -822,9 +820,9 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
     constant(Argument),
     Argument @< [],
     convert_to_string(Argument, As),
-    string_to_dlist(As, AL, [CHAR_RIGHT_BRACKET, CHAR_RIGHT_BRACKET | Suffix]),
-    string_to_dlist(LocalName,LNL, [CHAR_LEFT_BRACKET | AL]),
-    string_to_dlist(Functor, FL, [CHAR_LEFT_BRACKET | LNL]) |
+    string_to_dlist(As, AL, [CHAR_RIGHT_PAREN, CHAR_RIGHT_PAREN | Suffix]),
+    string_to_dlist(LocalName,LNL, [CHAR_LEFT_PAREN | AL]),
+    string_to_dlist(Functor, FL, [CHAR_LEFT_PAREN | LNL]) |
 	list_to_string(FL, Creator);
 
     otherwise :
@@ -936,17 +934,16 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
 		SpiFcp, Left, Right, Name) :-
 
     nth_char(1, Name, Char1),
-    ascii('A') =< Char1, Char1 =< ascii('Z') |
+    CHAR_A =< Char1, Char1 =< CHAR_Z |
 	goal_channels;
 
-    nth_char(1, Name, Char1),
-    Char1 =:= ascii('.'),
+    nth_char(1, Name, CHAR_DOT),
     nth_char(2, Name, Char2),
-    ascii('A') =< Char2, Char2 =< ascii('Z') |
+    CHAR_A =< Char2, Char2 =< CHAR_Z |
 	goal_channels;
 
     nth_char(1, Name, Char1),
-    ascii('a') =< Char1, Char1 =< ascii('z') |
+    CHAR_a =< Char1, Char1 =< CHAR_z |
 	show_goal3 + (X = 2);
 
     otherwise,
@@ -963,17 +960,14 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
 		SpiFcp, Left, Right, Name, X):-
 
     X++,
-    nth_char(X, Name, Char1),
-    Char1 =:= ascii('$'),
+    nth_char(X, Name, CHAR_DOLLAR),
     nth_char(X', Name, Char2),
-    ascii('A') =< Char2, Char2 =< ascii('Z') |
+    CHAR_A =< Char2, Char2 =< CHAR_Z |
 	goal_channels;
 
     X++,
-    nth_char(X, Name, Char1),
-    Char1 =:= ascii('$'),
-    nth_char(X', Name, Char2),
-    Char2 =:= ascii('.') |
+    nth_char(X, Name, CHAR_DOLLAR),
+    nth_char(X', Name, CHAR_DOT) |
 	goal_channels;
 
     X++,
@@ -1410,7 +1404,7 @@ show_goal_list(List, Depth, Sender, Which, Format, Result, Left, Right) :-
     List ? Name(Goal),
     Name =?= vanilla,
     arg(1, Goal, Functor), nth_char(1, Functor, C),
-    ascii('a') =< C, C =< ascii('z') |
+    CHAR_a =< C, C =< CHAR_z |
 	self;
 /***********************************************************************/
 

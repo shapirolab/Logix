@@ -1045,35 +1045,29 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
 
 spifunctions(List, SpiOffset, Close, Post, Step, Index, Rate) :-
 
-    List ? C,
-    C =:= ascii('c') :
+    List ? CHAR_c :
       Close = SpiOffset? |
 	self;
 
-    List ? P,
-    P =:= ascii('p') :
+    List ? CHAR_p :
       Post = SpiOffset? |
 	self;
 
-    List ? S,
-    S =:= ascii('s') :
+    List ? CHAR_s :
       Step = SpiOffset? |
 	self;
 
-    List ? I,
-    I =:= ascii('i') :
+    List ? CHAR_i :
       Index = SpiOffset? |
 	self;
 
-    List ? R,
-    R =:= ascii('r') :
+    List ? CHAR_r :
       Rate = SpiOffset? |
 	self;
 
     List ? Other,
     otherwise,
-    Q := ascii('"'),
-    list_to_string([Q,Other,Q], String) |
+    list_to_string([CHAR_DOUBLE_QUOTE,Other,CHAR_DOUBLE_QUOTE], String) |
 	fail(not_a_function - String),
 	self;
 
