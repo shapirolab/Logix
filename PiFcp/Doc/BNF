@@ -59,13 +59,20 @@ BNF for PiFcp
 <body>                 ::= <call>
                            <call> , <body>
 
-<call>                 ::= <atom>
-                           <name>( <substitution_list> )
+<call>                 ::= <local_sum>
                            <communication>
                            << <new_scope> >>
                            <external_call>
                            {<logix_goal_list>}
+                           self
+			   self( <substitution_list> )
                            true
+
+<local_sum>            ::= <local_call>
+                           <local_sum> + <local_call>
+
+<local_call>           ::= <atom>
+                           <name>( <substitution_list> )
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
@@ -147,8 +154,10 @@ variable names all begin with a capital letter or underscore; to reference a
 refer to '_var'(<channel_name>.
 
 
-Thusfar, the only reserved name is "true".  It should only be needed as the
-only <call> in the <body> of a clause.
+The reserved words are "self" and "true".
+
+"self" may be used to iterate any process, including anonymous processes.
+"true" should only be needed as the only <call> in the <body> of a clause.
 
 
 Channel typing has been omitted.
@@ -181,3 +190,7 @@ is equivalent to:
 
     P :- <communication> | << P1 . P1 :- {<logix_guard_list1>} | Q ;
                                          {<logix_guard_list2>} | R >> .
+
+
+A <local_call> in a <local_sum> must be to a <process> whose <right_hand_side>
+consists of <synchronized_clauses>.
