@@ -113,12 +113,11 @@ SPI_MESSAGE_SIZE =>    9.
 SPI_NEXT_MS =>         1.
 SPI_PREVIOUS_MS =>     2.
 
-/* Operation request tuple (1-5), Transmission common tuple (1-4) */
+/* Transmission common tuple (1-4) */
 
 SPI_OP_PID =>          1.
 SPI_OP_MSLIST =>       2.
 SPI_OP_VALUE =>        3.
 SPI_OP_CHOSEN =>       4.
-SPI_OP_REPLY =>        5.
 
 SPI_COMMON_SIZE =>     4.

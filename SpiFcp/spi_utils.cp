@@ -834,11 +834,20 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 show_compound(Argument, Which, Depth, Sender, Format, Display, Left, Right) :-
 
     tuple(Argument),
+    Depth-- > 0,
     arity(Argument, Index),
     make_tuple(Index, Args) :
       Tuple = Argument,
       Display = Args |
 	show_tuple_args;
+
+    tuple(Argument),
+    Depth =< 0 :
+      Which = _,
+      Sender = _,
+      Format = _,
+      Display = "...",
+      Left = Right;
 
     Argument ? A :
       Display ! D |
@@ -986,7 +995,6 @@ goal_channels(Goal, Index, Which, Depth, Sender, Format,
 
     string_length(Name, L),
     nth_char(L, Name, CHAR_PRIME) :
-      ExtraChannels = [],
       Leaders = [Name | LeadingArgs?] |
 	leading_arguments(2, Goal, LeadingArgs, TrailingChannels),
 	trailing_goal_channels(Index, Goal, TrailingChannels, []),

@@ -32,7 +32,7 @@ STOPPED => Reply = _.
 */
 
 %SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
-SPIOFFSETS => {unbound, SpiOffset, unbound, SpiOffset, SpiOffset}.
+SPIOFFSETS => {SpiOffset, SpiOffset, unbound, SpiOffset, SpiOffset}.
 %SPIOFFSETS => {unbound, unbound, unbound, unbound, unbound}.
 
 initialize(In) :-
@@ -1115,8 +1115,9 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       store_vector(SPI_NEXT_CHANNEL, Channel, Channel),
       store_vector(SPI_PREVIOUS_CHANNEL, Channel, Channel),
       store_vector(SPI_CHANNEL_NAME, ChannelName, Channel) |
-	based_or_instantaneous,
-	complete_weighter_tuple;
+	complete_weighter_tuple(Result, ComputeWeight, WeighterIndex,
+				WeighterTuple, Result'),
+	based_or_instantaneous;
 
     convert_to_real(0, Zero),
     arg(SPI_INDEX, SpiOffsets, unbound),
@@ -1202,23 +1203,27 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
       Reply = Result.
 
-  complete_weighter_tuple(Reply, ComputeWeight, WeighterIndex, WeighterTuple) :-
+  complete_weighter_tuple(Reply, ComputeWeight, WeighterIndex,
+			  WeighterTuple, Reply1) :-
 
     Reply = true,
     arg(2, ComputeWeight, Index) :
       Index = WeighterIndex,
-      WeighterTuple = ComputeWeight;
+      WeighterTuple = ComputeWeight,
+      Reply1 = Reply;
 
     Reply = true,
     otherwise :
       WeighterIndex = _,
-      WeighterTuple = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
+      WeighterTuple = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
+      Reply1 = Reply |
 	fail(invalid_weighter_index(ComputeWeight));
 
     Reply =\= true :
       ComputeWeight = _,
       WeighterIndex = _,
-      WeighterTuple = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX).
+      WeighterTuple = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
+      Reply1 = Reply.
 
 
 queue_channel(Channel, Anchor) :-
@@ -2037,13 +2042,14 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
     arg(SPI_AMBIENT_CHANNEL, Send, SendAmbient),
     SendAmbient =\= [],
     arg(SPI_AMBIENT_CHANNEL, Receive, ReceiveAmbient),
-    SendAmbient =?= ReceiveAmbient |
+    SendAmbient =?= ReceiveAmbient,
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send') |
 	self;
 
     arg(SPI_MS_TYPE, Send, SPI_SEND),
     arg(SPI_COMMON, Send, SendCommon),
     arg(SPI_MESSAGE_LINKS, Send, SendLinks),
-    arg(SPI_MS_TYPE, Receive, SPI_RECEIVE),
     arg(SPI_COMMON, Receive, ReceiveCommon),
     % This Send has the same Chosen as the Receive -
     % mixed communications which ARE NOT homodimerized.
@@ -2053,14 +2059,19 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
 	self;
 
     arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
-    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
-    arg(SPI_MS_TYPE, Receive, SPI_RECEIVE),
     arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
-    read_vector(SPI_NEXT_MS, SendLinks, Send'),
-    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive') |
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    arg(SPI_MS_TYPE, Receive', Type),
+    Type =\= SPI_MESSAGE_ANCHOR,
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send') |
 	self;
 
-    arg(SPI_MS_TYPE, Receive, SPI_MESSAGE_ANCHOR) :
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    arg(SPI_MS_TYPE, Receive', Type),
+    Type =?= SPI_MESSAGE_ANCHOR :
       Send = _,
       store_vector(SPI_BLOCKED, TRUE, Channel),
       Reply = done.

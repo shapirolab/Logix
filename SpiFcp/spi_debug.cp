@@ -1,6 +1,8 @@
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([count_requests/2, format_channel/3, format_channels/4, spi_channels/3,
+-export([count_requests/2,
+	 format_c/2, format_d/2, format_channel/3,
+	 format_channels/4, spi_channels/3,
 	 stream_out/4]).
 
 -include(spi_constants).
@@ -103,6 +105,12 @@ format_channels(Kind, Channels, Out, Out1) :-
       Kind = _,
       Out = Out1.
 
+
+format_c(Channel, FormattedChannel) :-
+    format_channel + (Kind = CHAR_c).
+
+format_d(Channel, FormattedChannel) :-
+    format_channel + (Kind = CHAR_d).
 
 format_channel(Kind, Channel, FormattedChannel) :-
 
