@@ -485,7 +485,10 @@ serve_ambient(In, Events, FromSub, Done,
     AmbientId =?= _AmbientName(UniqueId) :
       Start' = start(Signature, Operations, Message, Chosen, UniqueId),
       write_channel(Start', Scheduler) |
-	DEBUG(Start, scheduler),
+	DEBUG(Start, Ch-scheduler),
+	TERMS((Operations? = [Op | _],arg(SPI_MS_CHANNEL,Op,SCh),
+		format_channel(SCh,Ch)
+	)),
 	self;
 
 /******************** Inter-ambient communication **************************/
@@ -990,7 +993,8 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       Last = _,
       NewChannelList = [SharedChannel?],
       write_channel(new_channel(Id, NewChannel, BaseRate?), Scheduler) |
-	DEBUG(lookup, new - Id - PrivateChannel),
+	DEBUG(lookup, new - Id - NC),
+	TERMS(format_channel(NewChannel, NC)),
 	rate_to_baserate,
 	update_new_channel.
 
