@@ -717,23 +717,33 @@ serve_ambient(In, Events, FromSub, Done,
 	DEBUG(delegate, Ready),
 	self;
 
+    In ? withdraw(Child, Removed) |
+	DEBUG(withdraw(Removed), ChildId),
+        TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
+	remove_shared_communications(Child, SharedChannels, Scheduler,
+					Removed),
+	self;
+
     In ? enter(Enterer, Ready) :
       write_vector(AMBIENT_CONTROL,
-		   change_parent(Ambient, Removed, Ready),
-		   Enterer, Enterer') |
-	DEBUG("enter"(Removed, Ready), move_ambient-NewParentId),
-        TERMS(read_vector(AMBIENT_ID,Ambient,NewParentId)),
-	remove_shared_communications(Enterer', SharedChannels, Scheduler,
-					Removed),
+		   withdraw(Enterer, Removed),
+		   Parent),
+      write_vector(AMBIENT_CONTROL,
+		   change_parent(Ambient, Removed?, Ready),
+		   Enterer) |
+	DEBUG("enter"(Removed, Ready), move - EntererId - into - MyId),
+        TERMS((read_vector(AMBIENT_ID, Enterer, EntererId),
+	       read_vector(AMBIENT_ID, Ambient, MyId))),
 	self;
 
     In ? exit(Exiter, Ready) :
       write_vector(AMBIENT_CONTROL,
 		   change_parent(Parent, Removed, Ready),
-		   Exiter, Exiter') |
-	DEBUG("exit"(Removed, Ready), move_ambient-NewParentId),
-        TERMS(read_vector(AMBIENT_ID,Parent,NewParentId)),
-	remove_shared_communications(Exiter', SharedChannels, Scheduler,
+		   Exiter) |
+	DEBUG("exit"(Removed, Ready), move - ExiterId - into - ParentId),
+        TERMS((read_vector(AMBIENT_ID, Exiter, ExiterId),
+	       read_vector(AMBIENT_ID, Parent, ParentId))),
+	remove_shared_communications(Exiter, SharedChannels, Scheduler,
 					Removed),
 	self;
 
@@ -775,7 +785,7 @@ serve_ambient(In, Events, FromSub, Done,
 	remove_all_communications(Channels?, Reply2),
 	remove_all_communications(PrivateChannels, Reply3),
 	resume_controls_when_ready(Reply1, Reply2, Reply3, Ready,
-					Controls, Controls'),
+					Controls', Controls''),
 	self;
 
     In ? extract(Goals, MergedAmbient, Ready) :
@@ -1088,8 +1098,9 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL,
 		   change_parent(MergedAmbient, Removed, _Ready),
 		   Child) |
-	DEBUG("merge"(Removed, Ready), move_ambient-NewParentId),
-        TERMS(read_vector(AMBIENT_ID,MergedAmbient,NewParentId)),
+	DEBUG("merge"(Removed, Ready), move - ChildId - into - NewParentId),
+        TERMS((read_vector(AMBIENT_ID, Child, ChildId),
+	       read_vector(AMBIENT_ID, MergedAmbient, NewParentId))),
 	remove_shared_communications(Child, SharedChannels, Scheduler,
 					Removed),
 	self;
