@@ -3,28 +3,42 @@
 	 pi2cmp/3, pi2fcp/3]).
 -mode(failsafe).
 
-pi2cmp(Name, Options, Results) :-
+pi2cmp(Name, Attributes, Results) :-
     string_to_dlist(Name,Fp,[46, 99, 109, 112]),
-    list_to_string(Fp,FN) |
-	get_source#file(Name,[language([evaluate,pifcp])|Options],R,_),
-	transform2.
+    list_to_string(Fp, FN) |
+	get_source#file(Name, [], R, _),
+	transform2 + (Target = compound).
 
-pi2fcp(Name, Options, Results) :-
+pi2fcp(Name, Attributes, Results) :-
     string_to_dlist(Name,Fp,[46, 102, 99, 112]),
-    list_to_string(Fp,FN) |
-	get_source#file(Name,[language([evaluate,pifcp,compound,colon]) |
-				Options],
-			R,_),
-	transform2.
+    list_to_string(Fp, FN) |
+	get_source#file(Name, [], R, _),
+	transform2 + (Target = dg).
 
-transform2(FN,Results,R) :-
-    R = module(O,A,S) |
-	transform#languages(O,dg,A,_AO,S,SO,Results,Done),
+transform2(FN, Attributes, R, Target, Results) :-
+    R = module(O, A, S) |
+	concatenate(Attributes, A, AI),
+	transform#languages(O, Target, AI, _AO, S, SO, Results, Done),
 	widgets#pretty#module(SO,SP),
 	file#put_file(FN, SP, put, Done);
     otherwise :
       FN = _,
+      Attributes = _,
+      Target = _,
       Results = R.
+
+  concatenate(L1, L2, L3) :-
+
+    L1 ? I :
+      L3 ! I |
+	self;
+
+    L1 =?= [] :
+      L3 = L2;
+
+    L1 =\= [_|_], L1 =\= [] :
+      L1' = [L1] |
+	self.
 
 
 transform(Name, Results) :-
