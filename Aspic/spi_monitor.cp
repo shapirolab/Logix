@@ -1,6 +1,6 @@
 -monitor(initialize).
 -language([evaluate,compound,colon]).
--export([get_global_channels/1, global_channels/1, global_channels/2,
+-export([get_public_channels/1, public_channels/1, public_channels/2,
 	 new_channel/3, new_channel/4,
 	 options/2, reset/0, scheduler/1]).
 -include(spi_constants).
@@ -65,9 +65,14 @@ initialize(In) :-
 **
 ** It recognises:
 **
+***** Obsolescent **********************************************************
 **    get_global_channels(List?^)
 **    global_channels(List)
 **    global_channels(List, Scheduler^)
+****************************************************************************
+**    get_public_channels(List?^)
+**    public_channels(List)
+**    public_channels(List, Scheduler^)
 **    new_channel(ChannelName, Channel, BaseRate)
 **    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    options(New, Old?^)
@@ -86,7 +91,7 @@ initialize(In) :-
 ** State
 **
 **   Options - for spi_utils functions
-**   Globals - sorted (bounded) list of global channel {name,baserate}
+**   Publics - sorted (bounded) list of public channel {name,baserate}
 **   Scheduler - Channel to Scheduling input
 **
 ** Side-effects
@@ -95,12 +100,12 @@ initialize(In) :-
 */
 
 serve(In, Options, Ordinal, SpiOffsets, DefaultWeighter) :-
-	Globals = [{0, _, -1, ""}, {[], _, -1, ""}],
+	Publics = [{0, _, -1, ""}, {[], _, -1, ""}],
 	processor#link(lookup(math, MathOffset), OkMath),
 	server,
 	start_scheduling.
 
-server(In, Options, Scheduler, Globals) :-
+server(In, Options, Scheduler, Publics) :-
 
     In ? debug(Debug) :
       Debug = Debug'?,
@@ -117,18 +122,33 @@ server(In, Options, Scheduler, Globals) :-
 	self;
 
     In ? global_channels(List) |
-	merge_global_channels(List, Globals, Globals', "", Scheduler, _),
+	merge_public_channels(List, Publics, Publics', "", Scheduler, _),
 	self;
 
     In ? global_channels(List, ReadyScheduler) |
-	merge_global_channels(List, Globals, Globals', "",
+	merge_public_channels(List, Publics, Publics', "",
 			      Scheduler, ReadyScheduler),
 	self;
 
     In ? get_global_channels(List),
     we(List) :
       List = List'? |
-	copy_global(Globals, List', _),
+	copy_public(Publics, List', _),
+	self;
+
+    In ? public_channels(List) |
+	merge_public_channels(List, Publics, Publics', "", Scheduler, _),
+	self;
+
+    In ? public_channels(List, ReadyScheduler) |
+	merge_public_channels(List, Publics, Publics', "",
+			      Scheduler, ReadyScheduler),
+	self;
+
+    In ? get_public_channels(List),
+    we(List) :
+      List = List'? |
+	copy_public(Publics, List', _),
 	self;
 
     In ? New , New = new_channel(_Creator, _Channel, _BaseRate) :
@@ -156,7 +176,7 @@ server(In, Options, Scheduler, Globals) :-
 	self;
 
     In ? reset(DefaultWeighter, SpiOffsets, Ordinal) :
-      Globals = _,
+      Publics = _,
       close_channel(Scheduler) |
 	serve;
 
@@ -179,78 +199,78 @@ server(In, Options, Scheduler, Globals) :-
 
     In =?= [] :
       Options = _,
-      Globals = _,
+      Publics = _,
       close_channel(Scheduler).
 
 /***************************** Utilities ************************************/
 
-/* merge_global_channels
+/* merge_public_channels
 **
 ** Input:
 **
 **   List - sorted list in {Name, Channel^, BaseRate}.
-**   Globals - (bounded) sorted list of {Name, BaseRate}.
-**   Last - Name of previous element of Globals - initially "".
+**   Publics - (bounded) sorted list of {Name, BaseRate}.
+**   Last - Name of previous element of Publics - initially "".
 **   Scheduler - FCP channel to scheduling monitor.
 **
 ** Output:
 **
-**   NewGlobals - updated global list.
+**   NewPublics - updated public list.
 **
 ** Processing:
 **
-**   Merge new Name Channels to NewGlobals.
+**   Merge new Name Channels to NewPublics.
 **   Call scheduling to create each new Channel.
 */
 
-merge_global_channels(List, Globals, NewGlobals, Last,
+merge_public_channels(List, Publics, NewPublics, Last,
 		      Scheduler, ReadyScheduler) :-
 
     List =?= [] :
       Last = _,
       ReadyScheduler = Scheduler,
-      NewGlobals = Globals;
+      NewPublics = Publics;
 
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
     we(NewChannel),
-    Globals ? Global, Global = Name(SpiChannel, _ComputeWeight, BaseRate),
+    Publics ? Public, Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
       Last = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewGlobals ! Global,
+      NewPublics ! Public,
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate),
-    Globals ? Entry, Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
+    Publics ? Entry, Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewGlobals ! Entry |
-	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+      NewPublics ! Entry |
+	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
-    Globals ? Entry,
+    Publics ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
       Last = _,
-      NewGlobals ! Entry |
+      NewPublics ! Entry |
 	self;
 
     List ? Name(NewChannel, BaseRate),
     we(NewChannel),
-    Globals =?= [Name1(_, _, _) | _],
+    Publics =?= [Name1(_, _, _) | _],
     string(Name),
     Last @< Name, Name @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
-      Globals' =
-	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate) | Globals],
+      Publics' =
+	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate) | Publics],
       write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
 				BaseRate), Scheduler),
       GT = NL |
@@ -260,7 +280,7 @@ merge_global_channels(List, Globals, NewGlobals, Last,
     List ? Name(NewChannel, CW, BaseRate),
     Last @< Name,
     we(NewChannel),
-    Globals ? Global, Global = Name(SpiChannel, ComputeWeight, BaseRate),
+    Publics ? Public, Public = Name(SpiChannel, ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
@@ -268,43 +288,43 @@ merge_global_channels(List, Globals, NewGlobals, Last,
       CW = ComputeWeight?,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewGlobals ! Global,
+      NewPublics ! Public,
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, _, BaseRate),
-    Globals ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
+    Publics ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewGlobals ! Entry |
-	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+      NewPublics ! Entry |
+	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List ? Name(_NewChannel, ComputeWeight, _),
-    Globals ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
+    Publics ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight :
-      NewGlobals ! Entry |
-	fail(global_channel(compute_weight_conflict(Name -
+      NewPublics ! Entry |
+	fail(public_channel(compute_weight_conflict(Name -
 				ComputeWeight =\= OtherComputeWeight))),
 	self;
 
     List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
-    Globals ? Entry,
+    Publics ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
       Last = _,
-      NewGlobals ! Entry |
+      NewPublics ! Entry |
 	self;
 
     List ? Name(NewChannel, ComputeWeight, BaseRate),
     we(NewChannel),
-    Globals =?= [Name1(_, _, _) | _],
+    Publics =?= [Name1(_, _, _) | _],
     string(Name),
     Last @< Name, Name @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
-      Globals' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Globals],
+      Publics' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Publics],
       write_channel(new_channel(Id?, SpiChannel, ComputeWeight, BaseRate),
 			Scheduler),
       GT = NL |
@@ -314,36 +334,36 @@ merge_global_channels(List, Globals, NewGlobals, Last,
     otherwise :
       Last = _,
       ReadyScheduler = Scheduler,
-      NewGlobals = Globals |
-	fail(merge_global_channels(List)).
+      NewPublics = Publics |
+	fail(merge_public_channels(List)).
 
-/* copy_globals
+/* copy_publics
 **
 ** Input:
 **
-**   Globals - (bounded) list of {Name, Channel, BaseRate}
+**   Publics - (bounded) list of {Name, Channel, BaseRate}
 **
 ** Output:
 **
-**   List - Globals exluding bounding entries
-**   Ends - bounding entries of Globals
+**   List - Publics exluding bounding entries
+**   Ends - bounding entries of Publics
 */
 
-copy_global(Globals, List, Ends) :-
-    Globals ? Head :
+copy_public(Publics, List, Ends) :-
+    Publics ? Head :
       Ends ! Head |
 	copy_interior.
 
-  copy_interior(Globals, List, Ends) :-
+  copy_interior(Publics, List, Ends) :-
 
-    Globals ? Entry,
-    Globals' =\= [] :
+    Publics ? Entry,
+    Publics' =\= [] :
       List ! Entry |
 	self;
 
-    Globals = [_] :
+    Publics = [_] :
       List = [],
-      Ends = Globals.
+      Ends = Publics.
 
 /***************************** Scheduling ***********************************/ 
 
@@ -432,7 +452,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 ** State:
 **
 **   DefaultWeighter - assigned to new Channel, unless Weighter provide
-**   Ordinal - Unique index assigned to a non - "public."/".global" file
+**   Ordinal - Unique index assigned to a non - "public."/".public" file
 **     also in Status
 **   SpiOffsets - magic numbers (or "unknown") for C-coded functions
 **
@@ -1015,8 +1035,8 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
 
     string(Name),
     string_to_dlist(Name, CS1, []),
-    /* "global" for spifcp */
-    string_to_dlist("global.", CS2, _Tail) :
+    /* "public" for spifcp */
+    string_to_dlist("public.", CS2, _Tail) :
       CS1 = CS2,
       Ordinal' = Ordinal,
       Name' = Name;
