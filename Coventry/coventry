@@ -1,8 +1,8 @@
 #! /sbin/sh
 #
-# Coventry - Monitor and re-nice TS queue processes.
+# Coventry - Monitor and re-nice TS queue processes - SGI version.
 #
-# Note: killall is available on SGI, but not on Solaris
+# Note: chkconfig and killall are available on SGI, but not on Solaris.
 #
 IS_ON=/etc/chkconfig
 AUXILIARY_DIR=/usr/local/sbin
@@ -26,10 +26,10 @@ case $1 in
 	    fi
 	;;
 	'stop')
-	    $ECHO Stopping coventry daemon.
-	    killall -k 1 coventryd
+		$ECHO Stopping coventry daemon.
+		killall -k 1 coventryd
 	;;
 	*)
-            echo "usage: $0 {start|stop}"
+		echo "usage: $0 {start|stop}"
 
 esac
