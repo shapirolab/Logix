@@ -1,0 +1,26 @@
+rm release/README
+cp -p README release
+rm -f release/BioSpi/README
+cp -p BioSpi/README release/BioSpi
+
+rm -f release/Logix/install
+cp -p Logix/install release/Logix
+
+rm -f Logix/*/spiweight.o
+rm release/Logix/LINUX/*
+cp -p Logix/LINUX/*.o release/Logix/LINUX
+cp -p Logix/LINUX/spiweight.c release/Logix/LINUX
+rm -f release/Logix/SGI/*
+cp -p Logix/SGI/*.o release/Logix/SGI
+cp -p Logix/SGI/spiweight.c release/Logix/SGI
+rm -f release/Logix/SOLARIS/*
+cp -p Logix/SOLARIS/*.o release/Logix/SOLARIS
+cp -p Logix/SOLARIS/spiweight.c release/Logix/SOLARIS
+
+rm -f release/Logix/Linux/makefile
+cp -p Emulator/LINUX/makefile release/Logix/LINUX
+rm -f release/Logix/SGI/makefile
+cp -p Emulator/SGI/makefile release/Logix/SGI
+rm -f release/Logix/SOLARIS/makefile
+cp -p Emulator/SOLARIS/makefile release/Logix/SOLARIS
+
