@@ -7,9 +7,9 @@ Revised By William Silverman, 05-08-85
 Additions by Eli Biham & William Silverman, 07-03-85
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:02:56 $
+		       	$Date: 1999/11/28 12:38:51 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
     			$Source: /home/qiana/Repository/Logix/system/terms_to_string.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -616,6 +616,7 @@ infix_operator(Length, Op, PLeft, Pop, PRight, Reply) :-
 infix_operator_1( ';' ,1069^, 1070^, 1070^, true^).
 infix_operator_1( '|' ,1059^, 1060^, 1060^, true^).
 infix_operator_1( ':' ,1049^, 1050^, 1049^, true^).
+infix_operator_1( '&' , 999^, 1000^, 1000^, true^).	 
 infix_operator_1( ',' , 999^, 1000^, 1000^, true^).	 
 infix_operator_1( '!' , 899^,  900^,  900^, true^).	 
 infix_operator_1( '?' , 900^,  900^,  899^, true^).	 
