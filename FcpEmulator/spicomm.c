@@ -38,14 +38,20 @@
 
 /* Channel Types */
 
-#define SPI_CHANNEL_ANCHOR	0
-#define SPI_UNKNOWN		1
-#define SPI_BIMOLECULAR		2
-#define SPI_HOMODIMERIZED	3
-#define SPI_INSTANTANEOUS	4
-#define SPI_SINK		5
-#define SPI_BIMOLECULAR_PRIME	6
-#define SPI_HOMODIMERIZED_PRIME	7
+#define SPI_CHANNEL_ANCHOR	 0
+#define SPI_UNKNOWN		 1
+#define SPI_BIMOLECULAR		 2
+#define SPI_HOMODIMERIZED	 3
+#define SPI_INSTANTANEOUS	 4
+#define SPI_SINK		 5
+#define SPI_UNKNOWN_PRIME	 9
+#define SPI_BIMOLECULAR_PRIME	10
+#define SPI_HOMODIMERIZED_PRIME	11
+
+#define SPI_TYPE_MASK		 7
+#define SPI_PRIME_FLAG		 8
+#define SPI_PRIME_MASK		15
+#define SPI_RANDOM_FLAG		16
 
 /* Weight Index Computation Values */
 
@@ -133,7 +139,7 @@ int spi_rate(heapP Channels,heapP Weight,heapP Reply);
 //*************************** Post Functions **********************************
 
 int set_offset(heapP OpEntry);
-int set_channel_type(heapP ChP, int MsType, int *ChannelType, heapP Reply);
+int update_channel_type(heapP ChP, int MsType, int *ChannelType, heapP Reply);
 
 int vctr_var_s(heapP Ch,int Size);
 int which_mode (heapP P);
@@ -268,15 +274,14 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
      if (!channel_type(ChP, &ChannelType)){
        return(False);
      }
-     if (ChannelType == SPI_UNKNOWN) {
-       if (!set_channel_type(ChP, MsType, &ChannelType, Reply)){
-	 //should check reason?
+     if ((ChannelType & SPI_TYPE_MASK) == SPI_UNKNOWN) {
+       if (!update_channel_type(ChP, MsType, &ChannelType, Reply)){
 	 return(False);
        } 
      }
-     switch (ChannelType) {
-          case   SPI_BIMOLECULAR:
-          case   SPI_BIMOLECULAR_PRIME:
+     switch (ChannelType & SPI_TYPE_MASK) {
+          case SPI_BIMOLECULAR:
+          case SPI_BIMOLECULAR_PRIME:
           case SPI_INSTANTANEOUS:
 		  if (!(MsType==SPI_SEND||MsType==SPI_RECEIVE))
 		    return
@@ -288,14 +293,14 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
 		  break; 
-          case    SPI_SINK: 
+          case SPI_SINK: 
 	          break;
           default:
                 return(set_reply_to("Error - Wrong channel type",Reply));
 		
      } /* End Switch */
    
-   if (ChannelType==SPI_INSTANTANEOUS)
+   if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS)
      {
        Tag=(OpEntry+SPI_MS_TAGS);
        deref_ptr(Tag);
@@ -344,7 +349,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
      ChP=OpEntry+SPI_MS_CHANNEL;  // the channel 
      deref_ptr(ChP);
      channel_type(ChP, &ChannelType);
-     if (ChannelType!=SPI_SINK)
+     if (ChannelType != SPI_SINK)
        {
 	 if (!do_store_vector(Word(SPI_BLOCKED,IntTag),Word(False,IntTag),
 			      Ref_Word(ChP))){
@@ -936,13 +941,14 @@ heapP Message,MessageTail;
 
 //*********************************************************************
 
-set_channel_type(ChP, MsType, ChannelType, Reply) //should check reason`
+update_channel_type(ChP, MsType, ChannelType, Reply)
 heapP ChP,Reply;
 int MsType;
 int *ChannelType;            
 {
   heapP Pa;
   int FinalType;
+  int RandomFlag = *ChannelType & SPI_RANDOM_FLAG;
 
   if(!do_read_vector(Word(SPI_CHANNEL_RATE,IntTag),Ref_Word(ChP))){
     return(False);
@@ -950,6 +956,7 @@ int *ChannelType;
   deref(KOutA,Pa); 
   if (!IsReal(*Pa)||real_val((Pa+1))<0) {
     set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
+    *ChannelType = SPI_SINK;
     return(True);
   }
   if(!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP))){
@@ -985,7 +992,7 @@ int *ChannelType;
 			 Word(FinalType,IntTag),Ref_Word(ChP))){
     return(False);
   }
-  *ChannelType = FinalType;
+  *ChannelType = FinalType | RandomFlag;
  return(True); 
 }
 
@@ -1238,7 +1245,7 @@ heapP Now ,Anchor ,NowP ,Reply ;
        if (!channel_type(ChP, &ChannelType)) {
 	 return(False);
        }
-       switch(ChannelType)
+       switch(ChannelType & SPI_TYPE_MASK)
 	 {     
 	 case SPI_BIMOLECULAR :
 	 case SPI_BIMOLECULAR_PRIME :
@@ -1292,7 +1299,7 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	 if (!channel_type(ChP, &ChannelType)) {
 	   return(False);
 	 }
-	 switch(ChannelType)
+	 switch(ChannelType & SPI_TYPE_MASK)
 	   {     
 	   case SPI_BIMOLECULAR :	 
 	   case SPI_BIMOLECULAR_PRIME :
@@ -1426,7 +1433,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
   if (!IsInt(KOutA) || (WeightIndex=Int_Val(KOutA)) < 0)
     return set_reply_to("Error - Invalid Weight Index", Reply);
   if (SendWeight > 0)
-    switch (Type)
+    switch (Type & SPI_TYPE_MASK)
       {
       case SPI_BIMOLECULAR:
       case SPI_BIMOLECULAR_PRIME:
@@ -1510,7 +1517,7 @@ int get_selector(heapP ChP, int Type, double *Result)
     }
     WeightIndex = Int_Val(KOutA);
 
-    switch (Type)
+    switch (Type & SPI_TYPE_MASK)
       {
       case SPI_BIMOLECULAR: 
       case SPI_BIMOLECULAR_PRIME: 
@@ -1921,7 +1928,7 @@ heapP Channel, Weight, Reply ;
   if (!channel_type(Channel, &ChannelType)) {
     return(False);
   }
-  switch (ChannelType)
+  switch (ChannelType & SPI_TYPE_MASK)
     {
     case SPI_BIMOLECULAR: 
     case SPI_BIMOLECULAR_PRIME: 
