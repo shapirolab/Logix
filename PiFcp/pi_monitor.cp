@@ -151,7 +151,8 @@ start_scheduling(Scheduler, Offset, Ok) :-
       make_channel(Scheduler, Schedule),
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential}) |
-	scheduling(Schedule, Offset, NegativeExponential,
+	processor#Waiter?,
+	scheduling(Schedule, Offset, NegativeExponential, Waiter,
 		Zero, [], [], false, _Wakeup, _Recording, _Debug,
 				MAXINT, Start_real_time);
 
@@ -184,10 +185,10 @@ start_scheduling(Scheduler, Offset, Ok) :-
 **
 ** a. For each schedule(List) item:
 **
-**	(1) WakeupTime := integer(Now + exponential(Mean)),
+**	(1) WakeupTime := Now + exponential(Mean),
 **	    where exponential(Mean) := Variate is computed by
 **
-**		execute(MathOffset, {MathExponential, Mean, Variate})
+**		execute(MathOffset, {RnadomExponential, Mean, Variate})
 **
 **	    Initially WakeUpTime is computed by:
 **
@@ -195,12 +196,12 @@ start_scheduling(Scheduler, Offset, Ok) :-
 **		execute(MathOffset, {NaturalLog, UniformVariate, Variate}),
 **		WakeupTime := Now - Mean*Variate,
 **
-**	(2) Add scheduling triplet to an NewList (push onto front).
+**	(2) Add scheduling triplet to NewList (push onto front).
 **
 ** b. Whenever system becomes idle and NewList or TripletList is non-empty:
 **
-**	(1) Sort NewList and mege with TripletList on WakeupTime,
-**	    unifying WaitVariable for equal WaitTime.
+**	(1) Sort NewList and merge with TripletList on WakeupTime,
+**	    unifying WaitVariable for equal WaitTime (highly unlikely).
 **
 **	(2) Unify "true" with first WaitVariable and discard that triplet.
 **
@@ -211,7 +212,7 @@ start_scheduling(Scheduler, Offset, Ok) :-
 **      Termination <token>.
 */
 
-scheduling(Schedule, Offset, NegativeExponential,
+scheduling(Schedule, Offset, NegativeExponential, Waiter,
 	Now, TripletList, NewList, Waiting, Wakeup, Record, Debug,
 			Cutoff, Start_real_time) :-
 
@@ -236,12 +237,12 @@ scheduling(Schedule, Offset, NegativeExponential,
     WakeupTime := Now - Mean*NegativeExponential :
       Debug ! receive(Id, WakeupTime),
       Wakeup = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
       Schedule'' = [schedule(More) | Schedule'],
       NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
-	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Schedule ? schedule([send(Channel, WakeVar) | More]),
@@ -250,12 +251,12 @@ scheduling(Schedule, Offset, NegativeExponential,
     WakeupTime := Now - Mean*NegativeExponential :
       Debug ! send(Id, WakeupTime),
       Wakeup = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
       Schedule'' = [schedule(More) | Schedule'],
       NewList' = [{WakeupTime, Vector, WakeVar} | NewList],
       execute(Offset, {RAN, 0, Uniform}),
       execute(Offset, {LN, Uniform, NegativeExponential'}) |
-	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Schedule ? schedule([receive(Channel, WakeVar) | More]),
@@ -295,6 +296,7 @@ scheduling(Schedule, Offset, NegativeExponential,
       Start_real_time = _,
       Waiting = _,
       Wakeup = _,
+      Waiter = [],
       Record = [],
       Debug = [];
 
@@ -315,9 +317,10 @@ scheduling(Schedule, Offset, NegativeExponential,
       Stream = Record'? |
 	self;
 
-    Schedule ? terminate(Token, When?) :
+    Schedule ? Terminate, Terminate = terminate(Token, When?) :
       When = Now,
-      Record ! Token |
+      Record ! Token,
+      Debug ! Terminate |
 	self;
 
 /**************************** Debuging code ********************************/
@@ -346,11 +349,11 @@ scheduling(Schedule, Offset, NegativeExponential,
       Schedule = _,
       Waiting = _,
       Wakeup = _,
+      Waiter = [machine(idle_wait(Done), _Ok)],
       Record = [],
       Debug = [] |
 	computation#display((done @ Now:
 		seconds = Real_time)),
-	processor#machine(idle_wait(Done)),
 	wait_done;
 
     Wakeup =?= done,
@@ -379,20 +382,20 @@ scheduling(Schedule, Offset, NegativeExponential,
       Debug ! time(Now'),
       Record ! Now',
       Now = _,
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
       WakeVar = Vector |
-	processor#machine(idle_wait(Wakeup'), _Ok),
 	self;
 
     Wakeup =?= done,
     NewList =\= [] :
-      Debug ! time(Now'),
+      Debug ! time(Now'?),
       Now = _,
       Record ! Now',
       Triplet = {Now', Vector, Vector},
+      Waiter ! machine(idle_wait(Wakeup'), _Ok),
       NewList' = [] |
 	SORT(Merger1, NewList, Sorted),
 	MERGE(Merger2, Sorted, TripletList, TripletList', Triplet),
-	processor#machine(idle_wait(Wakeup'), _Ok),
 	self.
 
   wait_done(Done) :-
