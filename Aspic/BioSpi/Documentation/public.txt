@@ -1,0 +1,14 @@
+In Pi Calculus, as defined by Milner, global channels may be declared
+implicitly by reference.  In this implementation of Ambient Stochastic Pi
+Calculus, they must be declared explicitly for each module in which they
+are referenced.  They are shared within an Ambient by all modules in which
+they are declared; they are not shared between Ambients, although they may
+be merged when two ambients merge.
+
+The declaration has the form:
+
+    public(<stochastic_channel_list>).
+
+See BioSpi/Documentation/BNF.
+
+See the modules in BioSpi/Examples.
