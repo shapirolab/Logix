@@ -60,10 +60,10 @@ specifies that the named first-level processes may be called externally.
 
 The attribute:
 
-    global(<communicator_list>).
+    public(<communicator_list>).
 
 specifies that the named channels are shared by name between all processes
-in a Spi session.  See Documentation/global.txt.
+in a Spi session.  See Documentation/public.txt.
 
 
 The attribute:

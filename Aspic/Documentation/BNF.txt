@@ -7,13 +7,13 @@ BNF for SpiFcp
                            <spi_attribute> . <spi_attributes>
 
 <spi_attribute>        ::= <export_declaration>
-                           <global_declaration>
+                           <public_declaration>
                            <default_baserate_declaration>
                            <default_weighter_declaration>
 
 <export_declaration>   ::= export(<process_name_list>)
 
-<global_declaration>   ::= global(<global_declaration_list>)
+<public_declaration>   ::= public(<public_declaration_list>)
 
 <default_baserate_declaration>
                        ::= baserate(<base_rate>)
@@ -31,9 +31,9 @@ BNF for SpiFcp
                        ::= <weighter_parameter>
                            <weighter_parameter> , <weighter_parameter_list>
 
-<global_declaration_list>
+<public_declaration_list>
                       ::= <channel_declaration>
-                          <channel_declaration> , <global_declaration_list>
+                          <channel_declaration> , <public_declaration_list>
 
 <channel_declaration> ::=  <channel>
                            <channel>(<base_rate>)
@@ -186,7 +186,7 @@ of a <channel>.  When the <base_rate> of a <channel> is 0, the
 channel acts as a sink - all messages on that channel are discarded.
 
 A <base_rate> may be specified by a logix variable for a new channel,
-but not in the <default_baserate_declaration> nor for a global channel.
+but not in the <default_baserate_declaration> nor for a public channel.
 The logix variable should be instantiated to a number.
 
 
@@ -195,11 +195,11 @@ alphabetic character; the string may contain underscore (_)
 characters.
 
 A <weighter> may be specified by a logix variable for a new channel,
-but not in the <default_weighter_declaration> nor for a global channel.
+but not in the <default_weighter_declaration> nor for a public channel.
 The logix variable should be instantiated to a string.
 
 Any <weighter_parameter> may be specified by a logix variable for a new
-channel, but not for the default nor for a global channel.  The logix
+channel, but not for the default nor for a public channel.  The logix
 variable should be instantiated to a real number.
 
 
@@ -228,7 +228,7 @@ a <message> or within a <logix_guard>, a <logix_ask_guard> or a <logix_goal>.
 
 WARNING:  when the single underscore character <logix_variable> appears in a
 <message>, it should not appear in place of a <channel>, unless the
-corresponding sent <channel> is defined by a <global_declaration>.
+corresponding sent <channel> is defined by a <public_declaration>.
 
 
 A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix

@@ -1,11 +1,11 @@
 In Pi Calculus, as defined by Milner, global channels may be declared
 implicitly by reference.  In this implementation of Stochastic Pi
-Calculus, global channels must be declared explicitly for each module
-in which they are referenced.
+Calculus, they must be declared explicitly for each module in which
+they are referenced.  They are shared between all modules.
 
 The declaration has the form:
 
-    global(<stochastic_channel_list>).
+    public(<stochastic_channel_list>).
 
 See Documentation/BNF.
 
