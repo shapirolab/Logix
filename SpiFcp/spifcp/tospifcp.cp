@@ -6,7 +6,7 @@ Bill Silverman, May 2000.
 Last update by		$Author: bill $
 		       	$Date: 2002/05/15 08:10:09 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/tospifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL

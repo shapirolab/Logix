@@ -6,7 +6,7 @@ Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 Last update by          $Author: bill $
 			$Date: 2002/05/15 08:10:08 $
 Currently locked by     $Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/breaks.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
