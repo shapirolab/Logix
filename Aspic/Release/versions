@@ -52,12 +52,13 @@ Compiles biospi modules in interpret mode.
 Added randomize and serialize.
 Edited spidbg help text.
 
-Version Aspic-release.2004-12-27.tar.gz
+Version Aspic-release.2005-01-01.tar.gz
 
 Updated user_macros: removed prgcs,spgcs; added reset.
-Fixed bug in ambient use of repeat (esp. in record and run).
+Fixed bug in use of repeat (esp. in record and run).
 Updated Documentation: added randomize, serialize, reset; changed some
 nomenclature.
 Added automatic randomization of selection among multiple instantaneous
 offers within a simultaneous set of offers (e.g. in one procedure).
 Fixed some bugs.
+
