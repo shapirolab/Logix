@@ -1,9 +1,9 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.5 2004/10/12 16:37:37 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.6 2004/10/21 15:56:12 bill Exp $ */
 /*
 **  fcp.c  -  emulator startup
 */
 
-
+#include	<errno.h>
 #include	<stdio.h>
 #ifdef	SUNOS5d3
 #include	<sys/fcntl.h>
@@ -53,12 +53,16 @@ fcp(argc, argv)
   register int	Fd;
 
   char *Base;
-  int Size;
+  int Size, Reply;
 
   extern char *malloc();
+#ifdef	LINUX
+  extern int posix_memalign(void **, int, int);
+#else
   extern void *memalign();
+#endif
 
-  void fcp_debug(char *);
+  void display_memory(char *);
 
   DbgFile = stderr;
   OutFile = stdout;
@@ -110,11 +114,27 @@ fcp(argc, argv)
     return(False);
   }
   if (BootType != WarmBoot) {
-    PMem = (char *) memalign(HOPage, RsrvSize+LinkSize+HeapSize);
+    Size = RsrvSize+LinkSize+HeapSize;
+
+#ifdef LINUX
+    Reply = posix_memalign((void **)&PMem, HOPage, HOPage);
+    if (Reply != 0) {
+      Reply = posix_memalign((void **)&PMem, HOPage, Size);
+      if (Reply != 0) {
+	fprintf(DbgFile, "fcp: %s - posix_memalign(**, 0x%x, 0x%x)\n",
+		strerror(Reply), HOPage, Size);
+	return(False);
+      }
+    }
+#else
+    PMem = (char *) memalign(HOPage, Size);
     if (PMem == NULL) {
-      fprintf(DbgFile, "fcp: not enough core for link/heap area\n");
+      fprintf(DbgFile, "fcp: %s - memalign(0x%x, 0x%x)\n",
+	      strerror(errno), HOPage, Size);
       return(False);
     }
+#endif
+
     LinkBase = (linkP) (PMem+RsrvSize);
     LinkEnd = LinkBase + (LinkSize / sizeof(linkT));
     HeapBase = (heapP) LinkEnd;
@@ -123,13 +143,13 @@ fcp(argc, argv)
 
     HOByte = HOByteMask & ((int) HeapBase);
     if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
-      fprintf(DbgFile, "fcp: Heap size too large.\n");
-      fcp_debug("Cold");
+      fprintf(DbgFile, "fcp: Working storage too large.\n");
+      display_memory("Cold");
       return(False);
     }
 
     if(SpecRsrv) {
-      fcp_debug("Reserve");
+      display_memory("Reserve");
     }
 
     HeapStart = HeapBase;
@@ -249,19 +269,34 @@ fcp(argc, argv)
     if (!SpecTbls) {
       TblsSize = Size;
     }
-    PMem = (char *)memalign(HOPage, RsrvSize+LinkSize+HeapSize);
+
+    Size = RsrvSize+LinkSize+HeapSize;
+#ifdef LINUX
+    Reply = posix_memalign((void **)&PMem, HOPage, HOPage);
+    if (Reply != 0) {
+      Reply = posix_memalign((void **)&PMem, HOPage, Size);
+      if (Reply != 0) {
+	fprintf(DbgFile, "fcp: %s - posix_memalign(**, 0x%x, 0x%x)\n",
+		strerror(Reply), HOPage, Size);
+	return(False);
+      }
+    }
+#else
+    PMem = (char *) memalign(HOPage, RsrvSize+LinkSize+HeapSize);
     if (PMem == NULL) {
-      fprintf(DbgFile, "fcp: not enough core for link/heap area(%u)\n",
-	      RsrvSize+LinkSize+HeapSize);
+      fprintf(DbgFile, "fcp: %s - memalign(0x%x, 0x%x)\n",
+	      strerror(errno), HOPage, Size);
       close(Fd);
       return(False);
     }
+#endif
 
     MemEnd = PMem + (RsrvSize+LinkSize+HeapSize);
     /* Load Link */
     read(Fd, &Base, sizeof(Base)); /* Saved LinkBase */
     if ((Base < PMem) || ((Base+LinkSize) > MemEnd)) {
-      fprintf(DbgFile, "fcp: restoring link to different location(%x,%x,%x,%x)\n",
+      fprintf(DbgFile,
+	 "fcp: restoring link to different location(0x%x,0x%x,0x%x,0x%x)\n",
 	      Base, PMem, Base+LinkSize, MemEnd);
       close(Fd);
       return(False);
@@ -278,7 +313,8 @@ fcp(argc, argv)
     /* Load Heap */
     read(Fd, &Base, sizeof(Base)); /* Saved HeapBase */
     if ((Base < ((char *) LinkEnd)) || ((Base+HeapSize) > MemEnd)) {
-      fprintf(DbgFile, "fcp: restoring heap to different location(%x,%x,%x,%x)\n",
+      fprintf(DbgFile,
+	 "fcp: restoring heap to different location(0x%x,0x%x,0x%x,0x%x)\n",
 	      Base, LinkEnd, Base+HeapSize, MemEnd);
       close(Fd);
       return(False);
@@ -289,13 +325,13 @@ fcp(argc, argv)
 
     HeapEnd = HeapBase + (HeapSize / sizeof(heapT));
     if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
-      fprintf(DbgFile, "fcp: Heap size too large.\n");
-      fcp_debug("Warm");
+      fprintf(DbgFile, "fcp: Working storage too large.\n");
+      display_memory("Warm");
       return(False);
     }
 
     if(SpecRsrv) {
-      fcp_debug("Reserve");
+      display_memory("Reserve");
     }
 
     read(Fd, &HeapStart, sizeof(HeapStart));  /* Saved HeapStart */
@@ -632,21 +668,27 @@ init_stats()
   GCMajFlt = 0;
 }
 
-void fcp_debug(char *String)
+void display_memory(char *Title)
 {
-  fprintf(DbgFile, "\n**%s**\n", String);
+  fprintf(DbgFile, "\n** %s - %smemalign **\n", Title,
+#ifdef LINUX
+	  "posix_"
+#else
+	  ""
+#endif
+);
   fprintf(DbgFile, "RsrvSize = %d, LinkSize = %d, HeapSize = %d\n",
 	  RsrvSize, LinkSize, HeapSize);
   if ( PMem < ((char *) LinkBase) ) {
-    fprintf(DbgFile, "PreRsrv = %x, PreRsrvEnd = %x\n",
+    fprintf(DbgFile, "PreRsrv = 0x%x, PreRsrvEnd = 0x%x\n",
 	    PMem, LinkBase);
   }
-  fprintf(DbgFile, "LinkBase = %x, LinkEnd = %x\n",
+  fprintf(DbgFile, "LinkBase = 0x%x, LinkEnd = 0x%x\n",
 	  LinkBase, LinkEnd);
-  fprintf(DbgFile, "HeapBase = %x, HeapEnd = %x, HOByte = %x\n",
+  fprintf(DbgFile, "HeapBase = 0x%x, HeapEnd = 0x%x, HOByte = 0x%x\n",
 	  HeapBase, HeapEnd, HOByte);
   if ( ((char *) HeapEnd) < MemEnd ) {
-    fprintf(DbgFile, "PostRsrv = %x, PostRsrvEnd = %x\n",
+    fprintf(DbgFile, "PostRsrv = 0x%x, PostRsrvEnd = 0x%x\n",
 	    LinkEnd, MemEnd);
   }
   if ( BootType != WarmBoot ) {
