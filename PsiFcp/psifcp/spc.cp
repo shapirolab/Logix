@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/03 04:58:09 $
+		       	$Date: 2000/07/26 07:21:54 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -116,9 +116,11 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 
     Procedure =?= (Atom :- Communicate1),
     RHSS =?= [(Ask : Writes | Body)] :
-      NewRHSS = (Ask? : Tell? | Body),
+      NewRHSS = (Ask'? : Tell? | Body),
       Terms ! (Atom :- Communicate2?) |
-	utilities#untuple_predicate_list(',', Ask, Asks),
+	utilities#untuple_predicate_list(',', Ask, Asks'),
+	analyze_multipliers(Writes''?, Asks, Asks'?),
+	utilities#make_predicate_list(',', Asks?, Ask'),
 	utilities#untuple_predicate_list(',', Writes, Writes'),
 	utilities#untuple_predicate_list(';', Communicate1, Communicate1'),
 	analyze_rhss(Communicate1'?, Prototype, Writes'?, ChannelTables,
@@ -137,6 +139,22 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 			ProcessTable', ProcessTable''?, Communicate2'),
 	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
 	output.
+
+  analyze_multipliers(Writes, Multipliers,  Asks) :-
+
+    Writes ? _write_message(Ms, _Channel),
+    Ms =?= _Type(_Id, _Message, _Tag, Multiplier, _Chosen),
+    Multiplier =?= `_ :
+      Multipliers ! integer(Multiplier),
+      Multipliers' ! (Multiplier > 0) |
+	self;
+
+    Writes ? _Other,
+    otherwise |
+	self;
+
+    Writes =?= [] :
+     Multipliers = Asks.
 
   prototype_channel_table(Channels, Prototype) :-
 
@@ -490,7 +508,8 @@ body_channel_usage1(ChannelTable, NewChannelTable, Body,
     Channels ? ChannelName :
       NewChannels = [Channel | Channels'];
 
-    Channels ? OtherName, ChannelName =\= OtherName |
+    Channels ? OtherName, ChannelName =\= OtherName :
+      NewChannels ! OtherName |
 	self.
 
 
@@ -501,13 +520,22 @@ body_channel_usage2(ChannelTable, NewChannelTable, Body,
     Channels ? ChannelName :
       Old = {Refs, ChannelName},
       ChannelTable ! lookup(ChannelName, New, Old, Found),
-      New = {Refs'?, ChannelName} |
-	Found? = old,				/* debugging code */
-	Refs++,
+      New = {NewRefs?, ChannelName} |
+	body_channel_usage3,
 	self;
 
     Channels =?= [] |
 	body_channel_usage.
+
+  body_channel_usage3(Found, Refs, NewRefs) :-
+
+    Found =?= old,
+    Refs++ :
+      NewRefs = Refs';
+
+    Found =?= new :
+      Refs = _,
+      NewRefs = 1.
 
 
 update_rhss(Comm, RHSS, ChannelTables, ProcessTable, NextProcessTable, Rhss) :-
@@ -549,6 +577,7 @@ reduce_channel_table(Entries, AddAsk, AddTell, Table, NextTable) :-
 
     Entries ? entry(Name, {0, _}) :
       Table ! delete(Name, _, _),
+      AddAsk ! known(`Name),
       AddTell ! (`Name = {`"_", `"_",
 			 {`psiln(Name), `psiln(Name)}}) |
 	self;
@@ -637,7 +666,7 @@ update_body(Body, Table, NewBody, ProcessTable, NextProcessTable) :-
 	update_goal(Goal, Goal, Channels, Ok, [], Goal', Table, Table'?),
 	self;
 
-    Body ? Goal, Goal = Functor + (Substitutions), string(Functor) :
+    Body ? Goal, Goal = Functor + Substitutions, string(Functor) :
       NewBody ! Goal'?,
       ProcessTable ! member(Functor, Channels, Ok) |
 	utilities#untuple_predicate_list(',', Substitutions, Substitutions'),
@@ -807,7 +836,8 @@ dimerize_requests(Tell, NewTell) :-
       Retell = [write_channel(NewRequest, Channel) | Tell'?] ;
 
     /* No change if already dimerized. */
-    Tell ? Other :
+    Tell ? Other,
+    otherwise :
       Retell ! Other |
 	self;
 
