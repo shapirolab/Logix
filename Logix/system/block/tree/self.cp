@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/self.cp,v 1.1 1999/07/09 07:03:12 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/self.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
 /*
  *  Block compile  Tree  at  RootId , producing  Blocked  and  Report .
  */
@@ -24,7 +24,8 @@ load(ScopeId, RootId, Tree, Blocked, Report) :-
     Tree =\= false(_), Tree =\= {_, [], []} |
 	graph # build(ScopeId, RootId, Tree, Graph),
 	GCalls ! {'_', Graph, _},
-	serve_calls(GCalls, {GCalls', Blocked, Report});
+	serve_calls(GCalls, {GCalls', Blocked, Report}),
+	find_and_propagate_entries;
 
     Tree = {_, [], []} : ScopeId = _, RootId = _,
       Blocked = [],
@@ -34,6 +35,20 @@ load(ScopeId, RootId, Tree, Blocked, Report) :-
       Blocked = [],
       Report = [] |
 	computation # event(Tree) .
+
+  find_and_propagate_entries(Blocked, Graph) :-
+
+    Blocked ? -entries(Entries) :
+      Blocked' = _ |
+	graph # propagate_entries(Graph, Entries);
+
+    Blocked ? -Other,
+    Other =\= entries(_) |
+	self;
+
+    otherwise :		% probably a non-director target
+      Blocked = _,
+      Graph = _ .
 
 
 procedure serve_calls(GCalls, Controls).
@@ -55,9 +70,15 @@ serve_calls(GCalls, Controls) :-
 	graph_reply(Reply, GCalls', GCalls'', Controls, Controls'),
 	serve_calls;
 
-    GCalls ? {Service # RemoteGoal, Graph, Goal} |
+    GCalls ? {Service # RemoteGoal, Graph, Goal},
+    (Service # RemoteGoal) =\= (self # service_id(_)) |
 	graph # rpc(RemoteGoal, Graph, Goal, Reply, Service),
 	graph_reply(Reply, GCalls', GCalls'', Controls, Controls'),
+	serve_calls;
+
+    GCalls ? {Call, _Graph, Goal},
+    Call =?= (self # service_id(_)) :
+      Goal = Call |
 	serve_calls;
 
     GCalls ? {RemoteGoal, Graph, Goal},
@@ -89,15 +110,15 @@ graph_reply(Reply, GCalls1, GCalls2, Controls1, Controls2) :-
       GCalls2 = [GCall | GCalls1],			% push simplified rpc
       Controls1 = Controls2 ;
 
-    Reply = load(SourceId, State, Calls),
+    Reply = load(SourceId, Entries, State, Calls),
     Controls1 = {QueueCalls, Blocked, Report} :
       GCalls1 = GCalls2,
       Calls ! calls(Lead, Path, QueueCalls, QueueCalls'),
       Controls2 = {QueueCalls', Blocked'', Report'} |
-	parser # parse(SourceId, Clauses, ProcIds, Attributes, Result),
+	parser # parse(SourceId, Lead, Clauses, ProcIds, Attributes, Result),
 	auxils # member(monitor(_), Attributes, Monitor),
 	service_included(Lead, Monitor, Path, Result, Kind, Report, Report'),
-	save_attributes(Lead, Kind, Attributes, Clauses, Clauses',
+	save_attributes(Lead, Kind, Attributes, Entries, Clauses, Clauses',
 			Blocked, Blocked'
 	),
 	rename # clauses(Clauses', Lead, ProcIds, Blocked', Blocked'', Calls'),
@@ -170,15 +191,16 @@ procedure save_attributes(String, ServiceKind, Attributes, Clauses, Clauses,
 % Attributes  are added to the beginning of  Block1 .
 % The source (Clauses) of an excluded service is elided.
 
-save_attributes(Lead, Kind, Attributes,
+save_attributes(Lead, Kind, Attributes, Entries,
 		Clauses1, Clauses2,
 		Blocked1, Blocked2
 ) :-
 
     Kind =\= excluded,
     Lead = '' :
-      Blocked1 = [-export(Exports), -mode(Mode) | Blocked1'],
+      Blocked1 = [-export(Exports), -entries(_), -mode(Mode) | Blocked1'],
       Clauses1 = Clauses2 |
+	server_entries,
 	extract_root_attributes(Attributes, Exports, Mode,
 				Blocked1', Blocked2
 	);
@@ -186,12 +208,26 @@ save_attributes(Lead, Kind, Attributes,
     Kind = procedures,
     Lead =\= '' : Attributes = _,
       Clauses1 = Clauses2,
-      Blocked1 = Blocked2 ;
+      Blocked1 = Blocked2 |
+	server_entries;
 
     otherwise : Kind = _, Lead = _, Attributes = _, Clauses1 = _,
       Clauses2 = [],
+      Entries = [],
       Blocked1 = Blocked2 .
 
+server_entries(Attributes, Entries) :-
+
+    Attributes ? entries(E) :
+      Attributes' = _,
+      Entries = E;
+
+    Attributes ? Other,
+    Other =\= entries(_) |
+	self;
+
+    Attributes = [] :
+      Entries = [] .
 
 procedure extract_root_attributes(Attributes, Any, Any,
 				BlockedSource, BlockedSource
@@ -216,8 +252,12 @@ extract_root_attributes(Attributes, Exports, Mode, Blocked1, Blocked2) :-
 	    Blocked1 ! -Monitor |
 		extract_root_attributes;
 
+	Attributes ? block_prefix(_) |
+		extract_root_attributes;
+
 	Attributes ? Other,
-	Other =\= export(_), Other =\= mode(_), Other =\= monitor(_) |
+	Other =\= export(_), Other =\= mode(_), Other =\= monitor(_),
+	Other =\= block_prefix(_) |
 		extract_root_attributes.
 
 extract_root_attributes([], all^, interrupt^, Blocked, Blocked^).

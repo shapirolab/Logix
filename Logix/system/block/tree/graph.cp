@@ -1,20 +1,21 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.1 1999/07/09 07:03:12 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/graph.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
 /*
  *  Transform the hierarchical tree into a graph.
  */
 
--export([build/4, format_rpc/3, goal/4, rpc/5]).
+-export([build/4, format_rpc/3, goal/4, rpc/5, propagate_entries/2]).
 -language(compound).
 -mode(trust).
 
 Tree ::= hierarchy # Tree.
 Trees ::= [Tree].
 Graph ::= SubGraph ; [].
-DirGraph ::= {ServiceId, Lead, Graph, State, SubGraphs}.
-SubGraph ::= {ServiceId, Lead, Graph, State, (SubGraphs ; server)}.
+DirGraph ::= {ServiceId, Lead, Graph, Entries, State, SubGraphs}.
+SubGraph ::= {ServiceId, Lead, Graph, Entries, State, (SubGraphs ; server)}.
 SubGraphs ::= [SubGraph].
 State ::= ProcIds ; monitor ; system ; excluded .
 ProcIds ::= [String/Integer].
+Entries ::= [(String ; String/Integer)].
 SubAnswer ::= found(SubGraph) ; not_found(Name).
 
 
@@ -41,17 +42,28 @@ procedure director(ServiceId, Lead, Graph, Nodes, Trees, DirGraph, SubGraph).
 director(ScopeId, RootId, DirLead, Super, Servers, SubTrees, Graph, Root) :-
 
     Servers ? self :
-      Graph = {ScopeId, SelfLead?, Super, _Status, SubGraphs?},
+      Graph = {ScopeId, SelfLead?, Super, Entries, _Status, SubGraphs?},
       Super' = Graph |
 	scope_lead,
+	director_entries,
 	servers,
 	subgraphs;
 
     otherwise :
-      Graph = {ScopeId, DirLead, Super, excluded, SubGraphs?},
+      Graph = {ScopeId, DirLead, Super, [], excluded, SubGraphs?},
       Super' = Graph |
 	servers,
 	subgraphs.
+
+procedure director_entries(Lead, Entries).
+
+director_entries(SelfLead, Entries) :-
+
+    SelfLead = "" :
+      Entries = _;
+
+    SelfLead =\= "" :
+      Entries = [].
 
 
 procedure servers(ServiceId, Lead, Graph, Nodes, SubGraphs).
@@ -59,7 +71,7 @@ procedure servers(ServiceId, Lead, Graph, Nodes, SubGraphs).
 servers(ScopeId, DirLead, Super, Servers, Modules) :-
 
     Servers ? Server :
-      Modules ! {[Server | ScopeId], SLead, Super, _, server} |
+      Modules ! {[Server | ScopeId], SLead, Super, _, _, server} |
 	self,
 	auxils # server_lead(DirLead, Server, SLead);
 
@@ -89,7 +101,7 @@ subgraphs(ScopeId, RootId, DirLead, Graph, SubTrees, SubGraphs,
 
 /****************************** G O A L / 4 **********************************/
 
-GoalReply ::= done ; load(ServiceId, State, FullCalls).
+GoalReply ::= done ; load(ServiceId, Entries, State, FullCalls).
 FullCalls ::= [ calls(Lead, String, GCalls, GCalls) | Calls].
 RpcReply ::= done ; call(GCall).
 Reply ::= GoalReply ; RpcReply.
@@ -98,12 +110,12 @@ procedure goal(Any, Graph, Any, GoalReply).
 
 goal(Call, Graph, Goal, Reply) :-
 
-    Graph = {_, Lead, _, ProcIds, _},
+    Graph = {_, Lead, _, _, ProcIds, _},
     ProcIds =\= excluded, ProcIds =\= monitor :
       Reply = done |					% Eureka!
 	rename # goal(Call, Lead, ProcIds, Goal);	% rename the call!
 
-    Graph = {_, _, Graph', NotCallable, Subs},
+    Graph = {_, _, Graph', _, NotCallable, Subs},
     string(NotCallable),				% "excluded" or
     Subs =\= server,					% "monitor"
     Graph' =\= [] |					% imbedded self
@@ -113,10 +125,11 @@ goal(Call, Graph, Goal, Reply) :-
       Reply = done |
 	format_rpc;
 
-    Graph = {ScopeId, Lead, Super, State, Subs},
+    Graph = {ScopeId, Lead, Super, Entries, State, Subs},
     writable(State) : Reply' = _,
       State = Locked? |
-	Reply = load(NodeId, Locked, [calls(Lead, SPath, Cs1, Cs2) | Calls]),
+	Reply = load(NodeId, Entries, Locked,
+		     [calls(Lead, SPath, Cs1, Cs2) | Calls]),
 	source_service_id(Subs, ScopeId, NodeId),
 	subgraph_path(ScopeId, Subs, Super, SPath),
 	calls(Calls, Graph, Cs1, Cs2),
@@ -151,7 +164,7 @@ procedure server_path(ServiceId, Graph, Path, Path).
 
 server_path(ScopeId, Super, Path, Partial) :-
 
-    Super = {_, _, Super', _, _},
+    Super = {_, _, Super', _, _, _},
     ScopeId ? Name :
       Partial' = Name # Partial |
 	server_path;
@@ -169,7 +182,7 @@ calls(Calls, Graph, Calls1, Calls2) + (Cs1 = Cs, Cs2 = Cs) :-
 	calls;
 
     Calls = [],
-    Graph = {_, _, _, excluded, _} : Cs1 = _, Cs2 = _,
+    Graph = {_, _, _, _, excluded, _} : Cs1 = _, Cs2 = _,
       Calls1 = Calls2 ;
 
     Calls = [],
@@ -187,11 +200,11 @@ rpc(Call, Graph, Goal, Reply, Service) :-
       Reply = call({Call, Graph, Goal}) ;
 
     Service = super,
-    Graph = {_, _, Super, _, _} |
+    Graph = {_, _, Super, _, _, _} |
 	super_goal(Call, Super, Goal, Reply) ;
 
     Service =\= super, Service =\= self,
-    Graph = {_, _, Super, _, Subs} |
+    Graph = {_, _, Super, _, _, Subs} |
 	search_subs(Service, Subs, Answer),
 	found_sub(Call, Graph, Goal, Reply, Super, Answer).
 
@@ -246,7 +259,7 @@ procedure format_rpc(Any, Graph, Any).
 
 format_rpc(Call, Graph, Goal) :-
 
-    Graph = {[Name | _], _, Graph', _, _},
+    Graph = {[Name | _], _, Graph', _, _, _},
     Graph' =\= [] :
       Call' = Name # Call |
 	format_rpc;
@@ -255,9 +268,65 @@ format_rpc(Call, Graph, Goal) :-
     Call = _#_ :
       Goal = Call ;
 
-    Graph = {[Name | _], _, [], _, _},		% remove this clause if the
+    Graph = {[Name | _], _, [], _, _, _},	% remove this clause if the
     Call =\= _#_ :				% block is to be anonymous!
       Goal = Name # Call ;
 
-    otherwise : Graph = _,			% The root is anonymous!
+    otherwise : Graph = _ |			% The root is anonymous!
       Goal = self # Call .
+
+
+propagate_entries(Graph, Entries) + (NextEntries = []) :-
+
+    Graph = {_, Lead, _, Es, _, SubGraphs} |
+	cumulate_entries(Lead, Es, Entries, Entries'),
+	propagate_sub_entries;
+
+    Graph = [] :
+      Entries = NextEntries;
+
+    otherwise :
+      Entries = NextEntries |
+	fail((graph = Graph)).
+
+  cumulate_entries(Lead, Es, Entries, NextEntries) :-
+
+    Es ? Entry,
+    string_to_dlist(Lead, LL,LT) :
+      Entries ! LeadEntry |
+	complete_entry_name,
+	self;
+
+    Es = [] :
+      Lead = _,
+      Entries = NextEntries;
+
+
+    Es =\= [_|_], Es =\= [] :
+      Es' = [Es] |
+	self.
+
+  complete_entry_name(LL, LT, Entry, LeadEntry) :-
+
+    string(Entry),
+    string_to_dlist(Entry, EL, []) :
+      LT = EL |
+	list_to_string(LL, LeadEntry);
+
+    Entry = Entry'/Arity :
+      LeadEntry = LeadEntry'/Arity |
+	self;
+
+    otherwise :
+      Entry' = "" |
+	fail(invalid_entry_name(Entry)),
+	self.
+
+  propagate_sub_entries(SubGraphs, Entries, NextEntries) :-
+
+    SubGraphs ? Graph |
+	propagate_entries(Graph, Entries, Entries'),
+	self;
+
+    SubGraphs =\= [_|_] :
+      Entries = NextEntries.

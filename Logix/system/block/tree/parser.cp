@@ -1,10 +1,10 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/parser.cp,v 1.1 1999/07/09 07:03:12 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/parser.cp,v 1.2 2002/05/29 08:04:03 bill Exp $ */
 /*
  *  Get and parse a module, rejecting library, monitor (except root-self),
  *  empty module and module with parsing-errors.
  */
 
--export([parse/5]).
+-export([parse/6]).
 -language(compound).
 -mode(trust).
 
@@ -25,12 +25,13 @@ procedure parse(ServiceId, Clauses, ProcIds, Attributes, Result).
 %   or transformation_errors(TransformationErrors).
 % Clauses, ProcIds and Attributes are non-empty iff  "included".
 
-parse(ServiceId, Clauses, ProcIds, Attributes, Out) :-
+parse(ServiceId, Lead, Clauses, ProcIds, Attributes, Out) :-
     ServiceId ? Name |
 		get_source # context(ServiceId', Name, [], Result,
 				  {ParsingErrorsStream, []}
 			     ),
-		interpret(Result, ServiceId, ParsingErrorsStream, Parsed, Out),
+		interpret(Result, ServiceId, Lead, ParsingErrorsStream,
+			  Parsed, Out),
 		arg(1, Parsed, Attributes),
 		arg(2, Parsed, Clauses),
 		get_ids(Clauses, ProcIds).
@@ -114,7 +115,7 @@ get_ids(Terms, ProcIds) + (Previous = ''/(-1)) :-
 
 /******* INTERPRET ***********************************************************/
 
-procedure interpret(get_source#Result, ServiceId, ParsingErrors, Parsed,
+procedure interpret(get_source#Result, ServiceId, Lead, ParsingErrors, Parsed,
 			Result
 ).
 
@@ -124,28 +125,31 @@ procedure interpret(get_source#Result, ServiceId, ParsingErrors, Parsed,
 %   Out is instantiated to one of the values described in the 
 % specification of procedure parse.
 
-interpret(Result, ServiceId, ParsingErrorsStream, Parsed, Out) :-
+interpret(Result, ServiceId, Lead, ParsingErrorsStream, Parsed, Out) :-
 
 	Result = library(_, _, _) : ServiceId = _, ParsingErrorsStream = _,
+            Lead = _,
 	    Parsed = {[], []},
 	    Out = excluded - library ;
 
 	Result = false(Reason) : ServiceId = _, ParsingErrorsStream = _,
+            Lead = _,
 	    Parsed = {[], []},
 	    Out = excluded - Reason ;
 
 	Result = module(_, Attributes, Clauses),
 	ParsingErrorsStream = [] |
 
-		transform # languages([], typed, [service_id(ServiceId)
-						 | Attributes], Attributes',
+		transform # languages([block_prefix(Lead)], typed,
+				      [service_id(ServiceId) 
+				      | Attributes], Attributes',
 				      Clauses, Clauses', Errors, []
 		),
 		transformation_errors({Attributes', Clauses'}, Parsed,
 				      Errors, Out
 		);
 
-	otherwise : Result = _, ServiceId = _,		% Parsing-errors
+	otherwise : Result = _, ServiceId = _, Lead = _, % Parsing-errors
 	    Parsed = {[], []},
 	    Out = parsing_error(ParsingErrorsStream) .
 
