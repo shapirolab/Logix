@@ -10,20 +10,26 @@ into three major categories:
 
   * Debugging.
 
-Channels
---------
+In the discussion below, refer to BNF.txt for syntactic definition of
+most bracketed terms, such as <logix_variable>.  Other bracketed
+terms, such as <goals>, are defined in explicitly specified documents.
+
+Channel Management and Message Transmission
+-------------------------------------------
 
 The user macros:
 
     pc(C)
     pc(C,S,B)
+    pc(C,S,B,W)
 
 are used to create channels.  The former user macro creates an "instantaneous"
-(infinite rate) channel C.  The latter creates a "based" channel C,whose
+(infinite rate) channel C.  The latter two create "based" channel C,whose
 name is derived from the string S, and whose base rate is specified by
 the non-negative number B (When B is 0, the created channel is a "sink" -
 i.e. all sends and receives on the channel are discarded, and no actual
-transmission occurs.)
+transmission occurs.).  The third specifies a <weighter_declaration> in
+addition.
 
 
 The user macros:
@@ -48,9 +54,7 @@ The user macro:
 
     weighter(W)
 
-sets the default weight computation.  W  is an atom: a computation name
-(string) or a tuple  Name(P1, ..., Pn), where P1, ... Pn are additional
-parameters to the weight computation, each a number.
+sets the default weight computation.  W  is a <weighter_decaration>.
 
 
 Program Execution
@@ -61,7 +65,9 @@ The basic Logix command to execute a program has the form:
     <directory path>#<goal>
 
 The system creates a computation, uniquely identified by a positive
-integer throughout the session.
+integer, its "computation number", throughout the session.  The command
+starts a Logix computation, redefining the "current computation" and
+the "current computation number"
 
 
 To execute a Stochastic Pi Calculus program, e.g. RunTT in module booland
@@ -104,7 +110,7 @@ The user macros:
 
     s
     suspend
-    a(all)
+    s(all)
     suspend(all)
     s(N)
     suspend(N)
@@ -197,14 +203,6 @@ display the channel C.
 
 The user macros:
 
-    spgcs
-    spgcs(Options)
-
-display the global channels.
-
-
-The user macros:
-
     pdb(RPC)
     pdb(RPC,Options)
 
@@ -278,8 +276,22 @@ may be used to display all named Logix variables.
 
 The user macro:
 
-    VariableName^
+    <logix_variable>^
 
 may be used to display a named variable.
+
+
+The user macro:
+
+    unbind
+
+may be used to remove the current definitions of all Logix variables.
+
+
+The user macro:
+
+    unbind(<logix_variable>)
+
+may be used to remove the current definition of all <logix_variable>.
 
 
