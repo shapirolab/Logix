@@ -8,7 +8,7 @@ BNF for BioFcp
 
 <bio_attribute>        ::= <export_declaration>
                            <public_declaration>
-                           <default_base_rate_declaration>
+                           <default_baserate_declaration>
                            <default_weighter_declaration>
 
 <export_declaration>   ::= export(<process_name_list>)
@@ -146,6 +146,7 @@ BNF for BioFcp
                            <local_sum>
                            <nested_scope>
                            <ambient>
+                           <macro_call>
                            <external_call>
                            {<logix_goal>}
                            {(<logix_goal_list>)}
@@ -178,6 +179,13 @@ BNF for BioFcp
                            <logix_path_term>#<logix_goal>
                            <logix_path_term>#<external_call>
 
+<macro_call>           ::= set_base_rate(<base_rate>, <channels_and_reply>)
+                           randomize_messages(<channels_and_reply>)
+                           serialize_messages(<channels_and_reply>)
+
+<channels_and_reply>   ::= <logix_variable>
+                           <channel> , <channels_and_reply>
+
 <logix_goal_list>      ::= <logix_goal>
                            <logix_goal> , <logix_goal_list>
 
@@ -202,8 +210,8 @@ of a <channel>.  When the <base_rate> of a <channel> is 0, the
 channel acts as a sink - all messages on that channel are discarded.
 
 A <base_rate> may be specified by a logix variable for a new channel,
-but not for the default nor for a public channel.  The logix variable
-should be instantiated to a number.
+but not in the <default_baserate_declaration> nor for a public channel.
+The logix variable should be instantiated to a number.
 
 
 A <weighter> is an alpha-numeric string, beginning with a lower-case
@@ -211,8 +219,8 @@ alphabetic character; the string may contain underscore (_)
 characters.
 
 A <weighter> may be specified by a logix variable for a new channel,
-but not for the default nor for a public channel.  The logix variable
-should be instantiated to a string.
+but not in the <default_weighter_declaration> nor for a public channel.
+The logix variable should be instantiated to a string.
 
 Any <weighter_parameter> may be specified by a logix variable for a new
 channel, but not for the default nor for a public channel.  The logix
@@ -288,11 +296,20 @@ variable names all begin with a capital letter or underscore; to reference a
 <logix_term>, refer to '_var'(<channel>).
 
 
+In a <macro_call> any argument which precedes the <channels_and_reply> may
+be a read-only-variable (<logix_variable>?).  The <logix_variable>
+must be instantiated before the <macro_call> can complete.
+
+When a <macro_call> is completed, the trailing <logix_variable> is
+instantiated - its value is usually the string "true", but it may vary in
+some cases.
+
+
 A <logix_variable> may have a value which is an arbitrary logix term.  Such
-values may be tested by a <logix_ask_guard> or manipulated by a <logix_goal>
-or by a <logix_tell_guard>.  An arbitrary <logix_term> may be sent in a
-<message> by the library <logix_goal> spi_send/2, or received by the logix
-goal, spi_receive/2:
+values may be tested by a <logix_ask_guard>, instantiated or used as an
+argument in a <logix_goal> or in a <logix_tell_guard>.  An arbitrary
+<logix_term> may be sent in a <message> by the library <logix_goal> spi_send/2,
+or received by the logix goal, spi_receive/2:
 
     spi_send(<message_content>, <channel>)
     spi_receive(<channel>, <message_content>)
@@ -305,7 +322,11 @@ e.g.
 
 The library <logix_goal>s spi_send/3, spi_receive/3, spi_send/4, spi_receive/4
 may be used as well, where the third argument is a multiplier (default 1), and
-the fourth argument is an identifier (default sender or receiver).
+the fourth argument is an identifier (default string "sender" or "receiver").
+
+A <logix_variable> may be instantiated by an assignment:
+
+    <logix_variable> = <logix_term>
 
 
 The additive definition of <left_hand_side> is syntactic sugar - e.g.
