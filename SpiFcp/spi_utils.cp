@@ -944,7 +944,7 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
     arg(1, Tuple, N) :
       N = Name,
       SpiFcp = Tuple |
-	goal_channels1.
+	goal_channels2.
 
   % Blocked code may begin with a lower-case directory name.
   % Check the first character after '$'.
@@ -978,10 +978,81 @@ show_goal1(Goal, Which, Depth, Sender, Format, SpiFcp, Left, Right) :-
     arg(1, Tuple, N) :
       N = Name,
       SpiFcp = Tuple |
-	goal_channels1.
+	goal_channels2.
 
 
 goal_channels(Goal, Index, Which, Depth, Sender, Format,
+		SpiFcp, Left, Right, Name) :-
+
+    string_length(Name, L),
+    nth_char(L, Name, CHAR_PRIME) :
+      ExtraChannels = [],
+      Leaders = [Name | LeadingArgs?] |
+	leading_arguments(2, Goal, LeadingArgs, TrailingChannels),
+	trailing_goal_channels(Index, Goal, TrailingChannels, []),
+	utils#list_to_tuple(Leaders, Goal'),
+	ambient_goal;
+
+    otherwise :
+      Name = _ |
+	goal_channels1.
+
+  leading_arguments(Index, Goal, LeadingArgs, TrailingChannels) :-
+
+    Index > arity(Goal) :
+      TrailingChannels = _,
+      LeadingArgs = [];
+
+    Index =< arity(Goal),
+    arg(Index, Goal, Arg),
+    unknown(Arg),
+    Index++ :
+      LeadingArgs ! Arg |
+	self;
+
+    Index =< arity(Goal),
+    arg(Index, Goal, Arg),
+    vector(Arg),
+    arity(Arg, 2 /* should be AMBIENT_ARITY != CHANNEL_SIZE */) :
+      LeadingArgs = TrailingChannels;
+
+    Index =< arity(Goal),
+    arg(Index, Goal, Arg),
+    Index++,
+    otherwise :
+      LeadingArgs ! Arg |
+	self.
+
+  trailing_goal_channels(Index, Goal, TrailingChannels, AddedChannels) :-
+
+    arg(Index, Goal, Channel),
+    vector(Channel),
+    arity(Channel, CHANNEL_SIZE),
+    Index-- :
+      AddedChannels' = [Channel | AddedChannels] |
+	self;
+
+    arg(Index, Goal, Other),
+    unknown(Other) :
+      TrailingChannels = AddedChannels;
+
+    otherwise :
+      Goal = _,
+      Index = _,
+      TrailingChannels = AddedChannels.
+
+
+  ambient_goal(Goal, Which, Depth, Sender, Format,
+		SpiFcp, Left, Right) :-
+    arg(1, Goal, Name),
+    arity(Goal, Index),
+    make_tuple(Index, Tuple),
+    arg(1, Tuple, N) :
+      N = Name,
+      SpiFcp = Tuple |
+	goal_channels2.
+
+goal_channels1(Goal, Index, Which, Depth, Sender, Format,
 		SpiFcp, Left, Right) :-
 
 /* Exclude trailing non-pi arguments (mostly) */
@@ -1003,7 +1074,7 @@ goal_channels(Goal, Index, Which, Depth, Sender, Format,
     arg(1, Tuple, N) :
       N = Name,
       SpiFcp = Tuple |
-	goal_channels1;
+	goal_channels2;
 
     Index-- > 1,
     otherwise |
@@ -1018,7 +1089,7 @@ goal_channels(Goal, Index, Which, Depth, Sender, Format,
       SpiFcp = Name,
       Left = Right.
 
-  goal_channels1(Goal, Index, Which, Depth, Sender, Format,
+  goal_channels2(Goal, Index, Which, Depth, Sender, Format,
 			SpiFcp, Left, Right) :-
 
     Index > 1,
