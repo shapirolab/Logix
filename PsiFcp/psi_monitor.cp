@@ -469,7 +469,17 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
 			NotesChannel, CommandIn, CommandOut, Stop) :-
 
     BaseRate =< 0 :
-      Halt = _ |
+      Halt = _,
+      Input = _,
+      InputChannel  = _,
+      NotesChannel = _,
+      Stop = _,
+      CommandOut = CommandIn,
+      DEBUG((ChannelName: sink));
+
+    BaseRate = test :
+      Halt = _,
+      DEBUG((ChannelName: test)) |
 	test_channel;
 
     BaseRate =?= infinite :
@@ -548,9 +558,9 @@ test_channel(ChannelName, Input, InputChannel,
       ChannelName = _,
       Input = _,
       InputChannel = _,
+      NotesChannel = _,
       Stop = _,
-      CommandOut = [] |
-	self;
+      CommandOut = [];
 
     Input ? In :
       DEBUG((ChannelName:input = In)) |
@@ -675,10 +685,10 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
 		Requests1, AddRequests1, Request, Selected) :-
 
     /* Maybe we should randomize the choice of send/receive. */
-    Requests ? _(RId, {_SMs, ReceiveMessage}, {_ST, ReceiveTag},
+    Requests ? _(ReceiveId, ReceiveMessage, {_SendTag, ReceiveTag},
 			ReceiveMultiplier, ReceiveReply),
     we(ReceiveReply),
-    Request =?= _(SId, {SendMessage, _RMs}, {SendTag, _RT},
+    Request =?= _(SendId, SendMessage, {SendTag, _ReceiveTag},
 			SendMultiplier, SendReply),
     we(SendReply),
     Weight -= ReceiveMultiplier + SendMultiplier :
@@ -686,7 +696,7 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
       ReceiveMessage = SendMessage,
       ReceiveReply = ReceiveTag,
       SendReply = SendTag,
-      Selected = done(SId, RId) |
+      Selected = done(SendId, ReceiveId) |
 	dimerized + (Requests = Requests1);
 
     /* Both have the same Reply - unlikely, but possible. */
@@ -694,7 +704,7 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
     we(Reply1),
     Request = _(_, _, _, _, Reply2),
     we(Reply2),
-    Reply1 =?= Reply2? :
+    Reply1 =?= Reply2 :
       AddRequests1 ! Request1 |
 	self;
 

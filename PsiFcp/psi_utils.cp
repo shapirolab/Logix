@@ -132,9 +132,10 @@ dimer(SendMessage, ReceiveMessage, Multiplier, Channel) :-
 	dimer(SendMessage, ReceiveMessage, Channel, Multiplier, _).
 dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen) :-
     Channel = Creator(FcpChannel, _Circuit) :
-      Dimer = dimer(psi(Creator), {SendMessage, ReceiveMessage}, {1, 2},
-				Multiplier, Chosen),
-      write_channel(Dimer, FcpChannel);
+      Dimer = dimer(psi(Creator), Message, {1, 2}, Multiplier, Chosen),
+      write_channel(Dimer, FcpChannel) |
+	unify_without_failure({Chosen?, Message}, {1, SendMessage}),
+	unify_without_failure({Chosen?, Message}, {2, ReceiveMessage});
 
     string(Channel), Channel =\= "_", Channel =\= "" |
 	computation#dictionary(find, Channel, Ch, Reply),
