@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/07/01 07:38:51 $
+		       	$Date: 2002/08/07 07:07:11 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,7 +15,8 @@ Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -export([expand/2]).
 -mode(trust).
--language(compound).
+-language([evaluate,compound,colon]).
+-include(spi_constants).
 
 /*	expand/2
 
@@ -333,6 +334,15 @@ expand(Command, Cs) :-
     Command = at(Service) |
 	service_attributes(Service, Cs);
 
+    string_to_dlist(Command,[X, CHAR_t, CHAR_a], []),
+    CHAR_b =< X, X =< CHAR_d :
+      Cs = [state(No,_,_,_),
+	    to_context(utils # append_strings(["<",No,"> "], IdG))
+           | Commands]\Commands1 |
+	spi_monitor#status(Status),
+	spi_channels(X, Status, Out),
+	stream_out(Out?, true, IdG, Commands, Commands1);
+
     Command = c :
       Cs = [compile |Commands]\Commands ;
     Command = c(Computation) :
@@ -592,3 +602,345 @@ spi_run(Goals, Run, Action, Cs) :-
     otherwise :
        Run = repeat#run(Goals),
        Cs = [to_context(spi_monitor#reset), Action | Commands]\Commands.
+
+
+stream_out(Terms, Done, IdG, Commands, Commands1) + (Indent = "") :-
+
+    Terms ? "+",
+    string_to_dlist(Indent, LI, [CHAR_SPACE]),
+    list_to_string(LI, Indent') |
+	self;
+
+    Terms ? "-",
+    string_to_dlist(Indent, LI, []),
+    LI ? CHAR_SPACE,
+    list_to_string(LI', Indent') |
+	self;
+
+    Terms ? "-",
+    string_to_dlist(Indent, LI, []),
+    LI ? CHAR_SPACE,
+    LI' =?= [] :
+      Indent' = "" |
+	self;
+
+    Terms ? Term, Term =\= "+", Term =\= "-",
+    string_to_dlist(IdG, LIdG, LI),
+    string_to_dlist(Indent, LI, []),
+    list_to_string(LIdG, P) :
+      Commands ! to_context(computation#display(term, Term,
+						[prefix(P), type(ground),
+						known(Done),
+						close(Done, Done')])) |
+	self;
+
+    Terms = [] :
+      Done = _,
+      IdG = _,
+      Indent = _,
+      Commands = Commands1.
+
+/*
+** Kind == ascii b | c | d
+** Status == [..., anchors([BasedAnchor, InstantaneousAnchor)]), ...]
+** Out = display_stream
+*/
+spi_channels(Kind, Status, Out) :-
+
+    Status ? anchors([BasedAnchor, InstantaneousAnchor]) :
+      Status' = _ |
+	extract_anchored_channels(BasedAnchor, Channels, Instantaneous?),
+	extract_anchored_channels(InstantaneousAnchor, Instantaneous, []),
+	format_channels(Kind, Channels, Out, []);
+
+    Status ? _Other,
+    otherwise |
+	self;
+
+    Status =?= [] :
+      Kind = _,
+      Out = [no_anchors].
+
+  extract_anchored_channels(Channel, Channels, Channels1) :-
+
+    vector(Channel),
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =\= SPI_CHANNEL_ANCHOR :
+      Channels ! Channel' |
+	self;
+
+    vector(Channel),
+    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
+    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
+    Type =?= SPI_CHANNEL_ANCHOR :
+      Channels = Channels1.
+
+
+format_channels(Kind, Channels, Out, Out1) :-
+
+    Kind =?= CHAR_a :
+      Channels = _,
+      Out = Out1;
+
+    Kind =\= CHAR_a, Kind =\= CHAR_d,
+    Channels ? Channel,
+    vector(Channel),
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    SendWeight + ReceiveWeight =:= 0 |
+	self;
+
+    Channels ? Channel,
+    vector(Channel),
+    otherwise |
+	format_channel,
+	format_channel_out(FormattedChannel, Out, Out'),
+	self;
+
+    Channels =?= [] :
+      Kind = _,
+      Out = Out1.
+
+  format_channel(Kind, Channel, FormattedChannel) :-
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_BIMOLECULAR,
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    /* Eventually use c-extencion (spifcp.c) to compute weight */
+    Weight := SendWeight + ReceiveWeight,
+    Weight =:= 0,
+    Kind =?= CHAR_d :
+      FormattedChannel = Name - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_BIMOLECULAR,
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    Weight := SendWeight + ReceiveWeight,
+    Weight > 0 |
+	format_channel_b;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_HOMODIMERIZED,
+    read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
+    DimerWeight =:= 0,
+    Kind =?= CHAR_d :
+      FormattedChannel = Name - Refs;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_HOMODIMERIZED,
+    read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
+    DimerWeight > 0 |
+	format_channel_h;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_INSTANTANEOUS,
+    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),  
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor) |
+	count_requests(SendAnchor, SendRequests),
+	count_requests(ReceiveAnchor, ReceiveRequests),
+	format_channel_i;
+
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Type =?= SPI_UNKNOWN,
+    Kind =?= CHAR_d :
+      FormattedChannel = (Name ? Refs);
+
+    otherwise,
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    Kind =?= CHAR_d,
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
+      FormattedChannel = Name(type = Type) - Refs;
+
+    otherwise,
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    Kind =\= CHAR_d :
+      FormattedChannel = Name(type = Type).
+
+  format_channel_b(Channel, Kind, SendWeight, ReceiveWeight, Name, Refs,
+				FormattedChannel) :-
+
+    SendWeight * ReceiveWeight =:= 0,
+    Kind =?= CHAR_b :
+      Channel = _,
+      Name = _,
+      Refs = _,
+      FormattedChannel = "";
+
+    SendWeight =\= 0, ReceiveWeight =\= 0,
+    Kind =?= CHAR_b,
+    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    Weight := Rate * SendWeight * ReceiveWeight :
+      Refs = _,
+      FormattedChannel = Name(Weight);
+
+    Kind =?= CHAR_c,
+    SendWeight =?= 0 :
+      Channel = _,
+      Refs = _,
+      QM = "?",
+      FormattedChannel = Name(QM(ReceiveWeight));
+
+    Kind =?= CHAR_c,
+    ReceiveWeight =?= 0 :
+      Channel = _,
+      Refs = _,
+      FormattedChannel = Name(SendWeight!);
+
+    Kind =?= CHAR_d,
+    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),  
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor) :
+      ReceiveWeight = _,
+      SendWeight = _ |
+	count_requests(SendAnchor, SendRequests),
+	count_requests(ReceiveAnchor, ReceiveRequests),
+	format_d_channel_b.
+
+  format_d_channel_b(Name, Refs, SendRequests, ReceiveRequests,
+				FormattedChannel) :-
+
+    SendRequests =?= 0 :
+      QM = "?",
+      FormattedChannel = Name(QM(ReceiveRequests)) - Refs;
+
+    ReceiveRequests =?= 0 :
+      FormattedChannel = Name(SendRequests!) - Refs;
+
+    otherwise :
+      FormattedChannel = Name(SendRequests, ReceiveRequests) - Refs.
+
+  format_channel_h(Channel, Kind, DimerWeight, Name, Refs,
+				FormattedChannel) :-
+
+    Kind =?= CHAR_b,
+    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    Weight := Rate*DimerWeight*(DimerWeight - 1),
+    Weight =?= 0 :
+      Channel = _,
+      Name = _,
+      Refs = _,
+      FormattedChannel = "";
+
+    Kind =?= CHAR_b,
+    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    Weight := Rate*DimerWeight*(DimerWeight - 1),
+    Weight =\= 0 :
+      Channel = _,
+      Refs = _,
+      FormattedChannel = Name(Weight);
+
+    Kind =?= CHAR_c,
+    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    Weight := Rate*DimerWeight*(DimerWeight - 1) :
+      Channel = _,
+      Refs = _,
+      FormattedChannel = Name(Weight);
+
+    Kind =?= CHAR_d,
+    read_vector(SPI_SEND_ANCHOR, Channel, DimerAnchor) :
+      DimerWeight = _,
+      FormattedChannel = Name(DimerRequests) - Refs |
+	count_requests(DimerAnchor, DimerRequests).
+
+
+  format_channel_i(Kind, SendRequests, ReceiveRequests, Name, Refs,
+				FormattedChannel) :-
+
+    SendRequests =:= 0,
+    ReceiveRequests =:= 0,
+    Kind =?= CHAR_d :
+      FormattedChannel = Name - Refs;
+
+    SendRequests =:= 0,
+    ReceiveRequests =:= 0,
+    Kind =\= CHAR_d :
+      Name = _,
+      Refs = _,
+      FormattedChannel = "";
+
+    SendRequests > 0,
+    ReceiveRequests =:= 0,
+    Kind =?= CHAR_d :
+      FormattedChannel = (Name ! SendRequests - Refs);
+
+    SendRequests > 0,
+    ReceiveRequests =:= 0,
+    Kind =\= CHAR_d :
+      FormattedChannel = (Name ! SendRequests - Refs);
+
+    SendRequests > 0,
+    ReceiveRequests =:= 0,
+    Kind =?= CHAR_c :
+      Refs = _,
+      FormattedChannel = (Name ! SendRequests);
+
+    SendRequests =:= 0,
+    ReceiveRequests > 0,
+    Kind =?= CHAR_d :
+      QM = "?",
+      FormattedChannel = (Name(QM(ReceiveRequests)) - Refs);
+
+    SendRequests =:= 0,
+    ReceiveRequests > 0,
+    Kind =?= CHAR_c :
+      Refs = _,
+      QM = "?",
+      FormattedChannel = Name(QM(ReceiveRequests));
+
+    SendRequests > 0,
+    ReceiveRequests > 0,
+    Kind =?= CHAR_d :
+      FormattedChannel = (Name : blocked(SendRequests, ReceiveRequests) - Refs);
+
+    SendRequests > 0,
+    ReceiveRequests > 0,
+    Kind =\= CHAR_d :
+      Refs = _,
+      FormattedChannel = (Name : blocked(SendRequests, ReceiveRequests));
+
+    otherwise :
+      Kind = _,
+      Name = _,
+      ReceiveRequests = _,
+      Refs = _,
+      SendRequests = _,
+      FormattedChannel = "".
+
+  format_channel_out(FormattedChannel, Out, Out1) :-
+
+    FormattedChannel =?= "" :
+      Out = Out1;
+
+    FormattedChannel =\= "" :
+      Out = [FormattedChannel | Out1].
+    
+
+  count_requests(Anchor, Requests) + (Request = Anchor, Counter = 0) :-
+
+    arg(SPI_MESSAGE_LINKS, Request, Links),
+    read_vector(SPI_NEXT_MS, Links, Request'),
+    Request' =\= Anchor,
+    Request' =\= Request,
+    Counter++ |
+	self;
+
+    otherwise :
+      Anchor = _,
+      Request = _,
+      Requests = Counter.
