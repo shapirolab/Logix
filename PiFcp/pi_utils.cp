@@ -1,4 +1,5 @@
 -language(compound).
+-mode(failsafe)
 -export([make_channel/1, make_channel/4, send/2, receive/2]).
 
 
