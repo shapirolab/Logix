@@ -117,11 +117,12 @@ server(In, Options, Scheduler, Globals) :-
 	self;
 
     In ? global_channels(List) |
-	merge_global_channels(List, Globals, Globals', "", Scheduler),
+	merge_global_channels(List, Globals, Globals', "", Scheduler, _),
 	self;
 
-    In ? global_channels(List, Scheduler^) |
-	merge_global_channels(List, Globals, Globals', "", Scheduler),
+    In ? global_channels(List, ReadyScheduler) |
+	merge_global_channels(List, Globals, Globals', "",
+			      Scheduler, ReadyScheduler),
 	self;
 
     In ? get_global_channels(List),
@@ -202,11 +203,12 @@ server(In, Options, Scheduler, Globals) :-
 **   Call scheduling to create each new Channel.
 */
 
-merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
+merge_global_channels(List, Globals, NewGlobals, Last,
+		      Scheduler, ReadyScheduler) :-
 
     List =?= [] :
       Last = _,
-      Scheduler = _,
+      ReadyScheduler = Scheduler,
       NewGlobals = Globals;
 
     List ? Name(NewChannel, BaseRate),
@@ -311,7 +313,7 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
 
     otherwise :
       Last = _,
-      Scheduler = _,
+      ReadyScheduler = Scheduler,
       NewGlobals = Globals |
 	fail(merge_global_channels(List)).
 
