@@ -109,7 +109,7 @@ sub make_months
 
 sub read_month
 {
-  my $date = (shift) % 10000;
+  my ($date) = (shift) =~ m/.*(\d{4})/;
   my @lines = split /\n/, `rsh $Platform \"cat $SUM_PREFIX.$date\"`;
   (shift @lines) or die "Can't read $SUM_PREFIX.$date";
   return @lines;
