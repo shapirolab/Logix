@@ -2,8 +2,8 @@
 ** PiFcp
 **
 **   Mix(a, b, c) :- 
-**      a ! [] | c ! a;
-**      b ? [] | c ! b.
+**      a ! [] | c ! {a};
+**      b ? [] | c ! {b}.
 **
 ** Compound Fcp
 */
@@ -35,18 +35,16 @@ testin(A, B, C) :-
         pi_monitor#unique_sender("Mix", Sender),
         "Mix.mixed".
 
-  "Mix.mixed"(A, B, C, Choice, Sender) :-
+  "Mix.mixed"(A, B, C, Chosen, Sender) :-
 
     /* Test offer accepted. */
-    Choice = 1,
+    Choice = 1 |
 
-    C = _(VC, _) :
-
-      write_channel("Mix"({B}, 1, _), VC);
+        pi_send("Mix.c"({B}, 1, _), VC);
 
     /* Skip messages that have already been consumed. */    
-    B = NCB(VB, MsB), MsB ? _(_, _, Choice1),
-    not_we(Choice1) :
+    B = NCB(VB, MsB), MsB ? _(_, _, Choice),
+    not_we(Choice) :
       B' = NCB(VB, MsB') |
 	self;
     /* Ignore any message offered by the associated reduction of Mix. */
@@ -54,13 +52,12 @@ testin(A, B, C) :-
       B' = NCB(VB, MsB') |
         "Mix.mixed";
     /* Consume the independantly offered message. */
-    B = NCB(VB, MsB), MsB ? NSB([], N, Choice1),
-    we(Choice1),
-    NSB =\= Sender,
+    B = NCB(VB, MsB), MsB ? NSB([], N, Choice),
+    we(Choice),
+    NSB =\= Sender :
 
-    C = _(VC, _) :
-      Choice1 = N,
+      Choice = N,
       /* Withdraw the offered message. */
-      Choice = 0,
+      Chosen = 0 |
 
-      write_channel("Mix"({A}, 1, _), VC).
+        pi_send("Mix.c", {A}, C).
