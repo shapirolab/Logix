@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:06 $
+		       	$Date: 2002/07/01 07:38:51 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/SpiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -208,37 +208,31 @@ expand(Command, Cs) :-
 			spi_utils # show_tree(Tree, Options, Stream)]) 
 	   | Commands]\Commands;
 
-    Command = record(Goals, File, Limit) :
-      Cs = [spi_record#run(repeat#run(Goals), File, Limit)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit) |
+	spi_run(Goals, Run, spi_record#run(Run, File, Limit), Cs);
 
-    Command = record(Goals, File, Limit, Scale) :
-      Cs = [spi_record#run(repeat#run(Goals), File, Limit, Scale)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit, Scale) |
+	spi_run(Goals, Run, spi_record#run(Run, File, Limit, Scale), Cs);
 
-    Command = record(Goals, File, Limit, Scale, Format) :
-      Cs = [spi_record#run(repeat#run(Goals), File, Limit, Scale, Format)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit, Scale, Format) |
+	spi_run(Goals, Run,
+		    spi_record#run(Run, File, Limit, Scale, Format), Cs);
 
-    Command = run(Goals) :
-      Cs = [repeat#run(Goals)
-	   | Commands]\Commands;
+    Command = run(Goals) |
+	spi_run(Goals, Run, Run, Cs);
 
-    Command = run(Goal, Limit) :
-      Cs = [spi_record#run(Goal, Limit)
-	   | Commands]\Commands;
+    Command = run(Goals, Limit) |
+	spi_run(Goals, Run, spi_record#run(Run, Limit), Cs);
 
-    Command = trace(Goals, File, Limit) :
-      Cs = [spi_trace#run(repeat#run(Goals), File, Limit)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit) |
+	spi_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
 
-    Command = trace(Goals, File, Limit, Scale) :
-      Cs = [spi_trace#run(repeat#run(Goals), File, Limit, Scale)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit, Scale) |
+	spi_run(Goals, Run, spi_trace#run(Run, File, Limit, Scale), Cs);
 
-    Command = trace(Goals, File, Limit, Scale, Format) :
-      Cs = [spi_trace#run(repeat#run(Goals), File, Limit, Scale, Format)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit, Scale, Format) |
+	spi_run(Goals, Run,
+		    spi_trace#run(Run, File, Limit, Scale, Format), Cs);
 
     Command = vtree(Context, Conjunction, Tree) :
       Cs = [widgets # vanilla # tree(Context, Conjunction, Tree) 
@@ -582,3 +576,19 @@ display_variable(Reply, Id, Value, Options, Xs) :-
     otherwise :
       Reply = _, Value = _, Options = _,
       Xs = [computation # display(term, invalid_variable_name(Id))].
+
+spi_run(Goals, Run, Action, Cs) :-
+
+    Goals =?= (Service # _Call) :
+      Run = Goals |
+      Cs = [to_context(spi_monitor#reset), Action, service(Service?)
+	   | Commands]\Commands;
+
+    Goals =?= (# Call) :
+      Run = Service? # Call,
+      Cs = [service(Service), to_context(spi_monitor#reset), Action,
+	    service(Service?) | Commands]\Commands;
+
+    otherwise :
+       Run = repeat#run(Goals),
+       Cs = [to_context(spi_monitor#reset), Action | Commands]\Commands.
