@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2004/05/31 07:05:02 $
+		       	$Date: 2004/10/24 10:17:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.10 $
+			$Revision: 1.11 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -87,6 +87,8 @@ expand(Command, Cs) :-
 		" pr(C,M)            - receive M from spi channel C",
 		" prgcs              - reset Spi public channels",
 		" ps(M,C)            - send M on spifcp channel C",
+		" randomize          - set all new channels to randomize",
+		" serialize          - set all new channels to serialize",
 		" re / re(No)        - resume computation No",
 		" s / s(No)          - suspend computation No",
 		" spc(C)             - Spi channel",
@@ -137,6 +139,14 @@ expand(Command, Cs) :-
 
     Command = ps(M, C, N) :
       Cs = [to_context(spi_utils # send(M, C, N)) | Commands]\Commands;
+
+    Command = randomize :
+      Cs = [to_context([spi_monitor # randomize]) 
+	   | Commands]\Commands;
+
+    Command = serialize :
+      Cs = [to_context([spi_monitor # serialize]) 
+	   | Commands]\Commands;
 
     Command = spc(C) :
       Cs = [to_context([spi_monitor # options(O, O),

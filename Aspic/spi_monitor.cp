@@ -14,6 +14,14 @@ MAXTIME => 99999999999999999999999999999999999999999999999999999999999.0.
 
 DEBUG(Note) => write_channel(debug_note(Note), Scheduler).
 
+DUMMYCHANNEL(NewChannel) =>
+   (Schedule ? NewChannel :
+      make_channel(Dummy, _),
+	new_channel(ChannelName, Channel, 0,
+		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
+		    _, _, Dummy, _, _, SpiOffsets),
+	self).
+
 %STOPPED => DEBUG(stopped(Reply)).
 STOPPED => Reply = _.
 
@@ -44,6 +52,7 @@ initialize(In) :-
       SpiOffset = _,
       Options = [3],		% preset depth - others default
       Ordinal = 1,
+      Randomize = 0,
       SpiOffsets = SPIOFFSETS,
       DefaultWeighter = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
 	processor#link(lookup(spicomm, SpiOffset), OkComm),
@@ -76,10 +85,12 @@ initialize(In) :-
 **    new_channel(ChannelName, Channel, BaseRate)
 **    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    options(New, Old?^)
+**    randomize
 **    record(List?^)
 **    reset
-**    reset(DefaultWeighter, SpiOffsets, Ordinal)
+**    reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal)
 **    scheduler(Scheduler^)
+**    serialize
 **    spifunctions(List)
 **    status(List?^)
 **
@@ -97,13 +108,14 @@ initialize(In) :-
 **                                       {name,channel,baserate}
 **                                       {name,channel,computeweight,baserate}
 **   Scheduler - Channel to Scheduling input
+**     Randomize - state of scheduling: 0 or SPI_RANDOM_FLAG
 **
 ** Side-effects
 **
 **   Close Scheduler at end of In or reset command.
 */
 
-serve(In, Options, Ordinal, SpiOffsets, DefaultWeighter) :-
+serve(In, Options, Ordinal, Randomize, SpiOffsets, DefaultWeighter) :-
 	Publics = [{0, _, -1, ""}, {[], _, -1, ""}],
 	Parameters = [{0, _}, {[], _}],
 	processor#link(lookup(math, MathOffset), OkMath),
@@ -178,23 +190,32 @@ server(In, Options, Scheduler, Parameters, Publics) :-
 	unify_without_failure(Options, Old),
 	self;
 
+    In ? randomize :
+      write_channel(randomize(SPI_RANDOM_FLAG), Scheduler) |
+	self;
+
     In ? record(Record) :
       Record = Record'?,
       write_channel(record(Record'), Scheduler) |
 	self;
 
     In ? reset :
-      write_channel(state(DefaultWeighter, SpiOffsets, _Ordinal), Scheduler),
-      In'' = [reset(DefaultWeighter, SpiOffsets, 1) | In'] |
+      write_channel(state(DefaultWeighter, Randomize, SpiOffsets, _Ordinal),
+		    Scheduler),
+      In'' = [reset(DefaultWeighter?, Randomize?, SpiOffsets?, 1) | In'] |
 	self;
 
-    In ? reset(DefaultWeighter, SpiOffsets, Ordinal) :
+    In ? reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal) :
       Parameters = _,
       Publics = _,
       close_channel(Scheduler) |
 	serve;
 
     In ? scheduler(Scheduler^) |
+	self;
+
+    In ? serialize :
+      write_channel(randomize(0), Scheduler) |
 	self;
 
     In ? spifunctions(List) :
@@ -420,13 +441,15 @@ copy_public(Publics, List, Ends) :-
 
 /***************************** Scheduling ***********************************/ 
 
-start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
+start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
+			DefaultWeighter, Randomize,
 			OkMath):-
 
     OkMath =\= true :
       DefaultWeighter = _,
       MathOffset = _,
       Ordinal = _,
+      Randomize = _,
       SpiOffsets = _,
       make_channel(Scheduler, _) |
 	fail(math_offset(OkMath));
@@ -442,7 +465,8 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 				Scheduler, _Recording, _Debug,
 				Zero, false, _Wakeup,
-				DefaultWeighter, MaxTime, Start_real_time,
+				DefaultWeighter, Randomize,
+				MaxTime, Start_real_time,
 				BasedAnchor, InstantaneousAnchor).
 
   make_channel_anchor(Name, Anchor) :-
@@ -479,12 +503,13 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **    close(ChannelTuple)
 **    close(ChannelTuple, Reply)
 **    cutoff(Now')
-**    default_weighter(Weighter)
+**    default_weighter(NewWeighter)
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel^, BaseRate)
 **    new_channel(ChannelName, Channel^, ComputeWeight, BaseRate)
 **    new_public_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    ordinal(Old?^, New)
+**    randomize(NewRandomize)
 **    record(Record?^)
 **    record_item(Item)
 **    end_record(Record'?^)
@@ -498,7 +523,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **    diagnostic(ApplicationDiagnostic)
 **    spifunctions(CharacterCodes)
 **    pause(Continue)
-**    state(DefaultWeighter^, SpiOffsets^, Ordinal^)
+**    state(DefaultWeighter^, Randomize^, SpiOffsets^, Ordinal^)
 **    status(ListOf NamedDetails^)
 **    step
 **    step(Resume)
@@ -546,13 +571,15 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 
 STATUS => [anchors([BasedAnchor, InstantaneousAnchor]),
 	   cutoff(Cutoff), debug(Debug?), ordinal(Ordinal),
+	   weighter(DefaultWeighter), randomize(Randomize),
 	   now(Now), record(Record?), waiting(Waiting)].
 
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
-		DefaultWeighter, Cutoff, Start_real_time,
+		DefaultWeighter, Randomize,
+		Cutoff, Start_real_time,
 		BasedAnchor, InstantaneousAnchor) :-
 
     Schedule =?= [] :
@@ -563,6 +590,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Now = _,
       MathOffset = _,
       Ordinal = _,
+      Randomize = _,
       Scheduler = _,
       SpiOffsets = _,
       Start_real_time = _,
@@ -854,7 +882,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 			 Start_real_time, Start_real_time'),
 	self;
 
-    Schedule ? state(DefaultWeighter^, SpiOffsets^, Ordinal^) |
+    Schedule ? state(DefaultWeighter^, Randomize^, SpiOffsets^, Ordinal^) |
 	self;		
 
     Schedule ? status(Status) :
@@ -876,6 +904,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
 /***************************************************************************/
+
+    Schedule ? randomize(NewRandomize),
+    Randomize' := NewRandomize /\ SPI_RANDOM_FLAG :
+      Randomize = _ |
+	self;
 
     Schedule ? Other,
     otherwise,
@@ -971,42 +1004,57 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	wait_done.
 
   /* 
-   * Supply default replies to selected requests.
+   * Supply default actions for selected requests.
    * (Could improve (?) close(...) to actually close the channels.)
    */
-  wait_done(Schedule, DefaultWeighter, SpiOffsets, Ordinal, Done) :-
+  wait_done(Schedule, DefaultWeighter, Randomize, SpiOffsets, Ordinal, Done) :-
 
-    Schedule ? new_channel(ChannelName, Channel, _BaseRate) :
+   Schedule ? new_channel(ChannelName, Channel, _Rate) :
       make_channel(Dummy, _) |
 	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    Dummy, _, _, _, SpiOffsets),
-        self;
-	     
-    Schedule ? new_channel(ChannelName, Channel, _ComputeWeight, _BaseRate) :
+		    0, _, Dummy, _, _, SpiOffsets),
+	self;
+
+   Schedule ? new_channel(ChannelName, Channel, _Weight, _Rate) :
       make_channel(Dummy, _) |
 	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    Dummy, _, _, _, SpiOffsets),
-        self;
-	     
-    Schedule ? new_public_channel(ChannelName, Channel,
-				 _ComputeWeight, _BaseRate) :
+		    0, _, Dummy, _, _, SpiOffsets),
+	self;
+
+
+   Schedule ? new_public_channel(ChannelName, Channel, _Weight, _Rate) :
       make_channel(Dummy, _) |
 	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    Dummy, _, _, _, SpiOffsets),
-        self;
+		    0, _, Dummy, _, _, SpiOffsets),
+	self;
 
     Schedule ? close(_, Reply) :
       Reply = [] |
 	self;
 
+    Schedule ? default_weighter(Weighter),
+    arg(SPI_INDEX, SpiOffsets, SpiOffset),
+    SpiOffset =\= unbound |
+	reset_default_weighter(SpiOffset, Weighter, DefaultWeighter,
+				DefaultWeighter'),
+	self;
+
     Schedule ? diagnostic(_) |
+	self;
+
+    Schedule ? randomize(NewRandomize),
+    Randomize' := NewRandomize /\ SPI_RANDOM_FLAG :
+      Randomize = _ |
 	self;
 
     Schedule ? Other,
     Other =\= close(_, _),
+    Other =\= default_weighter(_),
+    Other =\= diagnostic(_),
+    Other =\= randomize(_),
     Other =\= new_channel(_, _, _),
     Other =\= new_channel(_, _, _, _),
     Other =\= new_public_channel(_, _, _, _) |
@@ -1014,12 +1062,13 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     unknown(Schedule),
     known(Done) |
-	self#reset(DefaultWeighter, SpiOffsets, Ordinal).
+	self#reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal).
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
-		DefaultWeighter, Cutoff, Start_real_time,
+		DefaultWeighter, Randomize,
+		Cutoff, Start_real_time,
 		BasedAnchor, InstantaneousAnchor,
 		Reply) :-
 
@@ -1213,17 +1262,18 @@ spifunctions(List, SpiOffset, Close, Post, Step, Index, Rate) :-
 	self.
 
 
-new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
-		 BasedAnchor, InstantaneousAnchor, SpiOffsets) :-
+new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
+		Scheduler, BasedAnchor, InstantaneousAnchor, SpiOffsets) :-
 
-    arg(SPI_INDEX, SpiOffsets, SpiOffset), SpiOffset =\= unbound,
     we(Channel),
-    arg(1, ComputeWeight, WeighterName),
-    convert_to_real(0, Zero) :
+    bitwise_or(SPI_UNKNOWN, Randomize, ChannelType),
+    convert_to_real(0, Zero),
+    arg(SPI_INDEX, SpiOffsets, SpiOffset), SpiOffset =\= unbound,
+    arg(1, ComputeWeight, WeighterName) :
       execute(SpiOffset, {SPI_INDEX, WeighterName, WeighterIndex, Result}),
       make_vector(CHANNEL_SIZE, Channel, _),
       store_vector(SPI_BLOCKED, FALSE, Channel),
-      store_vector(SPI_CHANNEL_TYPE, SPI_UNKNOWN, Channel),
+      store_vector(SPI_CHANNEL_TYPE, ChannelType, Channel),
       store_vector(SPI_CHANNEL_RATE, Zero, Channel),
       store_vector(SPI_CHANNEL_REFS, 1, Channel),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Channel),
@@ -1246,13 +1296,14 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
 				WeighterTuple, Result'),
 	based_or_instantaneous;
 
+    we(Channel),
+    bitwise_or(SPI_UNKNOWN, Randomize, ChannelType),
     convert_to_real(0, Zero),
     arg(SPI_INDEX, SpiOffsets, unbound),
-    ComputeWeight =?= SPI_DEFAULT_WEIGHT_NAME(_),
-    we(Channel) :
+    ComputeWeight =?= SPI_DEFAULT_WEIGHT_NAME(_) :
       make_vector(CHANNEL_SIZE, Channel, _),
       store_vector(SPI_BLOCKED, FALSE, Channel),
-      store_vector(SPI_CHANNEL_TYPE, SPI_UNKNOWN, Channel),
+      store_vector(SPI_CHANNEL_TYPE, ChannelType, Channel),
       store_vector(SPI_CHANNEL_RATE, Zero, Channel),
       store_vector(SPI_CHANNEL_REFS, 1, Channel),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Channel),
@@ -1277,6 +1328,7 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
     otherwise :
       BasedAnchor = _,
       InstantaneousAnchor = _,
+      Randomize = _,
       Scheduler = _,
       SpiOffsets = _,
       Reply = error(new_channel(ChannelName, Channel, BaseRate, ComputeWeight)).
