@@ -1,3 +1,0 @@
-meta.cp and run.cp are identical to the same modules in the base Logix system
-in directory system/compile/control.  This will change when meta-interpretation
-is implemented for ambients.
