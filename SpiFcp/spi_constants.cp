@@ -22,6 +22,13 @@ CHAR_LESS => 60.
 CHAR_GREATER => 62.
 CHAR_QUERY => 63.
 
+CHAR_a => 97.
+CHAR_b => 98.
+CHAR_c => 99.
+CHAR_d => 100.
+CHAR_r => 114.
+CHAR_t => 116.
+
 /* Bounds */
 
 MAXINT => 33554431.
