@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/kernels.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/kernels.c,v 1.4 2004/09/03 11:49:11 bill Exp $ */
 /*
 **	kernels.c  -  kernel predicates.
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2001/11/29 11:19:58 $
+**		       	     $Date: 2004/09/03 11:49:11 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.3 $
+**			     $Revision: 1.4 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/kernels.c,v $
 */
 
@@ -738,18 +738,11 @@ do_exceptions()
 	*HP++ = Ref_Word((Constants[SYSTEM]));
 	{
 	  register heapP PStr;
-	  extern int sys_nerr;
+	  char *EStr;
+	  extern char *strerror(int);
 
-	  if ((((int) *ERRP) < 0) || (((int) *ERRP) >= sys_nerr)) {
-	    PStr = produce_string("Unknown error");
-	  }
-	  else {
-#ifndef LINUX
-	    extern char *sys_errlist[];
-#endif
-
-	    PStr = produce_string("sys_errlist[((int) *ERRP)]");
-	  }	    
+	  EStr = (char *)strerror((int) *ERRP);
+	  PStr = produce_string((EStr == NULL) ? "Unknown error" : EStr);
 	  *HP++ = Ref_Word(PStr);
 	}
 	break;
