@@ -51,24 +51,25 @@ Fcp procedure is the <variable> name of the <channel>.
 A <program> defines a scope which is global to every <process> which is
 defined within the <program>.
 
-A <process> defines a scope within which each <channel> in the <channel_list>s
-of the <process> is defined.  This is implemented by adding each
-corresponding <pi_channel> to the arguments of the Fcp procedure definitions
-and calls in the Fcp procedure.  The arguments of the <process>, within which
-the scope is defined, are also added, unless overridden by a <channel> of the
-same name in the <channel_list> of the <process>. Fcp proceduress within a
-scope are renamed as necessary to avoid conflict with containing or parallel
-scopes.
+A <process> defines a scope within which each channel in the containing
+scope is defined.  This is implemented by adding all of those channels to
+the parameters of the Fcp procedure definitions and to calls within the Fcp
+procedure.
 
-A <new_scope> in a <call> is represented by an invented Fcp process.  The
-brackets (<< >>) define a nested scope. The invented Fcp process and each Fcp
-process representing a <process> within the scope has an augmented argument
+Fcp procedures within a scope are renamed as necessary to avoid naming
+conflicts with procedures in containing or parallel scopes.
+
+A <new_scope> in a <call> is represented by an invented Fcp procedure.  The
+brackets (<< >>) define a nested scope. The invented Fcp procedure and each Fcp
+procedure representing a <process> within the scope has an augmented parameter
 list as above.
 
 Each <process> defined in the outermost scope of the program is like an
 independant program - such <process>es do not share any context.
 
-A PiFcp process is transformed into a procedures as follows.
+
+An PiFcp process is transformed into a procedure as follows.
+
 
 Each <process> in the <program> is transformed into one Fcp procedure with
 the same name, if it does not have an added <channel_list> - i.e. its
@@ -76,30 +77,54 @@ the same name, if it does not have an added <channel_list> - i.e. its
 Fcp procedures.  The first procedure initializes and opens the channels of
 the added <channel_list> and calls the second procedure.
 
-The parameter <channel_list> of the procedure (if any) consists of channels
+The parameter <channel_list> of a <process> (if any) consists of channels
 which have been initialized elsewhere.
 
-A procedure in the outermost scope has no additional parameters.  The set of
-its channels is the base cumulant for all scopes defined within the <process>.
+A procedure in the outermost scope has no additional parameters.  Its
+<channels_list>s form the base channel-set for all scopes which are defined
+within its <process>.  Each <process> defines a scope.
 
-For every inner scope, the cumulated <channel_list>s, if any, of the containing
-scopes, is added to the parameters of each procedure which is defined in the
-scope, providing a "global" context.  The "global" context is followed by the
-explicit <channel>.  When a declared parameter has the same name as an element
-of the cumulant, that <variable> is omitted - i.e. the declared parameter
-overrides the cumulated parameter.  The cumulated set of channels is augmented
-by the parameters and any channels in the added <channel_list>.
+For each procedure defined within a scope, the scope's channel-set is reduced
+by removing any channels which are explicitly declared by the procedure's
+<process>.  The defined parameters of the procedure are the declared parameters
+of its <process>, followed by the reduced channel-set of the containing scope,
+followed by any added channels.  These defined parameters form the base
+channel-set of the inner scope.
 
-When a <receive> in the <guard> instantiates a <channel> whose name matches
-a <channel> which is in the cumulant, that instance and all subsequent
-instances of the <channel> in the same <clause> are renamed.  A local
-<channel> is one which is instantiated by a <receive> in a <guard>, whose
-name does not match any of the cumulated channels.
+When a <receive> in a <synchronized_guard> instantiates a channel whose name
+is in the channel-set of the scope, that instance and all subsequent instances
+of the channel in the same <synchronized)clause> are renamed, by appending a
+single-quote (') to its name.
+
+A channel whose name is not in the channel-set of the scope and which is
+instantiated by a <receive> in a <synchronized_guard>, is referred to as a
+"local" channel.  A local channel is added to the channel-set of its scope,
+within the <synchronized_clause> in which it is declared; this is significant
+for any <new_scope> which is declared within the <body> of the clause.
 
 A <new_scope> within a <process> has the same semantics as a declared
 <process>, except that it can only be activated by commitment of its clause,
 not called; in addition it may contain <process_definitions> whose <process>es
 can only be referred to within the declared scope.
+
+When a <process> includes a <receive> in a <synchronized_clause>, an additional
+procedure is invented.  The first procedure implements all <send> offers, and
+call the additional procedure.  The additional procedure commits to the
+corresponding <body> when the offer is accepted.  In the case of mixed choice
+<synchronized_clauses>, a <synchronized_guard> <receive> <communication> may
+commit instead, in which case all of the offers are withdrawn.
+
+A <call> to <atom> or to <name>( <substitution_list> ) to a <process> within
+the same <program> is implemented by a compound-fcp call to the named
+procedure:  name  or  name+(substitutes)  as appropriate.
+
+A <communication> in the <body> is implemented by a logix library macro.
+
+<external_call> and <logix_call> are implemented by logix Remote Procedure
+Calls - they are not synchronized.
+
+
+Note:
 
 The initial version of the transformation requires that no two <process>es
 within a <program> have the same name.
