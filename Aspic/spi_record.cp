@@ -141,8 +141,8 @@ filter_none(Stream, Events, Out, Scale) :-
 
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_BRACKET | CU]) :
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
 	self;
@@ -235,8 +235,8 @@ filter_process(Stream, Events, Out, Scale) :-
 
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_BRACKET | CU]) :
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
 	self;
@@ -296,8 +296,8 @@ filter_creator(Stream, Events, Out, Scale) :-
     Stream ? end(Name(_ChannelName, Action, CreatedId(UniqueId))),
     number(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_BRACKET | CU]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(Action, CA, [CHAR_SPACE | CI]),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
       Out ! String? |
@@ -362,8 +362,8 @@ filter_creator(Stream, Events, Out, Scale) :-
     Stream ? end(Name(_LocusId, Action, merge(CreatedId(UniqueId)))),
     Action =?= SENT_ARROW,
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_BRACKET | CU]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(" merge- ", CP, CI),
     string_to_dlist(Action, CA, [CHAR_SPACE | CP]),
     string_to_dlist(Name, CN, [CHAR_SPACE | CA]) :
@@ -382,8 +382,8 @@ filter_creator(Stream, Events, Out, Scale) :-
 
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_BRACKET | CU]) :
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
 	self;
@@ -413,8 +413,8 @@ filter_creator(Stream, Events, Out, Scale) :-
 
     FileId =?= CreatedId(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_BRACKET | CU]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(Capability, CC, CI),
     string_to_dlist(Action, CA, CC),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
@@ -545,8 +545,8 @@ filter_full(Stream, Events, Out, Scale) :-
 
     Stream ? end(Name(ChannelName, Action, CreatedId(UniqueId))),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_BRACKET | CU]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(Action, CA, [CHAR_SPACE | CN]),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
@@ -615,8 +615,8 @@ filter_full(Stream, Events, Out, Scale) :-
 
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_BRACKET | CU]) :
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
 	self;
@@ -647,8 +647,8 @@ filter_full(Stream, Events, Out, Scale) :-
 
     FileId =?= CreatedId(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_BRACKET, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_BRACKET | CU]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(Capability, CC, CN),
     string_to_dlist(Action, CA, CC),

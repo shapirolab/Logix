@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:10 $
+		       	$Date: 2003/03/12 14:32:22 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -402,12 +402,14 @@ verify_communication_channel(Name, ChannelName, ChannelNames, Locals,
 verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
 		Errors, NextErrors) :-
 
-    string(ChannelName), ChannelName =\= NULL, ChannelName =\= EMPTY |
+    string(ChannelName),
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z |
 	defined_channel;
 
     ChannelName = `ChannelName',
     nth_char(1, ChannelName', C),
-    ascii('A') =< C, C =< ascii('Z') |
+    CHAR_A =< C, C =< CHAR_Z |
 	defined_channel;
 
     otherwise :

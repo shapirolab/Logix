@@ -4,16 +4,16 @@ Precompiler for Stochastic Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:09 $
+		       	$Date: 2003/03/12 14:32:35 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--language(compound).
+-language([evaluate, compound, colon]).
 -export([concatenate_lists/2, find_logix_variables/3, make_lhs_tuple/3,
 	 make_predicate_list/3,
 	 untuple_predicate_list/3, untuple_predicate_list/4,
@@ -23,6 +23,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 	 tuple_to_atom/2, update_process_mode/3,
 	 verify_channel/7, verify_communication_channel/7]).
 
+-include(spi_constants).
 
 update_process_mode(Mode, GuardMode, NewMode) :-
 
@@ -315,7 +316,8 @@ verify_communication_channel(Name, ChannelName, ChannelNames, Locals,
 				OkChannelName, Errors, NextErrors) :-
 
     string(ChannelName),
-    nth_char(1, ChannelName, C), ascii(a) =< C, C =< ascii(z) |
+    nth_char(1, ChannelName, C),
+    CHAR_a =< C, C =< CHAR_z |
 	verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
 				Errors, NextErrors);
 
@@ -334,7 +336,7 @@ verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
 
     ChannelName = `ChannelName',
     nth_char(1, ChannelName', C),
-    ascii('A') =< C, C =< ascii('Z') |
+    CHAR_A =< C, C =< CHAR_Z |
 	defined_channel;
 
     otherwise :
