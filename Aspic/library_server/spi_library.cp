@@ -15,8 +15,6 @@ spi_channel(Channel) :-
 spi_channel(Channel, Creator) :-
 	spi_channel(Channel, Creator, infinite).
 spi_channel(Channel, Creator, BaseRate) :-
-	spi_channel(Channel, Creator, BaseRate).
-spi_channel(Channel, Creator, BaseRate) :-
     number(BaseRate) :
       Channel = Channel'? |
 	spi_monitor#new_channel(Creator, Channel', BaseRate);
