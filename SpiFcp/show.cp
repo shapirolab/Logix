@@ -129,9 +129,10 @@ format_channel(Channel, CH, Left, Right) :-
 	read_vector(SPI_CHANNEL_NAME, Prev, NameP),
 	read_vector(SPI_CHANNEL_TYPE, Prev, TypeP),
 */
+    read_vector(SPI_WEIGHT_TUPLE,     Channel, WeighterTuple),
     read_vector(SPI_CHANNEL_NAME,     Channel, Name) :
-      CH = Name(TypeRate, Send, Receive) - BlockedRefs |
-	format_typerate(Type, Rate, TypeRate, Mid1, Right),
+      CH = Name(TypeId, Send, Receive) - BlockedRefs |
+	format_typerate(Type, Rate, WeighterTuple, TypeId, Mid1, Right),
 	format_blockedrefs(Blocked, Refs, BlockedRefs, Mid2, Mid1),
 	format_send(Sends, WeightS, Send, Mid3, Mid2),
 	format_receive(Receives, WeightR, Receive, Left, Mid3);
@@ -140,63 +141,68 @@ format_channel(Channel, CH, Left, Right) :-
       CH = Channel,
       Left = Right.
 
-format_typerate(Type, Rate, TypeRate, Left, Right) :-
+format_typerate(Type, Rate, WeighterTuple, TypeId, Left, Right) :-
 
     bitwise_and(Type, SPI_TYPE_MASK, BasicType),
     bitwise_and(Type, SPI_PRIME_FLAG, Primed),
     bitwise_and(Type, SPI_RANDOM_FLAG, Randomized) |
-	list_randomized,
-	list_basic_type,
-	list_primed,
-	format_typelist_rate.
+	format_basic_type,
+	format_weighter,
+        format_randomized.
 
-  list_randomized(Randomized, TypeList, BasicList) :-
-    Randomized =?= 0 :
-      TypeList = BasicList;
-    Randomized =\= 0 :
-      TypeList = [CHAR_HASH | BasicList].
+   format_basic_type(BasicType, TypeName) :-
 
-   list_basic_type(BasicType, BasicList, PrimeTail) :-
+    BasicType =?= SPI_CHANNEL_ANCHOR :
+      TypeName = anchor;
 
-    BasicType =?= SPI_CHANNEL_ANCHOR,
-    string_to_dlist(anchor, L, PrimeTail) :
-      BasicList = L;
+    BasicType =?= SPI_UNKNOWN :
+      TypeName = unknown;
 
-    BasicType =?= SPI_UNKNOWN,
-    string_to_dlist(unknown, L, PrimeTail) :
-      BasicList = L;
+    BasicType =?= SPI_BIMOLECULAR :
+      TypeName = bimolecular;
 
-    BasicType =?= SPI_BIMOLECULAR,
-    string_to_dlist(bimolecular, L, PrimeTail) :
-      BasicList = L;
+    BasicType =?= SPI_HOMODIMERIZED :
+      TypeName = homodimerized;
 
-    BasicType =?= SPI_HOMODIMERIZED,
-    string_to_dlist(homodimerized, L, PrimeTail) :
-      BasicList = L;
+    BasicType =?= SPI_INSTANTANEOUS :
+      TypeName = instantaneous;
 
-    BasicType =?= SPI_INSTANTANEOUS,
-    string_to_dlist(instantaneous, L, PrimeTail) :
-      BasicList = L;
-
-    BasicType =?= SPI_SINK,
-    string_to_dlist(sink, L, PrimeTail) :
-      BasicList = L;
+    BasicType =?= SPI_SINK :
+      TypeName = sink;
 
     otherwise,
-    convert_to_string(BasicType, S),
-    string_to_dlist(S, L, PrimeTail) :
-      BasicList = L.
+    convert_to_string(BasicType, S) :
+      TypeName = S.
 
-  list_primed(Primed, PrimeTail) :-
-    Primed =?= 0 :
-      PrimeTail = [];
-    Primed =\= 0 :
-      PrimeTail = [CHAR_PRIME].
+  format_weighter(TypeName, Rate, Primed, WeighterTuple, TypeRate) :-
 
-  format_typelist_rate(TypeList, Rate, TypeRate, Left,Right) :-
-    list_to_string(TypeList, TypeName) :
-      TypeRate = TypeName(Rate),
+    Primed =?= 0,
+    WeighterTuple =?= SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
+	format_normal_typerate;
+
+    otherwise :
+      Primed = _,
+      TypeRate = TypeName(Rate, WeighterTuple).
+
+  format_normal_typerate(TypeName, Rate, TypeRate) :-
+
+    typeName =\= anchor, TypeName =\= instantaneous, typeName =\= sink :
+       TypeRate = TypeName(Rate);
+
+    otherwise :
+      Rate = _,
+      TypeRate = TypeName.
+
+  format_randomized(Randomized, TypeRate, TypeId, Left, Right) :-
+    known(TypeRate),
+    Randomized =?= 0 :
+      TypeId = TypeRate,
+      Left = Right;
+    known(TypeRate),
+    Randomized =\= 0 :
+      TypeId = #TypeRate,
       Left = Right.
+
 
 format_blockedrefs(Blocked, Refs, BlockedRefs, Left, Right) :-
 
