@@ -43,6 +43,7 @@ $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 	     sh   => 1,
 	     tcsh => 1,
 # Added for Solaris
+	     ncdwm => 1,
 	     xterm => 1,
 	     "/X11/bin/xterm" => 1,
 	     "-tcsh" => 1,
@@ -394,16 +395,14 @@ sub send_to_coventry
     foreach $process (values(%current_processes)) {
 	$pid = $process->[3];
 	$previous = $previous_processes{$pid};
-	if ($previous) {
+	if (defined($previous)) {
 	    $user = $process->[0];
 	    $nice = $process->[1];
 	    $pid = $process->[3];
 	    $seconds = $previous->[2];
 	    $used = $process->[2] - $seconds;
 
-	    if ($nice == $NICE_COVENTRY or
-		($nice == $previous->[1] and
-		 $used >= $GREED_BOUND)) {
+	    if ($nice == $NICE_COVENTRY or $used >= $GREED_BOUND) {
 		$changed = $seconds >= 
 		    $THRESHHOLD*($NICE_RADIX**($nice - $NICE_DEFAULT));
 		$nice += $NICE_INCR if $changed;
@@ -411,8 +410,7 @@ sub send_to_coventry
 		$process =
 		    [$process->[0], $nice, $process->[2],
 		     $pid, $process->[4]];
-		$previous = $freed_processes{$freedid};
-		if ($previous) {
+		if (defined($freed_processes{$freedid})) {
 		    push @pids, $pid;
 		    push @coventry, $process;
 if ($debug) {# debug
@@ -427,7 +425,7 @@ if ($debug) {# debug
 		    if ($changed) {
 			setnice($pid, $nice);
 if ($debug) {# debug
-  print_refed_process("adjusted in society", $process);
+  print_refed_process("re-niced in society", $process);
 }# endebug
 		    }
 		}
@@ -454,16 +452,17 @@ sub free_from_coventry
 
     undef(@coventry);
     while ($#banned_processes >= 0) {
+	$banned = shift(@banned_processes);
 	$user = $banned->[0];
 	$nice = $banned->[1];
 	$freedid = "$user($nice)";
-	$banned = shift(@banned_processes);
-	if ($freed_processes{$freedid} or $banned->[1] == $NICE_COVENTRY) {
+	if (defined($freed_processes{$freedid}) or
+	    $banned->[1] == $NICE_COVENTRY) {
 	    # A process of this user with the same nice value has already
 	    # been freed, or this process has been permanently relegated! 
 	    push(@coventry, $banned);
-if ($debug) {# debug
-  print_refed_process("confined in coventry", $banned);
+if ($debug and $banned->[1] == $NICE_COVENTRY) {# debug
+  print_refed_process("forever in coventry", $banned);
 }# endebug
 	}
 	else {
