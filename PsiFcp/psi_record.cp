@@ -1,6 +1,6 @@
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([run/2, run/3]).
+-export([run/2, run/3, run/4]).
 
 EOL => 10.
 PLUS => 43.
@@ -22,10 +22,12 @@ run(Goal, Cutoff) :-
     otherwise |
 	fail(run(Goal, Cutoff)).
 
-run(Goal, File, Cutoff) :-
+run(Goal, File, Cutoff) + (Scale = 1) :-
     Goal =?= _#_,
     string(File), File =\= "",
-    Cutoff >= 0 |
+    Cutoff >= 0,
+    convert_to_real(Scale, Scale'),
+    0 < Scale' |
 	psi_monitor#scheduler(Scheduler),
 	write_channel(record(Stream), Scheduler, Scheduler'),
 	write_channel(cutoff(Cutoff), Scheduler'),
@@ -34,7 +36,8 @@ run(Goal, File, Cutoff) :-
 	filter_data,
 	run_ok;
 
-    otherwise |
+    otherwise :
+      Scale = _ |
 	fail(run(Goal, File, Cutoff)).
 
   run_ok(File, Ok) :-
@@ -47,13 +50,13 @@ run(Goal, File, Cutoff) :-
 		write"(File) - Ok)).
 
 
-filter_data(Stream, Events, Out) :-
+filter_data(Stream, Events, Out, Scale) :-
 
     Stream ? Number, number(Number),
-    convert_to_string(Number, N),
-    string_to_dlist(N, DN, [EOL]),
-    list_to_string(DN, String) :
-      Out ! String |
+    Number' := Scale*Number :
+      Out ! Number',
+      Out' ! "
+" |
 	self;
 
     Stream ? start(Name), string(Name),
@@ -76,10 +79,12 @@ filter_data(Stream, Events, Out) :-
 
     Stream =?= [] :
       Events = _,
+      Scale = _,
       Out = [] ;
 
     otherwise :
       Events = _,
+      Scale = _,
       Out = [QUERY, EOL] |
 	fail(Stream);
 
@@ -90,4 +95,5 @@ filter_data(Stream, Events, Out) :-
     unknown(Stream),
     Events ? aborted :
       Events' = _,
+      Scale = _,
       Out = [].

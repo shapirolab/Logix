@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/09 10:25:02 $
+		       	$Date: 2000/11/22 12:56:39 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PsiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -62,6 +62,9 @@ expand(Command, Cs) :-
     Command = pc(C, S, B) :
       Cs = [to_context(psi_utils # make_channel(C, S, B)) | Commands]\Commands;
 
+    Command = pc(C, S, B, W) :
+      Cs = [to_context(psi_utils # make_channel(C,S,B,W)) | Commands]\Commands;
+
     Command = pdb(Service) :
       Cs = [to_context(psi_monitor # options(O, O)),
 	    psidbg # interpret(Name?, Service, O)
@@ -90,7 +93,9 @@ expand(Command, Cs) :-
 		" spr / spr(No)      - Psi resolvent of computation No",
 		" ctree(Tree)        - Close a vanilla tree",
 		" ptree(Tree)        - Psi execution tree",
-		" record(GS, F, L)   - run Goals, record events on File until Limit.",
+		" record(GS, F, L)   - run Goals, record File until Limit.",
+		" record(GS, F, L, S)- run Goals, record File until Limit -",
+		"                      scaled by Scale.",
 		" run(GS)            - run Goals.",
 		" run(GS, L)         - run Goals until Limit.",
 		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
@@ -197,6 +202,10 @@ expand(Command, Cs) :-
 
     Command = record(Goals, File, Limit) :
       Cs = [psi_record#run(repeat#run(Goals), File, Limit)
+	   | Commands]\Commands;
+
+    Command = record(Goals, File, Limit, Scale) :
+      Cs = [psi_record#run(repeat#run(Goals), File, Limit, Scale)
 	   | Commands]\Commands;
 
     Command = run(Goals) :
