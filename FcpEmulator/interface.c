@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.1 1999/07/01 07:15:09 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.2 1999/11/28 12:33:14 bill Exp $ */
 /*
 **	interface.c - unix interface functions.
 **
 **	Michael Hirsch and Bill Silverman		February 1986
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 1999/07/01 07:15:09 $
+**		       	     $Date: 1999/11/28 12:33:14 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.1 $
+**			     $Revision: 1.2 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
 **
 */
@@ -57,7 +57,8 @@ extern FILE *OutFile;
 #define	Date	4
 #define UserData 5
 
-#define	DateLEN	12
+/* #define	DateLEN	12 */
+#define	DateLEN	14
 #define	GmtLEN	8
 
 #define	writable(P,T)					\
@@ -278,10 +279,14 @@ interface(T)
 	if ((strcmp(op, "gm2local")) || (Arity != 3))
 	  return(False);
 	string_var(GmTime, ++T);
-	if ((Str_Length(GmTime) != 12) ||
-	    (strcmp("000000000000", (char *) (GmTime+2)) > 0) ||
-	    (strcmp("999999999999", (char *) (GmTime+2)) < 0))
-	  return(False);
+	if ((Str_Length(GmTime) != 14) ||
+	    (strcmp("00000000000000", (char *) (GmTime+2)) > 0) ||
+	    (strcmp("99999999999999", (char *) (GmTime+2)) < 0)) {
+	  if ((Str_Length(GmTime) != 12) ||
+	      (strcmp("000000000000", (char *) (GmTime+2)) > 0) ||
+	      (strcmp("999999999999", (char *) (GmTime+2)) < 0))
+	    return(False);
+	}
 	writable(DateTime, ++T);
 	unpackdate((char *) (GmTime+2), &(time));
 	time.tm_isdst = 0;
@@ -431,12 +436,23 @@ unpackdate(String, time)
      struct tm *time;
      char *String;
 {
-  time->tm_year = (String[0]-'0')*10 + String[1] - '0';
-  time->tm_mon  = (String[2]-'0')*10 + String[3] - '1';
-  time->tm_mday = (String[4]-'0')*10 + String[5] - '0';
-  time->tm_hour = (String[6]-'0')*10 + String[7] - '0';
-  time->tm_min  = (String[8]-'0')*10 + String[9] - '0';
-  time->tm_sec  = (String[10]-'0')*10 + String[11] - '0';
+  if (String[12] && String[13]) {
+    time->tm_year = (String[0]-'0')*1000 + (String[1]-'0')*100 +
+                    (String[2]-'0')*10  + String[3] - '0';
+    time->tm_mon  = (String[4]-'0')*10 + String[5] - '1';
+    time->tm_mday = (String[6]-'0')*10 + String[7] - '0';
+    time->tm_hour = (String[8]-'0')*10 + String[9] - '0';
+    time->tm_min  = (String[10]-'0')*10 + String[11] - '0';
+    time->tm_sec  = (String[12]-'0')*10 + String[13] - '0';
+  }
+  else {
+    time->tm_year = (String[0]-'0')*10 + String[1] - '0';
+    time->tm_mon  = (String[2]-'0')*10 + String[3] - '1';
+    time->tm_mday = (String[4]-'0')*10 + String[5] - '0';
+    time->tm_hour = (String[6]-'0')*10 + String[7] - '0';
+    time->tm_min  = (String[8]-'0')*10 + String[9] - '0';
+    time->tm_sec  = (String[10]-'0')*10 + String[11] - '0';
+  }
   time->tm_wday = 1;
   time->tm_yday = 0;
 }

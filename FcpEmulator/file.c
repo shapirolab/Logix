@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/file.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/file.c,v 1.2 1999/11/28 12:33:13 bill Exp $ */
 /*
 **	file.c - foreign kernals for handling files.
 **
@@ -37,7 +37,8 @@ extern FILE *DbgFile;
 #include	"global.h"
 #include	"macros.h"
 
-#define	DATELEN		12
+#define	DATELEN		14
+/*#define	DATELEN		12 */
 
 #define	GET_FILE	1
 #define	GET_MODULE	2
@@ -479,6 +480,7 @@ static getworkingdirectory(A)
   asgn(*Directory, Directory, Ref_Word(Pstr));
   return(True);
 }
+/*
 
 packdate(time, String)
      struct tm *time;
@@ -500,6 +502,32 @@ packdate(time, String)
   String[13] = '\0';
   String[14] = '\0';
   String[15] = '\0';
+}
+*/
+packdate(time, String)
+     struct tm *time;
+     char *String;
+{
+  String[0]  = ((time->tm_year+1900) / 1000) % 10 + '0';
+  String[1]  = ((time->tm_year+1900) / 100) % 10 + '0';
+  String[2]  = (time->tm_year / 10) % 10 + '0';
+  String[3]  = time->tm_year    % 10 + '0';
+  String[4]  = time->tm_mon  /  9 + '0';
+  String[5]  = (time->tm_mon+1) % 10 + '0';
+  String[6]  = time->tm_mday / 10 + '0';
+  String[7]  = time->tm_mday % 10 + '0';
+  String[8]  = time->tm_hour / 10 + '0';
+  String[9]  = time->tm_hour % 10 + '0';
+  String[10] = time->tm_min  / 10 + '0';
+  String[11] = time->tm_min  % 10 + '0';
+  String[12] = time->tm_sec  / 10 + '0';
+  String[13] = time->tm_sec  % 10 + '0';
+  String[14] = '\0';
+  String[15] = '\0';
+  String[16] = '\0';
+  String[17] = '\0';
+  String[18] = '\0';
+  String[19] = '\0';
 }
 
 
