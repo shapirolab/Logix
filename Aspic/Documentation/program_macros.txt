@@ -3,30 +3,37 @@ program.  They have the general form:
 
     <program_macro_name>(<program_macro_arguments>)
 
-    <program_macro_arguments> ::= <logix_variable>
-                                  <program_input_arguments>
-                                  <program_input_arguments> , <logix_variable>
+    <program_macro_arguments> ::=
+                        <logix_variable>
+                        <program_input_arguments>
+                        <program_input_arguments> , <logix_variable>
 
-    <program_input_arguments> ::= <simple_logix_arguments>
-                                  <channels>
-                                  <simple_logix_arguments> , <channels>
+    <program_input_arguments> ::=
+                        <simple_logix_arguments>
+                        <channels>
+                        <simple_logix_arguments> , <channels>
 
-    <simple_logix_arguments>  ::= <integer>
-                                  <real>
-                                  <string>
-                                  []
-                                  <logix_variable>?
+    <simple_logix_arguments> ::=
+                        <simple_logix_argument>
+                        <simple_logix_argument> , <simple_logix_arguments>
 
-    <channels>                ::= <channel>
-                                  <channel> , <channels>
+    <simple_logix_argument>  ::= <integer>
+                                 <real>
+                                 <string>
+                                 []
+                                 <logix_variable>?
+
+    <channels>               ::= <channel>
+                                 <channel> , <channels>
 
 Where a <real> is designated, an <integer> or a <string> representing a
-real value may appear - it is converted to the correspondig real vale before
-the macro is performed.
+real value may appear - it is converted to the correspondig real value before
+the macro is performed.  This allows real values to be represented in the
+conventional form including an exponent.
 
-A read-only variable (<logix_variable>?) may appear in place of any of the
-<simple_logix_arguments>.  The <logix_variable> must be instantiated before
-the macoro can be performed.
+A read-only variable (<logix_variable>?) may appear in place of any
+<simple_logix_argument>.  The <logix_variable> must be instantiated to the
+appropriate constant before the macro can be performed.
 
 The <logix_variable> is optional.  Unless otherwise indicated, it is set
 to  true  when the macro is successfully completed.
@@ -36,9 +43,9 @@ The following program macros are defined.
 
   set_base_rate(<real> , <channels> , <logix_variable>)
 
-The baserate of each of the designated channels is set to the the real value.
-If the first argument is not (convertible to) real, the <logix_variable> is
-set to  false(<non_real>, [<channels>]) .
+The baserate of each of the designated channels is set to the the <real>'s
+value.  If the first argument is not (convertible to) real, the
+<logix_variable> is set to  false(<non_real>, [<channels>]) .
 
   randomize_messages(<channels> , <logix_variable>)
 
@@ -49,6 +56,6 @@ transmission.
   serialize_messages(<channels> , <logix_variable>)
 
 Each of the designated channels is set to select a send and a receive (or two
-dimer) offers to be completed on a first-come-first-served basis when the 
+dimer) offers to be completed on a first-come-first-served basis, when the 
 channel is chosen for transmission.
 
