@@ -90,6 +90,27 @@ spi_transmitted(Id, Tag, Chosen, Message, Value) :-
       Message = _,
       Id = _,
       Value = _.
+
+spi_update_channel_refs(List, S1, S2) :-
+
+    List ? Add,
+    Add =?= Increment(Channel),
+    integer(Increment),
+    vector(Channel),
+    arity(Channel, CHANNEL_SIZE),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Refs += Increment :
+      store_vector(SPI_CHANNEL_REFS, Refs', Channel) |
+	self;
+
+    List ? Close,
+    Close = close(Channels),
+    tuple(Channels) :
+      List' = _,
+      write_channel(Close, S1, S2);
+
+    List =?= [] :
+      S2 = S1.
 "
 
 	| true.
