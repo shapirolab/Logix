@@ -1,0 +1,53 @@
+Some users of the SGI servers (wisdom, bina) flood the system with
+multiple compute-intensive processes (usually matlab).  This results
+in unfair and inefficient use of the processors.
+
+To deal with this problem, and to bring some order to utilization of
+these machines, a daemon will be written to schedule machine use by
+such processes.
+
+The daemon maintains a list of currently running processes, called
+"society" and a list of "anti-social" processes, called "coventry".
+
+Periodically (e.g. at one minute intervals), the daemon examines all 
+running processes.
+
+   1. Some processes are ignored.
+
+   2. Anti-social processes are removed from society and sent to coventry.
+      This is done by resetting the nice value of such a process, to some 
+      value, called "nasty", which is higher than the default nice value,
+      called "normal".  Its current nice value + 1 is saved.
+
+   3. Each new process whose nice value is at least normal and less than
+      nasty, is added to society, unless it is ignored.  A new process
+      whose nice value is nasty is sent to coventry with saved value nasty.
+
+   4. A process in coventry may be returned to society with its saved nice
+      value.
+
+A process is ignored, if its owner is in a list of privileged owners or is
+a member of one of a list of privileged groups, its scheduling class is in 
+a list of exceptional scheduling classes, or its command is in a list of
+distinguished command.  Defaults for these lists are:
+
+   * owners:   daemon, root, 60001
+   * groups:   staff, system, wheel
+   * classes:  Operating System, Real Time
+   * commands: csh, sh, tcsh
+
+The lists may be set or augmented when the daemon is launched.
+
+A process in society is anti-social if: 
+
+  * its nice value is at least normal and is less than nasty;
+  * it has used at least 10**n minute of CPU since it started,
+    where n = its current nice value minus normal;
+  * it used at least some parametric percentage of the cpu time in the
+    last monitored interval.
+
+A process may be returned from coventry to society if:
+
+  * its saved nice value is not nasty;
+  * there is no process in society with the same owner whose current
+    nice value is the same as the saved value of the process in coventry.
