@@ -1,0 +1,4 @@
+The module tokenize.cp is manually optimized through revision 1.5.
+Starting with revision 1.6, it is naively coded for automatic
+optimization by the Decision Graph compiler.  This version runs
+INCREDIBLY slow when compiled by the WAM compiler.

@@ -1,0 +1,108 @@
+#!/usr/bin/sh
+# This Editor Script allows collaborative editing on locally accessible files
+# by using RCS to manage revisions and $1 as the Editor
+#
+# Syntax: rcs_document_editor Editor FilePath
+# Uses the following variables:
+#	F	file being edited
+# Returns the following exit statuses:
+#	0	no error
+#	51	FilePath doesn't exist
+#	52	FilePath is a symbolic link
+#	53	checkout failed
+#	54	can't create RCS directory
+#	55 	can't chmod RCS directory
+#	56	can't check-in file when no ,v existed
+#	57	final check-in failed
+#	58	final check-out failed
+
+
+
+# First make sure that the file exists and is not a link
+if(test -h $2) then
+	echo error:editing is NOT permitted for symbolic link $2; exit 52
+elif(test -f $2) then
+	F=$2; FF=$F
+elif(test -d $2) then
+	F=$2/index.html; FF=$2/index.html
+elif(test -f $2,v) then
+	if(`co -q $2,v $2`) then
+		echo checking out master file;
+		F=$2; FF=$F
+	else
+		echo error:checkout failed for $2,v; exit 53
+	fi
+elif(test -f `dirname $2`/RCS/`basename $2`,v) then
+	FFF=`dirname $2`/RCS/`basename $2`;
+	if(`co -q $FFF,v $FFF`) then
+		echo checking out master file from RCS subdirectory;
+		F=$2; FF=$F
+	else
+		error:echo checkout failed for RCS/$2,v; exit 53
+	fi
+elif(touch $2)  then
+	F=$2; FF=$F
+else echo error:No such file or directory, and could not create $2;
+     exit 51
+fi
+
+# if ,v file exists, check it out; if not, look for it in the RCS directory
+if(test -f $F,v) then
+	if(`co -l -q $F,v $F`) then
+		echo checkout succeeded
+	else
+		echo error:checkout failed for $F; exit 53
+	fi
+else
+	F=`dirname $F`/RCS/`basename $F`; 
+	if(test -f $F,v) then
+		if(`co -l -q $F`) then
+			echo checkout succeeded
+		else
+			echo error:checkout failed for $F; exit 53
+		fi
+# no ,v file exists so create an RCS directory if it doesn't exist; then
+# check in the working file and check it back out into the RCS directory
+	else
+		if (test -d `dirname $F`) then
+			echo RCS directory exists
+		else
+			if(`mkdir \`dirname $F\``) then
+				if(`chmod g+w \`dirname $F\``) then
+					echo created RCS directory;
+				else
+			    echo error:cannot make the RCS dir group writable;
+				 exit 55
+				fi 
+			else
+			    echo error:could not create RCS directory;
+				 exit 54
+			fi
+		fi
+		if(`ci -u -q -t"/dev/null" $FF`) then
+			if(`co -l -q $F`) then
+			echo checkout succeeded
+			else echo error:checkout failed for $F;
+			     exit 53
+			fi
+		else echo error:initial checkin failed for $F;
+		     exit 56
+		fi
+	fi
+fi
+
+# file checked out and ready for edit - so spawn the editor
+$1 $F
+
+# when editor completes check the file back in and check back out
+if(ci -m"updated by rcs_document_editor" -q -f $F) then
+	# check out again in read-only mode
+	if(`co -q $F,v $FF`) then 
+		echo final checkin and checkout succeeded;
+		exit 0
+	else echo error:final checkout failed for $FF;
+	     exit 58
+	fi
+else echo error:final check-in failed for $F;
+     exit 57
+fi

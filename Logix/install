@@ -1,0 +1,113 @@
+#! /bin/sh
+#
+# Install the Logix system.
+#
+# This shell script creates five files
+#
+#   LogixCommand		- an executable file (CurrentDir/Logix)
+#   Emulator/fcp		- the fcp emulator
+#   system/.logix_cold_start	- a Logix script which builds a saved version
+#				  of the Logix System
+#   SuperDir/.Logix		- a Logix script which terminates the save
+#				  of the Logix System (preset system/.Logix)
+#   SavedLogix			- a saved version of the Logix System
+#				  (preset saved_Logix)
+#
+# The file  system/.logix_cold_start  is removed following the run.
+# The file  SuperDir/.Logix  is removed following the run.
+# Arguments:
+#
+# 	1 : Emulator (default SPARC)
+#	2 : Emulator arguments (may be quoted - e.g. "-h6000 -tr100000")
+#
+
+
+CurrentDir=${PWD:-`pwd`}
+
+# To alter user directory super, adjust the following definitions.
+SuperDir=${CurrentDir}/system
+SuperId=[system]
+
+# To alter system command name, change the following definitions.
+Emulator=${1-SPARC}
+Logix=`echo ${Emulator} | tr A-Z a-z`_logix
+Restart=.logix
+
+CommandDir=${CurrentDir}
+
+EmulatorDir=${CurrentDir}/${Emulator}
+FcpPath=$EmulatorDir/fcp
+
+echo making ${FcpPath} ...
+
+cd ${EmulatorDir}
+make
+cd ${CurrentDir}
+
+BinPath=${CurrentDir}/Bin
+SavedLogix=saved_${Logix}
+SavePath=${CurrentDir}/${SavedLogix}
+BootPath=${BinPath}/boot.bin
+BootTerminal=${BinPath}/boot_terminal.bin
+TerminalObject=${CurrentDir}/boot_terminal.bin
+ColdPath=${CurrentDir}/system/.logix_cold_start
+ClosePath=${SuperDir}/${Restart}
+
+LogixCommand=${CommandDir}/${Logix}
+
+echo writing ${LogixCommand}
+rm -f ${LogixCommand}
+cat <<EOF > ${LogixCommand}
+#! /bin/sh
+exec ${FcpPath} \$* ${SavePath}
+EOF
+chmod 775 ${LogixCommand}
+
+echo writing ${ColdPath}
+
+cat <<EOF > ${ColdPath}
+% *****************  L O G I X   C O L D   S T A R T **********************
+shell_computation(delegate_unknown);shell_computation(ignore_lost)
+to_context(processor#link(lookup(ctl,_^)))
+load(get_module)
+cd(transform)
+    load([dfcp,evaluate,inherit])
+cd(super#library_server)
+    to_context(system_text#string(SystemText))
+    defer(SystemText,close(system_text))
+cd(super#"Doors")
+    to_context(doors_text#string(DoorsText))
+    defer(DoorsText,close(doors_text))
+cd(super#compile)
+    to_context(string(SystemText,[],_^))
+    unbind(SystemText)
+    to_context(string(DoorsText,[],_^))
+    unbind(DoorsText)
+    load(control)
+cd(super#ndg)
+load([phase0,phase1,phase2,assemble])
+cd(${SuperId})
+reset;service(error)
+freeze_heap
+defer(Saved,to_context(shell_server#user('${CurrentDir}','${Restart}')))
+unbind;									%
+  to_context(save#save('${SavedLogix}',"Welcome to ${Emulator} Logix !",Saved))
+	
+EOF
+
+echo writing ${ClosePath}
+rm -f ${ClosePath}
+cat <<EOF > ${ClosePath}
+to_context(processor#device(quit))
+EOF
+
+echo building ${SavePath} ...
+if test $1; then shift
+fi
+rm -f ${SavePath} ${TerminalObject}
+cp ${BootTerminal} ${TerminalObject}
+${FcpPath} $* ${BootPath}
+chmod 664 ${SavePath}
+
+echo removing ${ColdPath} ${ClosePath}
+rm -f ${ColdPath} ${ClosePath} ${TerminalObject}
