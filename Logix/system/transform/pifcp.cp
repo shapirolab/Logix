@@ -4,16 +4,16 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/01 07:07:30 $
+		       	$Date: 2000/02/10 10:50:20 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/Logix/system/transform/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
 
--export([transform/5]).
+-export(transform/5).
 -mode(interrupt).
 -language(compound).
 
@@ -47,7 +47,11 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
   filter_attributes(In, GlobalList, NewGlobalList, Out, Exported,
 			Errors, NextErrors) :-
 
-    In ? export(Es) :
+    In ? export(Es), string(Es), Es =\= all :
+      Exported = [Es] |
+	self;
+
+    In ? export(Es), list(Es) :
       Exported = Es |
 	self;
 
@@ -78,6 +82,10 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
       Errors ! invalid_global_channel_name(Other) |
 	self;
 
+    GlobalList =\= [], GlobalList =\= [_|_] :
+      GlobalList' = [GlobalList] |
+	self;
+
     GlobalList =?= [] :
       Tail = Old,
       Errors = NextErrors |
@@ -85,7 +93,7 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
 
 /*
-** serve_empty_scope/6+3
+** serve_empty_scope/6+5
 **
 ** Serve requests from first-level processes.  See serve_process_scope/6+6
 **
@@ -99,11 +107,13 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 **
 **          Lookup process Functor and return:
 **               CallType in {none, outer, inner}
-**               CallDefinition = {Name, Arity, Channels, OuterAtom, InnerAtom)
+**               CallDefinition = {Name, Arity, Channels, OuterLHS, InnerLHS,
+**					Mode(SendRHS, ProcessRHS)}
 **
-**      process(LHS, ProcessScope)
+**      process(PiLHS, Status, ProcessScope)
 **
-**          Analyze LHS (Left-hand-side) of process declaration and return
+**          Analyze PiLHS (Left-hand-side) of process declaration and return
+**               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
 **   GlobalList is a list of global channels.
@@ -124,7 +134,8 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 */
 
 serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
-		(Progeny = [], Refs = AddRef?, AddRef) :-
+		(Progeny = [], Refs = AddRef?, AddRef,
+		 Sums, Summed = Sums?) :-
 
     In ? error(Error) :
       Errors ! Error |
@@ -134,8 +145,8 @@ serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(LHS, Status, ProcessScope) |
-	make_process_scope(LHS, ProcessScope, [], In'', In'?,
+    In ? process(PiLHS, Status, ProcessScope) |
+	make_process_scope(PiLHS, ProcessScope, [], In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	compute_status,
 	export_process(ProcessDefinition?, Exported, Export,
@@ -145,45 +156,55 @@ serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
+    In ? call_sum(Name, Sum, Call) :
+      Sums ! Name(Sum, Call) |
+	self;
+
     In = [] :
       GlobalList = _,
       Exported = _,
       AddRef = [],
-      Entries = [],
-      Errors = [],
-      Exports = [] |
-	find_process_refs(Refs, Progeny, [], []).
+      Exports = [],
+      Sums = [] |
+	find_process_refs(Refs, Progeny, [], []),
+	/* sum_procedures. */
+	sum_procedures(Summed, Entries, Errors).
 
 
 create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 		Entries, NextEntries) :-
 
 
-    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, Channels, OuterLHS, _InnerLHS,
+					CodeTuple},
     Name =\= "_",
     GlobalList =\= [],
     Export = true,
-    Index := arity(OuterAtom),
+    Index := arity(OuterLHS),
     Index++,
     string_to_dlist(Name, NL, []) :
       ascii(' ', Space),
-      Entries ! (OuterAtom :- Initializer?),
+      Entries ! (Atom? :- Initializer?),
       NextEntries = Entries',
-      NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?} |
+      NewDefinition = {Name, Arity, Channels'?, OuterLHS'?, InnerLHS'?,
+					CodeTuple} |
+	tuple_to_atom(OuterLHS, Atom),
 	list_to_string([Space|NL], Name'),
 	split_channels(1, Index, Channels, ParamList, ChannelList),
-	construct_lhs_atoms,
-	initialize_global_channels(Index', OuterAtom'?, Initializer);
+	make_lhs_tuples,
+	initialize_global_channels(Index', OuterLHS'?, Initializer);
 
-    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, Channels, OuterLHS, _InnerLHS,
+					CodeTuple},
     Name =\= "_",
     GlobalList =\= [],
     Export = false,
-    Index := arity(OuterAtom) :
+    Index := arity(OuterLHS) :
       NextEntries = Entries,
-      NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?} |
+      NewDefinition = {Name, Arity, Channels'?, OuterLHS'?, InnerLHS'?,
+					CodeTuple} |
 	split_channels(1, Index, Channels, ParamList, ChannelList),
-	construct_lhs_atoms;
+	make_lhs_tuples;
 	
     otherwise :
       GlobalList = _,
@@ -226,6 +247,7 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
       Tail = [],
       Initializer = (pi_monitor#global_channels(List), PName).
 
+
 /*
 ** serve_process_scope/6+3
 **
@@ -236,7 +258,7 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 **   In is the request input stream:
 **
 **      atoms(Outer, Inner) - return ProcessDefinition's
-**                            OuterAtom and InnerAtom.
+**                            OuterLHS and InnerLHS.
 **
 **      body_receive(Channel, Body, ChannelVar, ChannelList)
 **
@@ -250,11 +272,14 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 **
 **          Lookup process Functor and return:
 **               CallType in {none, outer, inner}
-**               CallDefinition = {Name, Arity, Channels, OuterAtom, InnerAtom)
+**               CallDefinition = {Name, Arity, Channels, OuterLHS, InnerLHS,
+**					 Mode(SendRHS, ProcessRHS)}
 **
-**      process(LHS, ProcessScope)
 **
-**          Analyze LHS (Left-hand-side) of process declaration and return
+**      process(PiLHS, Status, ProcessScope)
+**
+**          Analyze PiLHS (Left-hand-side) of process declaration and return
+**               Status is one of  {single, double, nil} ;
 **               ProcessScope - a stream to a process context handler.
 **
 **   NextOut, NextErrors are continuation streams.
@@ -274,13 +299,15 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 		 Refs = AddRef?, AddRef) :-
 
     In ? atoms(Outer, Inner),
-    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} :
-      Outer = OuterAtom,
-      Inner = InnerAtom |
+    ProcessDefinition =?= {_Name, _Arity, _Channels, OuterLHS, InnerLHS,
+					_CodeTuple} :
+      Outer = OuterLHS,
+      Inner = InnerLHS |
 	self;
 
     In ? body_receive(Channel, Message, ChannelVar, ChannelList),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} :
       ChannelVar = `ChannelName' |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
@@ -292,7 +319,8 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	self;
 
     In ? body_send(Message, Channel, Sender, ChannelList, ChannelVar),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} :
       ChannelVar = `ChannelName'? |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
@@ -306,12 +334,13 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	self;
 
     In ? call(Body1, Body2) |
-	make_local_call(ProcessDefinition, Primes, Body1, Body2,
-			In'', In'?, Errors, Errors'?),
+	make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
+			In'', In'?, Errors, Errors'?, _CallDefinition),
 	self;
 
     In ? channels(Cs),
-    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} :
       Cs = Channels |
 	self;
 
@@ -322,14 +351,16 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 
     In ? guard_compare(Guard, ChannelList, NextChannelList, Comparer),
     Guard =?= {Operator, C1, C2},
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
 	message_to_channels({C1, C2}, Name, Channels, Locals, false, List,
 				Errors, Errors'?),
 	compare_channels_ok,
 	self;
 
     In ? guard_receive(Channel, Message, SendId, Iterates, Consume),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} :
       Primes = _ |
 	verify_channel(Name, Channel, Channels, Locals,
 			Channel', Errors, Errors'?),
@@ -342,7 +373,8 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	self;
 
     In ? guard_send(Channel, Message, SendId, SendIndex, Guard),
-    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
 	message_to_channels(Message, Name, Channels, Locals, false, MChannels,
@@ -379,31 +411,49 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	list_to_string(DL, Id),
 	self;
 
-    In ? process(LHS, Status, ProcessScope),
-    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
-	concatenate(Locals, Channels, GlobalList),
-	make_process_scope(LHS, ProcessScope, GlobalList,
+    In ? process(PiLHS, Status, ProcessScope),
+    ProcessDefinition =?= {_Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
+	concatenate_lists([Locals, Channels], GlobalList),
+	make_process_scope(PiLHS, ProcessScope, GlobalList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	compute_status,
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
     In ? remote_call(Call1, Call2),
-    arg(1, ProcessDefinition, Name) |
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
 	extract_arguments_or_substitutes(Name, Call1, Arguments, _Substitutes,
 			Errors, Errors'?, 2, channel),
+	verify_call_channels(Name, Call1, Channels, Locals,
+				Errors', Errors''?),
 	instantiated_local_channels(Primes, Arguments?, Arguments'),
 	complete_remote_call(ProcessDefinition, Call1, Arguments'?, Call2,
-				Errors', Errors''?),
+				Errors'', Errors'''?),
 	self;
 
-    In = [] :
-      ProcessDefinition = _,
+    /* Code for communication procedures */
+    In ? code(Mode, SendRHS, ProcessRHS),
+    ProcessDefinition =?= {_Name, _Arity, _Channels, _OuterLHS, _InnerLHS,
+					CodeTuple} :
+      CodeTuple = Mode?(SendRHS?, ProcessRHS?) |
+	self;
+
+    /* Pass along */
+    In ? CallSum, CallSum = call_sum(_Name, _Sum, _Call) :
+      Out ! CallSum |
+	self;
+
+    In = [],
+    ProcessDefinition =?= {_Name, _Arity, _Channels, _OuterLHS, _InnerLHS,
+					CodeTuple} :
       IdIndex = _,
       Locals = _,
       Primes = _,
       AddRef = [],
       Errors = NextErrors |
+	unify_without_failure(CodeTuple, none([], [])),
 	find_process_refs(Refs, Progeny, Out, NextOut).
 
   compare_channels_ok(Operator, List, Comparer,
@@ -533,12 +583,12 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 /*
 ** make_process_scope/9
 **
-** Analyze LHS, producing a ProcessDefinition and a process scope server,
+** Analyze PiLHS, producing a ProcessDefinition and a process scope server,
 ** serve_process_scope.
 **
 ** Input:
 **
-**   LHS is from a process/2 request.
+**   PiLHS is from a process/2 request.
 **
 **   GlobalList is a list of channel names which are global to the process.
 **
@@ -557,26 +607,27 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   Errors is defined in serve_empty_scope.
 */
 
-make_process_scope(LHS, ProcessScope, GlobalList,
+make_process_scope(PiLHS, ProcessScope, GlobalList,
 	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
-      ProcessDefinition =?= {Name?, Arity?, Channels?, OuterAtom?, InnerAtom?}|
-	parse_lhs(LHS, Name, Arity, ParamList, ChannelList, Errors, Errors'?),
+      ProcessDefinition =?= {Name?, Arity?, Channels?, OuterLHS?, InnerLHS?,
+					_CodeTuple} |
+	parse_lhs(PiLHS, Name, Arity, ParamList, ChannelList, Errors, Errors'?),
 	check_for_duplicates(ParamList?, ParamList1,
 				{Name?, duplicate_parameter},
 					Errors', Errors''?),
 	check_for_duplicates(ChannelList?, ChannelList1,
 				{Name?, duplicate_channel},
 					Errors'', Errors'''?),
-	concatenate(ParamList1?, ChannelList1?, LocalList),
+	concatenate_lists([ParamList1?, ChannelList1?], LocalList),
 	check_for_duplicates(LocalList?, LocalList1,
 				{Name?, channel_duplicates_parameter},
 					Errors''', Errors''''?),
 	correct_for_duplication(LocalList?, LocalList1?, ParamList,
 				ChannelList1?, ChannelList2),
-	construct_lhs_atoms(Name?, ParamList1?, GlobalList, ChannelList2?,
-				Channels, OuterAtom, InnerAtom),
+	make_lhs_tuples(Name?, ParamList1?, GlobalList, ChannelList2?,
+				Channels, OuterLHS, InnerLHS),
 	serve_process_scope(ProcessScope?, NewDefinition,
 				Out, NextOut, Errors'''', NextErrors).
 
@@ -594,12 +645,14 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 
 compute_status(NewDefinition, Status) :-
 
-    NewDefinition =?= {_Name, _Arity, _Channels, OuterAtom, _InnerAtom},
-    OuterAtom =?= [] :
+    NewDefinition =?= {_Name, _Arity, _Channels, OuterLHS, _InnerLHS,
+					_CodeTuple},
+    OuterLHS =?= [] :
       Status = nil;    
 
-    NewDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom},
-    OuterAtom =\= [], OuterAtom =?= InnerAtom :
+    NewDefinition =?= {_Name, _Arity, _Channels, OuterLHS, InnerLHS,
+					_CodeTuple},
+    OuterLHS =\= [], OuterLHS =?= InnerLHS :
       Status = single;
 
     otherwise :
@@ -608,14 +661,16 @@ compute_status(NewDefinition, Status) :-
 
 export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
 
-    ProcessDefinition =?= {Name, Arity, _Channels, _OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, _Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple},
     Name =\= "_",
     Exported =?= all :
       Export = true,
       Exports ! (Name/Arity),
       NextExports = Exports';
 
-    ProcessDefinition =?= {Name, Arity, _Channels, _OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, Arity, _Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple},
     Name =\= "_",
     Exported =\= all |
 	exported_procedure;	
@@ -627,6 +682,16 @@ export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
       Exports = NextExports.
 
   exported_procedure(Name, Arity, Exported, Export, Exports, NextExports) :-
+
+    Exported = Name :
+      Export = true,
+      Exports ! (Name/Arity),
+      NextExports = Exports';
+
+    Exported = (Name/Arity) :
+      Export = true,
+      Exports ! (Name/Arity),
+      NextExports = Exports';
 
     Exported ? Name :
       Exported' = _,
@@ -653,7 +718,8 @@ export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
 
 add_process_definition(ProcessDefinition, Progeny, NewProgeny) :-
 
-    ProcessDefinition =?= {Name, _Arity, _Channels, _OuterAtom, _InnerAtom},
+    ProcessDefinition =?= {Name, _Arity, _Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple},
     Name =\= "_" :
       NewProgeny = [ProcessDefinition | Progeny];
 
@@ -662,30 +728,30 @@ add_process_definition(ProcessDefinition, Progeny, NewProgeny) :-
       NewProgeny = Progeny.
 
 
-parse_lhs(LHS, Name, Arity, ParamList, ChannelList, Errors, NextErrors) :-
+parse_lhs(PiLHS, Name, Arity, ParamList, ChannelList, Errors, NextErrors) :-
 
-    LHS =?= `Functor, string(Functor), Functor =\= "" :
+    PiLHS =?= `Functor, string(Functor), Functor =\= "" :
       Name = Functor, Arity = 0,
       ParamList = [],
       Errors = NextErrors |
 	unify_without_failure(ChannelList, []);
 
-    LHS = LHS' + Channels,
+    PiLHS = PiLHS' + Channels,
     writable(ChannelList) :
       ChannelList' = ChannelList? |
 	extract_channel_list(Channels, ChannelList, Errors, Errors'),
 	self;
 
-    arg(1, LHS, `Functor), string(Functor), Functor =\= "",
-    arity(LHS, A), A-- :
+    arg(1, PiLHS, `Functor), string(Functor), Functor =\= "",
+    arity(PiLHS, A), A-- :
       Name = Functor,
       Arity = A' |
-	extract_arglist(LHS, ParamList, Errors, NextErrors),
+	extract_arglist(PiLHS, ParamList, Errors, NextErrors),
 	unify_without_failure(ChannelList, []);
 
     otherwise :
-      Errors ! improperly_formed_left_hand_side(LHS),
-      LHS' = `"_" |
+      Errors ! improperly_formed_left_hand_side(PiLHS),
+      PiLHS' = `"_" |
 	self.
 
 extract_channel_list(Channels, ChannelList, Errors, NextErrors) :-
@@ -719,74 +785,74 @@ extract_channel_list(Channels, ChannelList, Errors, NextErrors) :-
       ChannelList = [].
 
 
-extract_arglist(LHS, ParamList, Errors, NextErrors) + 
+extract_arglist(PiLHS, ParamList, Errors, NextErrors) + 
 			(Index = 2) :-
-    arity(LHS) < Index :
+    arity(PiLHS) < Index :
       ParamList = [],
       Errors = NextErrors;
 
-    arity(LHS) >= Index,
-    arg(Index, LHS, ChannelName), Index++,
+    arity(PiLHS) >= Index,
+    arg(Index, PiLHS, ChannelName), Index++,
     string(ChannelName), ChannelName =\= "" :
       ParamList ! ChannelName |
 	self;
 
-    arity(LHS) >= Index,
-    arg(Index, LHS, `ChannelName), Index++,
+    arity(PiLHS) >= Index,
+    arg(Index, PiLHS, `ChannelName), Index++,
     string(ChannelName), ChannelName =\= "" :
       ParamList ! ChannelName |
 	self;
 
     otherwise,
-    arg(Index, LHS, NotString), Index++ :
+    arg(Index, PiLHS, NotString), Index++ :
       Errors ! invalid_parameter(NotString) |
 	self.
 
 
-construct_lhs_atoms(Name, ParamList, GlobalList, ChannelList,
-			Channels, OuterAtom, InnerAtom) :-
+make_lhs_tuples(Name, ParamList, GlobalList, ChannelList,
+		Channels, OuterLHS, InnerLHS) :-
 
     Name =?= "_" :
       ParamList = _,
       GlobalList = _,
       ChannelList = _,
-      OuterAtom = [],
-      InnerAtom = [],
+      OuterLHS = [],
+      InnerLHS = [],
       Channels = [];
 
     Name =\= "_",
     ChannelList =?= [] :
-      InnerAtom = OuterAtom?|
+      InnerLHS = OuterLHS?|
 	subtract_list(GlobalList, ParamList, GlobalList1),
-	concatenate(ParamList, GlobalList1?, Channels),
-	construct_atom(Name, "", Channels?, OuterAtom);
+	concatenate_lists([ParamList, GlobalList1?], Channels),
+	construct_lhs_tuple(Name, "", Channels?, OuterLHS);
 
     Name =\= "_",
     ChannelList =\= [],
     GlobalList =?= [] |
-	construct_atom(Name, "", ParamList, OuterAtom),
-	concatenate(ParamList, ChannelList?, Channels),
-	construct_atom(Name, ".", Channels?, InnerAtom);
+	construct_lhs_tuple(Name, "", ParamList, OuterLHS),
+	concatenate_lists([ParamList, ChannelList?], Channels),
+	construct_lhs_tuple(Name, ".", Channels?, InnerLHS);
 
     Name =\= "_",
     ChannelList =\= [],
     GlobalList =\= [] |
 	subtract_list(GlobalList, ParamList, GlobalList1),
 	subtract_list(GlobalList1, ChannelList, GlobalList2),
-	concatenate(ParamList, GlobalList2?, OuterList),
-	construct_atom(Name, "", OuterList?, OuterAtom),
-	concatenate(OuterList?, ChannelList, Channels),
-	construct_atom(Name, ".", Channels?, InnerAtom).
+	concatenate_lists([ParamList, GlobalList2?], OuterList),
+	construct_lhs_tuple(Name, "", OuterList?, OuterLHS),
+	concatenate_lists([OuterList?, ChannelList], Channels),
+	construct_lhs_tuple(Name, ".", Channels?, InnerLHS).
 
 
-construct_atom(Name, Suffix, Channels, Atom) :-
+construct_lhs_tuple(Name, Suffix, Channels, Atom) :-
 
     string_to_dlist(Name, NameCs, NameEnd),
     string_to_dlist(Suffix, SuffixCs, []) :
       NameEnd = SuffixCs |
 	list_to_string(NameCs, Name'),
 	channels_to_variables(Channels, Channels', Count),
-	make_atom(Count?, Name', Channels'?, Atom).
+	make_lhs_tuple(Count?, Name', Channels'?, Atom).
 
 channels_to_variables(ChannelNames, Variables, Count) +
 				(Counter = 0) :-
@@ -799,7 +865,7 @@ channels_to_variables(ChannelNames, Variables, Count) +
       Variables = [],
       Count = Counter.
 
-make_atom(N, Name, Channels, Atom) :-
+make_lhs_tuple(N, Name, Channels, Atom) :-
 
     N =< 0 :
       Atom = {Name},
@@ -1098,20 +1164,35 @@ parse_message(Name, Channels, Message, ChannelNames, Locals, Primes,
       Primes = NextPrimes.
 
       
-make_local_call(ProcessDefinition, Primes, Body1, Body2,
-		In, NextIn, Errors, NextErrors) :-
+make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
+		In, NextIn, Errors, NextErrors, CallDefinition) :-
 
     Body1 = true :
       ProcessDefinition = _,
+      Locals = _,
       Primes = _,
       In = NextIn,
       Errors = NextErrors,
-      Body2 = true;
+      Body2 = true,
+      CallDefinition = [];
+
+    Body1 =?= self,
+    arg(1, ProcessDefinition, Name) :
+      Body1' = `Name |
+	self;
+
+    arity(Body1) > 1, arg(1, Body1, self),
+    arg(1, ProcessDefinition, Name) |
+	copy_goal_args(Body1, `Name, Body1'),
+	self;
 
     arity(Body1) > 1, arg(1, Body1, `Functor), string(Functor),
-    arg(1, ProcessDefinition, Name) |
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterLHS, _InnerLHS,
+					_CodeTuple} |
 	extract_arguments_or_substitutes(Name, Body1, Arguments, Substitutes,
 						Errors, Errors'?),
+	verify_call_channels(Name, Body1, Channels, Locals,
+				Errors', Errors''?),
 	instantiated_local_channels(Primes, Arguments?, Arguments'),
 	substituted_local_channels(Primes, Substitutes?, Substitutes'),
 	lookup_call_functor,
@@ -1119,28 +1200,38 @@ make_local_call(ProcessDefinition, Primes, Body1, Body2,
 
     Body1 = `Functor,
     arg(1, ProcessDefinition, Name) :
+      Locals = _,
       Primes = _,
       Arguments = [],
       Substitutes = [] |
 	lookup_call_functor,
 	complete_local_call;
 
+    Body1 = _ + _ :
+      CallDefinition = [] |
+	make_summed_call(ProcessDefinition, Locals, Primes, Body1, Body2,
+			 In, NextIn, Errors, NextErrors);
+
     otherwise,
     tuple(Body1),
     arity(Body1, Arity) :
       ProcessDefinition = _,
+      Locals = _,
       Primes = _,
       In = NextIn,
       Errors = NextErrors,
+      CallDefinition = [],
       Index = 1 |
 	copy_predicates(Body1, Index, Arity, Body2);	
 
     otherwise,
     arg(1, ProcessDefinition, Name) :
+      Locals = _,
       Primes = _,
       Body2 = true,
+      In = NextIn,
       Errors = [(Name - invalid_local_call(Body1)) | NextErrors],
-      In = NextIn.
+      CallDefinition = [].
 
   copy_predicates(Predicates, Index, Arity, Body) :-
 
@@ -1153,6 +1244,55 @@ make_local_call(ProcessDefinition, Primes, Body1, Body2,
     arg(Index, Predicates, Predicate) :
       Body = Predicate.
 
+  substituted_local_channels(Primes, Substitutes, Primed) :-
+
+    Primes ? {Channel, ChannelP} |
+	prime_substitutes(Channel, ChannelP, Substitutes, Substitutes'),
+	self;
+
+    Primes =?= [] :
+      Primed = Substitutes.
+
+  prime_substitutes(Channel, ChannelP, SubsIn, SubsOut) :-
+
+    SubsIn ? (Substitute = Sub), Sub =?= Channel :
+      SubsOut ! (Substitute = ChannelP) |
+	self;
+
+    SubsIn ?  (Substitute = Sub), Sub =\= Channel :
+      SubsOut !  (Substitute = Sub) |
+	self;
+
+    SubsIn =?= [] :
+      Channel = _,
+      ChannelP = _,
+      SubsOut = [].
+
+
+verify_call_channels(Name, Goal, Channels, Locals, Errors, NextErrors)
+			+ (Index = 2) :-
+
+    arg(Index, Goal, (_ = String)), string =\= "_",
+    Index++ |
+	verify_channel(Name, String, Channels, Locals, _, Errors, Errors'?),
+	self;
+
+    arg(Index, Goal, String), string =\= "_",
+    Index++ |
+	verify_channel(Name, String, Channels, Locals, _, Errors, Errors'?),
+	self;
+
+    Index =< arity(Goal),
+    otherwise,
+    Index++ |
+	self;
+
+    Index > arity(Goal) :
+      Name = _,
+      Channels = _,
+      Locals = _,
+      Errors = NextErrors.
+    
 
 complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 				Body1, Body2, Errors, NextErrors) :-
@@ -1167,7 +1307,8 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =\= none,
     list(Arguments),
-    CallDefinition =?= {_Name, Arity, _Channels, Atom, _InnerAtom} :
+    CallDefinition =?= {_Name, Arity, _Channels, Atom, _InnerLHS,
+					_CodeTuple} :
       Substitutes = _,
       Name = _,
       Body1 = _ |
@@ -1176,7 +1317,8 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =?= outer,
     Arguments =?= [],
-    CallDefinition =?= {_Name, _Arity, _Channels, Atom, _InnerAtom} :
+    CallDefinition =?= {_Name, _Arity, _Channels, Atom, _InnerLHS,
+					_CodeTuple} :
       Errors = NextErrors,
       Name = _,
       Body1 = _ |
@@ -1184,7 +1326,8 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =?= inner,
     Arguments =?= [],
-    CallDefinition =?= {_Name, _Arity, _Channels, _OuterAtom, Atom} :
+    CallDefinition =?= {_Name, _Arity, _Channels, _OuterLHS, Atom,
+					_CodeTuple} :
       Name = _,
       Body1 = _,
       Errors = NextErrors |
@@ -1232,7 +1375,7 @@ call_with_substitutes(Atom, Substitutes, Body2) :-
       Body2 = Name + Added |
 	add_substitutes.
 
-add_substitutes(Substitutes, Added) :-
+  add_substitutes(Substitutes, Added) :-
 
     Substitutes =?= [{S, C}] :
       Added = (S = `C);
@@ -1332,7 +1475,7 @@ complete_remote_call(ProcessDefinition, Call1, Arguments, Call2,
       ProcessDefinition = _,
       Errors = NextErrors |
 	channels_to_variables(Arguments, Variables, N),
-	make_atom(N, Functor, Variables?, Call2);
+	make_lhs_tuple(N, Functor, Variables?, Call2);
 
     arg(1, Call1, `Functor), string(Functor), Arguments =?= [] :
       ProcessDefinition = _,
@@ -1371,31 +1514,6 @@ instantiated_local_channels(Primes, Arguments, Primed) :-
       ArgsOut = [].
 
 
-substituted_local_channels(Primes, Substitutes, Primed) :-
-
-    Primes ? {Channel, ChannelP} |
-	prime_substitutes(Channel, ChannelP, Substitutes, Substitutes'),
-	self;
-
-    Primes =?= [] :
-      Primed = Substitutes.
-
-  prime_substitutes(Channel, ChannelP, SubsIn, SubsOut) :-
-
-    SubsIn ? (Substitute = Sub), Sub =?= Channel :
-      SubsOut ! (Substitute = ChannelP) |
-	self;
-
-    SubsIn ?  (Substitute = Sub), Sub =\= Channel :
-      SubsOut !  (Substitute = Sub) |
-	self;
-
-    SubsIn =?= [] :
-      Channel = _,
-      ChannelP = _,
-      SubsOut = [].
-
-
 /************************* Program Transformations ***************************/
 
 program(Source, GlobalList, Exported, Exports, Terms, Errors) :-
@@ -1406,8 +1524,8 @@ program(Source, GlobalList, Exported, Exports, Terms, Errors) :-
 
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
-    Source ? (LHS :- RHSS) :
-      Scope ! process(LHS, Status, ProcessScope) |
+    Source ? (PiLHS :- RHSS) :
+      Scope ! process(PiLHS, Status, ProcessScope) |
 	process_definitions(Processes, [], Nested, Nested'?,
 				ProcessScope, ProcessScope'?),
 	process(Status?, RHSS, ProcessScope', Process, Nested'),
@@ -1435,25 +1553,28 @@ process(Status, RHSS, Scope, Process, Nested) :-
       Nested = [];
 
     Status = double :
-      Scope ! atoms(OuterAtom, InnerAtom),    
-      Nested ! (OuterAtom? :- Initializer?),
+      Scope ! atoms(OuterLHS, InnerLHS),    
+      Nested ! (Atom? :- Initializer?),
       Status' = initialized |
-	Index := arity(OuterAtom) + 1,
-	arg(1, OuterAtom, Name),
-	initialize_channels(Index, InnerAtom, Name, Initializer),
+	tuple_to_atom(OuterLHS?, Atom),
+	Index := arity(OuterLHS) + 1,
+	arg(1, OuterLHS, Name),
+	initialize_channels(Index, InnerLHS, Name, Initializer),
 	self;
 
     Status =\= nil, Status =\= double, /* single or initialized */
     RHSS =\= (_|_), RHSS =\= (_;_)  :
-      Scope ! atoms(_OuterAtom, InnerAtom),
-      Process = (InnerAtom? :- RHSS'?) |
+      Scope = [atoms(_OuterLHS, InnerLHS), code(no_guard, [], []) | Scope'?],
+      Process = (Atom? :- RHSS'?) |
+	tuple_to_atom(InnerLHS?, Atom),
 	transform_body(RHSS, RHSS', Nested, [], Scope', []);
 
     Status =\= nil, Status =\= double, /* single or initialized */
     otherwise :
-      Scope ! atoms(_OuterAtom, InnerAtom),
-      Process = (InnerAtom? :- RHSS'?) |
-	guarded_clauses(RHSS, RHSS', Nested, Scope').
+      Scope ! atoms(_OuterLHS, InnerLHS),
+      Process = (Atom? :- RHSS'?) |
+	tuple_to_atom(InnerLHS?, Atom),
+	guarded_clauses(RHSS, RHSS', Process, Nested, Scope').
 
   initialize_channels(Index, Atom, Name, Initializer) +
 			(MakeAll = More?, More) :-
@@ -1503,10 +1624,9 @@ nested_procedures(Process, Nested, Terms, NextTerms) :-
 
 /************************* Guard Transformations *****************************/
 
-guarded_clauses(RHS1, RHS2, Nested, Scope) +
-		(Mode = none, SendId = _, NextNested = [], NextScope = [],
-			 Index = 0, NextRHSS, RHSS = NextRHSS?,
-			 NextSends = [], FinalMode = _) :-
+guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
+		(Mode = none, SendId = _, Index = 0,
+	NextRHSS, RHSS = NextRHSS?, NextSends = [], FinalMode = _) :-
 
     RHS1 =?= (_ | _),
     Index++ :
@@ -1516,7 +1636,8 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 			Nested, Nested'?, Scope, Scope'?),
 	update_process_mode(Mode, GuardMode, Mode'),
 	make_right_hand_side + (Index = 1),
-	make_rhs2;
+	make_rhs2 + (Scope = Scope', NextScope = Scope''?),
+	code_reply;
 
     RHS1 =?= (Guarded ; RHS1'), Guarded =?= (_|_),
     Index++ :
@@ -1527,12 +1648,33 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 	self;
 
     otherwise :
+      Process = _,
       Index = _,
+      FinalMode = none,
       Scope ! error(invalid_guarded_clause(RHS1)),
       NextRHSS = [],
-      FinalMode = none |
+      Nested = [] |
 	make_right_hand_side + (Index = 1),
-	make_rhs2.
+	make_rhs2 + (SendProcedure = _, NextScope = []).
+
+  code_reply(Process, FinalMode, SendProcedure, Nested, Scope) :-
+
+    FinalMode =?= receive,
+    Process =?= (_ :- ProcessRHS) :
+      SendProcedure = _,
+      Nested = [],
+      Scope = [code(receive, [], ProcessRHS)];
+
+    SendProcedure =?= (_ :- SendRHS),
+    Process =?= (_ :- ProcessRHS) :
+      Nested = [SendProcedure],
+      Scope = [code(FinalMode, ProcessRHS, SendRHS)];
+
+    otherwise :
+      Process = _,
+      SendProcedure = _,
+      Nested = [],
+      Scope = [code(FinalMode, [], [])].
 
   update_process_mode(Mode, GuardMode, NewMode) :-
 
@@ -1557,6 +1699,14 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
     GuardMode =?= send :
       NewMode = mixed;
 
+    Mode =?= mixed,
+    GuardMode =?= receive :
+      NewMode = mixed;
+
+    Mode =?= mixed,
+    GuardMode =?= send :
+      NewMode = mixed;
+
     otherwise :
       Mode = _,
       GuardMode = _,
@@ -1564,14 +1714,14 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 
 
   make_rhs2(Mode, SendId, ClauseList, Sends, RHS2,
-	Nested, NextNested, Scope, NextScope) :-
+	SendProcedure, Scope, NextScope) :-
 
     Mode =?= send :
       SendId = "_",
       RHS2 = (Writes | SendChoices),
-      Nested = [(ChoiceAtom? :- FcpClauses?) | NextNested],
-      Scope = [atoms(OuterAtom, InnerAtom) | NextScope] |
-	arg(1, OuterAtom, PName),
+      SendProcedure = (ChoiceAtom? :- FcpClauses?),
+      Scope = [atoms(OuterLHS, InnerLHS) | NextScope] |
+	arg(1, OuterLHS, PName),
 	make_choice_name(PName, ".sends", SendChoices),
 	make_predicate_list(';', ClauseList, FcpClauses),
 	sends_to_writes(Sends, Writes),
@@ -1581,9 +1731,9 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       SendId = pifcp(sendid),
       RHS2 = (Writes | pi_monitor#unique_sender(PName?, `SendId),
 			MixedChoices),
-      Nested = [(ChoiceAtom? :- FcpClauses?) | NextNested],
-      Scope = [atoms(OuterAtom, InnerAtom) | NextScope] |
-	arg(1, OuterAtom, PName),
+      SendProcedure = (ChoiceAtom? :- FcpClauses?),
+      Scope = [atoms(OuterLHS, InnerLHS) | NextScope] |
+	arg(1, OuterLHS, PName),
 	make_choice_name(PName?, ".mixed", MixedChoices),
 	make_predicate_list(';', ClauseList, FcpClauses),
 	sends_to_writes(Sends, Writes),
@@ -1595,7 +1745,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       Sends = [],
       SendId = "_",
       RHS2 = FcpClauses?,
-      Nested = NextNested,
+      SendProcedure = [],
       Scope = NextScope |
 	make_predicate_list(';', ClauseList, FcpClauses);
 
@@ -1603,7 +1753,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       SendId = "_",
       Sends = [],
       RHS2 = FcpClauses?,
-      Nested = NextNested,
+      SendProcedure = [],
       Scope = [error("missing_otherwise") | NextScope] |
 	make_predicate_list(';', ClauseList, FcpClauses);
 
@@ -1612,7 +1762,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       ClauseList = [],
       Sends = [],
       RHS2 = true,
-      Nested = NextNested,
+      SendProcedure = [],
       Scope = [error("conflicting_guards") | NextScope].
       
 
@@ -1635,8 +1785,8 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
       PS = SL |
 	list_to_string(PL, Name).
 
-  make_choice_atom(InnerAtom, Name, ChoiceVars, ChoiceAtom) :-
-	utils#tuple_to_dlist(InnerAtom, [_|Channels], ChoiceVars),
+  make_choice_atom(InnerLHS, Name, ChoiceVars, ChoiceAtom) :-
+	utils#tuple_to_dlist(InnerLHS, [_|Channels], ChoiceVars),
 	utils#list_to_tuple([Name|Channels], ChoiceAtom).
 
   make_right_hand_side(RHSS, FinalMode, Index, ClauseList, Sends, NextSends) :-
@@ -1870,16 +2020,16 @@ expand_new_scope(Channels, Body, Processes, Body2,
       Scope ! new_scope_id(Id),
       Body2 = Id? |
 	make_new_lhs,
-	process_definitions([(LHS :- Body)], Processes, Nested, NextNested,
+	process_definitions([(PiLHS :- Body)], Processes, Nested, NextNested,
 				Scope', NextScope).
 
-  make_new_lhs(Id, Channels, LHS) :-
+  make_new_lhs(Id, Channels, PiLHS) :-
 
     Channels =?= [] :
-      LHS = `Id;
+      PiLHS = `Id;
 
     Channels =\= [] :
-      LHS = `Id + Channels.
+      PiLHS = `Id + Channels.
 
 
 parse_remote_call(Call1, Call2, Scope, NextScope) :-
@@ -1888,7 +2038,7 @@ parse_remote_call(Call1, Call2, Scope, NextScope) :-
       Call2 = Name # Call2' |
 	self;
 
-    Call1 =\= _ # _,
+    Call1 =\= _ # _, Call1 =\= `_,
     tuple(Call1), arg(1, Call1, Name), string(Name) :
       Call2 = Call1,
       Scope = NextScope;
@@ -1904,15 +2054,28 @@ parse_remote_call(Call1, Call2, Scope, NextScope) :-
 
 /**** Utilities ****/
 
+tuple_to_atom(LHS, Atom) :-
 
-concatenate(List1, List2, List3) :-
+    LHS = {String} :
+      Atom = String;
 
-    List1 ? Item :
-      List3 ! Item |
+    otherwise :
+      Atom = LHS.
+
+
+concatenate_lists(Lists, Out) :-
+
+    Lists = [List | Rest],
+    List ? Item, Item =\= [] :
+      Out ! Item,
+      Lists' = [List' | Rest] |
 	self;
 
-    List1 =?= [] :
-      List3 = List2.
+    Lists ? [] |
+	concatenate_lists;
+
+    Lists =?= [] :
+      Out = [].
 
 subtract_list(List1, List2, List3) :-
 
@@ -2006,3 +2169,493 @@ make_predicate_list(Operator, List, Predicates) :-
     List =?= [Predicate] :
       Operator = _,
       Predicates = Predicate.
+
+
+sort_out_duplicates(In, Out, Reply) :-
+
+	concatenate_lists(In, List),
+	ordered_merger(Merger, Reply, ok),
+	utils#binary_sort_merge(List, Out, Merger).    
+
+ordered_merger(In, Left, Right) :-
+    In ? ordered_merge(In1, In2, Out) |
+	ordered_merge(In1, In2, Out, Left, Left'),
+	ordered_merger;
+
+    In = [] :
+      Left = Right.
+
+ordered_merge(In1, In2, Out, Left, Right) :-
+
+    In1 ? I1, In2 = [I2 | _],
+    string(I1), string(I2),
+    I1 @< I2 :
+      Out ! I1 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    string(I1), string(I2),
+    I2 @< I1 :
+      Out ! I2 |
+	ordered_merge;
+
+    In1 = [I | _], In2 ? I :
+      Right = _,
+      Left = duplicate,
+      Right' = _ |
+	ordered_merge;
+
+    In1 ? I1, In2 = [I2 | _],
+    arg(1, I1, A1), arg(1, I2, A2),
+    A1 @< A2 :
+      Out ! I1 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    arg(1, I1, A1), arg(1, I2, A2),
+    A2 @< A1 :
+      Out ! I2 |
+	ordered_merge;
+
+    In1 = [I1 | _], In2 ? I2,
+    arg(1, I1, A), arg(1, I2, A) :
+      Right = _,
+      Left = duplicate,
+      Right' = _ |
+	ordered_merge;
+
+    In1 = [] :
+      In2 = Out,
+      Left = Right ;
+
+    In2 = [] :
+      In1 = Out,
+      Left = Right .
+
+/***************** Summation Process server predicates. **********************/
+
+make_summed_call(ProcessDefinition, Locals, Primes, Sum, Call,
+			In, NextIn, Errors, NextErrors) :-
+
+    true :
+      In ! call_sum(Name?, Procedures?, Call) |
+	utils#binary_sort_merge(Names?, NameList),
+	concatenated_sum_name(NameList?, Name),
+	summed_call(ProcessDefinition, Locals, Primes, Sum, Names, Procedures,
+			In', NextIn, Errors, NextErrors).
+
+  concatenated_sum_name(NameList, Name) + (NLH = NLT?, NLT) :-
+
+
+    NameList ? N :
+      ascii("+", Plus),
+      NLT' ! Plus |
+	string_to_dlist(N, NLT, NLT'),
+	self;
+
+    NameList =?= [N],
+    string_to_dlist(N, NH, []) :
+      NLT = NH |
+	list_to_string(NLH, Name);
+
+    NameList = [] :
+      NLH = _,
+      NLT = _,
+      Name = false.
+
+
+summed_call(ProcessDefinition, Locals, Primes, Sum, Names, Procedures,
+		In, NextIn, Errors, NextErrors) :-
+
+    Sum = `Name + Sum', string(Name) :
+      Names ! Name,
+      Procedures ! {Call?, CallDefinition?} |
+	make_local_call(ProcessDefinition, Locals, Primes, `Name, Call,
+			In, In', Errors, Errors'?, CallDefinition),
+	self;
+
+    Sum = Sum' + `Name, string(Name) :
+      Names ! Name,
+      Procedures ! {Call?, CallDefinition?} |
+	make_local_call(ProcessDefinition, Locals, Primes, `Name, Call,
+			In, In', Errors, Errors'?, CallDefinition),
+	self;
+
+    Sum = `Name, string(Name) :
+      Names = [Name],
+      Procedures = [{Call?, CallDefinition?}] |
+	make_local_call(ProcessDefinition, Locals, Primes, `Name, Call,
+			In, NextIn, Errors, NextErrors, CallDefinition);
+
+    Sum = Tuple + Sum', arg(1,Tuple,`Name), string(Name) :
+      Names ! Name,
+      Procedures ! {Call?, CallDefinition?} |
+	make_local_call(ProcessDefinition, Locals, Primes, Tuple, Call,
+			In, In', Errors, Errors'?, CallDefinition),
+	self;
+
+    Sum = Sum' + Tuple, arg(1,Tuple,`Name), string(Name) :
+      Names ! Name,
+      Procedures ! {Call?, CallDefinition?} |
+	make_local_call(ProcessDefinition, Locals, Primes, Tuple, Call,
+				In, In', Errors, Errors'?, CallDefinition),
+	self;
+
+    arg(1,Sum,`Name), string(Name) :
+      Names = [Name],
+      Procedures = [{Call?, CallDefinition?}] |
+	make_local_call(ProcessDefinition, Locals, Primes, Sum, Call,
+			In, NextIn, Errors, NextErrors, CallDefinition);
+    otherwise,
+    arg(1, ProcessDefinition, Name) :
+      Locals = _,
+      Primes = _,
+      Errors = [Name - illegal_process_summation(Sum) | NextErrors],
+      Names = [],
+      Procedures = false,
+      In = NextIn.
+
+/****************** Summation  Empty server predicates. **********************/
+
+sum_procedures(Summed, Entries, Errors) + (Cumulated = []) :-
+
+    Summed ? Name(Procedures, Call) |
+	cumulate,
+	extract_procedure_parts(Procedures, Calls, Channels, CodeTuples),
+	cumulated;
+
+    Summed = [] :
+      Cumulated = _,
+      Entries = [],
+      Errors = [].
+
+  extract_procedure_parts(Procedures, Calls, Channels, CodeTuples) :-
+
+    Procedures ? {Call, ProcedureDefinition},
+    ProcedureDefinition = {_Name, _Arity, PChs, _OAtom, _IAtom, CodeTuple} :
+      Calls ! Call,
+      Channels ! PChs,
+      CodeTuples ! CodeTuple |
+	self;
+
+    Procedures ? _Ignore,
+    otherwise |
+	self;
+
+    Procedures = [] :
+      Calls = [],
+      Channels = [],
+      CodeTuples = [].
+
+  cumulate(Name, Cumulated, Reply) :-
+
+    Cumulated = [Name | _] :
+      Reply = found;
+
+    Cumulated ? Other,
+    Other =\= Name |
+	self;
+
+    Cumulated = [] :
+      Name = _,
+      Reply = new.
+
+  cumulated(Summed, Entries, Errors, Cumulated,
+	Name, Calls, Channels, CodeTuples, Call, Reply) :-
+
+    Reply =?= found :
+      Channels = _,
+      CodeTuples = _ |
+	make_sum_call(Name, Calls, Call, Errors, Errors'?),
+	sum_procedures;
+
+    Reply =?= new :
+      Cumulated' = [Name | Cumulated] |
+	make_summed_rhs(Name, Calls, CodeTuples, 1, Sends, Code, FinalMode,
+				Errors, Errors'?),
+	sort_out_duplicates(Channels?, SumChannels, _Reply),
+	make_named_list(Sends?, Writes, Name-duplicate_send_channel_in_sum,
+				Errors', Errors''?),
+	make_named_guard(Writes?, Ask, Tell),
+	make_named_list(Code?, RHS, Name-duplicate_receive_channel_in_sum,
+				Errors'', Errors'''?),
+	make_named_predicates(';', RHS, RHS'),
+	channels_to_variables(SumChannels, Variables, N),
+	make_lhs_tuple(N?, Name, Variables, Tuple),
+	make_sum_procedure(FinalMode?, Name, (Ask? : Tell?), RHS'?, Tuple?,
+				Entries, Entries'?),
+	make_sum_call(Name, Calls, Call, Errors''', Errors''''?),
+	sum_procedures.
+
+
+make_sum_call(Name, Calls, Call, Errors, NextErrors)
+		+ (NamedArgs = AddArgs?, AddArgs) :-
+
+    Calls ? String, string(String) |
+	self;
+
+    Calls ? (_Name + Arguments) |
+	extract_named_arguments(Arguments, AddArgs, AddArgs'?),
+	self;
+
+    Calls = [] :
+      AddArgs = [] |
+	make_named_list(NamedArgs, ArgList,
+		Name-duplicate_channel_substitution, Errors, NextErrors),
+	complete_sum_call.
+
+  complete_sum_call(Name, ArgList, Call) :-
+
+    ArgList =?= [] :
+      Call = Name;
+
+    ArgList =\= [] :
+      Call = Name+(Substitutes) |
+	make_named_predicates(',', ArgList, Substitutes).
+
+
+make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
+		Errors, NextErrors) + (Mode = none, Sender = _) :-
+
+    CodeTuples ? ProcessMode(SendRHS, ProcessRHS),
+    Calls ? _,
+    SendRHS =?= (Idents : Writes | _Relay) |
+	add_sends_and_receives(Idents, Writes, ProcessRHS, Sender?,
+			Index, Index', Sends, Sends'?, Code, Code'?),
+	update_process_mode(Mode, ProcessMode, Mode'),
+	self;
+
+    CodeTuples ? ProcessMode([], ProcessRHS), ProcessRHS =\= [],
+    Calls ? _ |
+	add_receives(ProcessRHS, Sender, Code, Code'?),
+	update_process_mode(Mode, ProcessMode, Mode'),
+	self;
+
+    CodeTuples ? ProcessMode([], []),
+    Calls ? Call :
+      Errors ! (Name-invalid_mode_in_summation(Call? - ProcessMode)) |
+	update_process_mode(Mode, ProcessMode, Mode'),
+	self;
+
+    CodeTuples = [] :
+      Calls = _,
+      Index = _,
+      Sends = [],
+      Code = [],
+      FinalMode = Mode,
+      Errors = NextErrors |
+	final_process_mode(Name, Mode, Sender).
+
+  final_process_mode(Name, Mode, Sender) :-
+
+    Mode =?= mixed :
+      Name = _,
+      Sender = `pifcp(sendid);
+
+    Mode =?= send :
+      Sender = Name;
+
+    /* receive or none */
+    otherwise :
+      Name = _,
+      Mode = _,
+      Sender = [].
+
+  add_sends_and_receives(Idents, Writes, ProcessRHS, Sender,
+	Index, NewIndex, Sends, NextSends, Code, NextCode) :-
+
+    Idents =?= (Identify, Idents'),
+    Identify = (`ChannelName = _Tuple),
+    Writes =?= (Write, Writes'),
+    Write =?= write_channel(_,_),
+    ProcessRHS =?= (Sent, ProcessRHS'),
+    Sent =?= (`pifcp(chosen) = _Index : Tell | Body),
+    Index++ :
+      Sends ! ChannelName(Identify, Write'?),
+      Code ! Index((`pifcp(chosen) = Index : Tell | Body)) |
+	reindex_write(Write, Sender, Index, Write'),
+	self;
+
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    ProcessRHS =?= (`pifcp(chosen) = _Index : Tell | Body),
+    Index++ :
+      NewIndex = Index',
+      Sends = [ChannelName(Idents, Write?) | NextSends],
+      Code = [Index((`pifcp(chosen) = Index : Tell | Body)) | NextCode] |
+	reindex_write(Writes, Sender, Index, Write);
+
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    ProcessRHS =?= (`pifcp(chosen) = _Index | Body),
+    Index++ :
+      NewIndex = Index',
+      Sends = [ChannelName(Idents, Write?) | NextSends],
+      Code = [Index((`pifcp(chosen) = Index | Body)) | NextCode] |
+	reindex_write(Writes, Sender, Index, Write);
+
+    ProcessRHS =?= (Receive; ProcessRHS'),
+    otherwise |
+	add_receives(Receive, Sender, Code, Code'?),
+	self;
+
+    otherwise :
+      Writes = _,
+      Idents = _,
+      NewIndex = Index,
+      NextSends = Sends |
+	add_receives(ProcessRHS, Sender, Code, NextCode).
+
+  reindex_write(Write, Sender, Index, NewWrite) :-
+
+    Write = write_channel({_Sender, ChannelList, _SendIndex, Chosen}, VN) :
+      NewWrite = write_channel({Sender, ChannelList, Index, Chosen}, VN).
+
+add_receives(Receives, Sender, Code, NextCode) :-
+
+    Receives = (Cdr ; Receives'),
+    Cdr =?= ((`ChannelName = _, _) : _ | self) |
+	analyze_receives.
+
+  analyze_receives(Receives, Sender, ChannelName, Cdr, Code, NextCode) :-
+
+    Sender =?= [],
+    Receives =\= (_ ; _) :
+      Code = [ChannelName(Cdr, Receives) | NextCode];
+
+    Sender =?= [],
+    Receives =?= (Consume ; Receives') :
+      Code = [ChannelName(Cdr, Consume) | Code'] |
+	add_receives;
+
+    /* Otherwise, the Sum is mixed. */
+    Sender =\= [],
+    Receives =\= (_ ; _) :
+      Code = [ChannelName(Cdr, Iterate?, Consume?) | NextCode] |
+	invent_iterate(ChannelName, Receives, Iterate, Consume);
+
+    Sender =\= [],
+    Receives =?= (Consume; Receives'), Consume =\= (_ | self) :
+      Code = [ChannelName(Cdr, Iterate?, Consume'?) | Code'] |
+	invent_iterate(ChannelName, Consume, Iterate, Consume'),
+	add_receives;
+
+    /* The Process was already mixed. */
+    Sender =\= [],
+    Receives =?= (Iterate; Consume),
+    Iterate =?= (_ | self), Consume =\= (_ ; _) :
+      Code = [ChannelName(Cdr, Iterate, Consume) | Code'] |
+	add_receives;
+
+    Sender =\= [],
+    Receives =?= (Iterate; Consume ; Receives'),
+    Iterate =?= (_ | self) :
+      Code = [ChannelName(Cdr, Iterate, Consume) | Code'] |
+	add_receives.
+
+  invent_iterate(ChannelName, Consume, Iterate, NewConsume) :-
+
+    Consume = ( _ChMsg,
+		_Mss =?= [{_Sender, ChannelList, _Tag, _Choose} | _],
+		_We : _Tell | _Body) |
+	make_guard_receive(ChannelName, ChannelList, pifcp(sendid),
+					{_Cdr, Iterate}, NewConsume).
+
+/* Compare to make_RHS2 */
+make_sum_procedure(Mode, Name, Writes, RHS, Tuple, Entries, NextEntries) :-
+
+    Mode =?= send :
+      Entries = [(Atom? :- (Writes | SendChoices?)), (ChoiceAtom? :- RHS)
+		| NextEntries] |
+	tuple_to_atom(Tuple, Atom),
+	make_choice_name(Name, ".sends", SendChoices),
+	make_choice_atom(Atom, SendChoices?, [`pifcp(chosen)],
+				ChoiceAtom);
+
+    Mode =?= mixed :
+      Sender = `pifcp(sendid),
+      Entries = [(Atom? :- Writes? |
+			pi_monitor#unique_sender(Name, Sender),
+			MixedChoices?),
+		 (ChoiceAtom? :- RHS?)
+		| NextEntries] |
+	tuple_to_atom(Tuple, Atom),
+	make_choice_name(Name, ".mixed", MixedChoices),
+	make_choice_atom(Atom, MixedChoices, [`pifcp(chosen), Sender],
+				ChoiceAtom);
+
+    /* receive, none */
+    Mode =\= send, Mode =\= mixed :
+      Name = _,
+      Writes = _,
+      Entries = [(Atom? :- RHS) | NextEntries] |
+	tuple_to_atom(Tuple, Atom).
+
+
+
+/************************** Summation Utilities ******************************/
+
+make_named_guard(Writes, Ask, Tell) :-
+
+    Writes ? _Name(Idents, Write), Writes' =\= [] :
+      Ask = (Idents, Ask'?),
+      Tell = (Write, Tell'?) |
+	self;
+
+    Writes = [_Name(Idents, Write)] :
+      Ask = Idents,
+      Tell = Write;
+
+    Writes = [] :
+      Ask = true,
+      Tell = true.
+
+
+make_named_list(NamedClauses, Clauses, Diagnostic, Errors, NextErrors) :-
+
+	sort_out_duplicates([NamedClauses], Clauses, Reply),
+	diagnose_duplicate.
+
+  diagnose_duplicate(Reply, Diagnostic, Errors, NextErrors) :-
+
+    Reply = ok :
+      Diagnostic = _,
+      Errors = NextErrors;
+
+    Reply =\= ok :
+      Errors = [Diagnostic | NextErrors].
+
+make_named_predicates(Operator, List, PredicateList) :-
+
+    List =?= [] :
+      Operator = _,
+      PredicateList = true;
+
+    List ? Name(Predicate1, Predicate2, Predicate3) :
+      PredicateList = {Operator, Predicate1,
+				{Operator, Predicate2, PredicateList'}},
+      List'' = [Name(Predicate3) | List'] |
+	self;
+
+    List ? Name(Predicate1, Predicate2) :
+      PredicateList = {Operator, Predicate1, PredicateList'},
+      List'' = [Name(Predicate2) | List'] |
+	self;
+
+    List ? _Name(Predicate),
+    List' =\= [] :
+      PredicateList = {Operator, Predicate, PredicateList'?} |
+	self;
+
+    List =?= [_Name(Predicate)] :
+      Operator = _,
+      PredicateList = Predicate.
+
+extract_named_arguments(Arguments, Args, NextArgs) :-
+
+    Arguments = (Substitution, Arguments'),
+    Substitution =?= (`Name = _Value) :
+      Args ! Name(Substitution) |
+	self;
+
+    Arguments =\= (_ , _),
+    Arguments =?= (`Name = _Value) :
+      Args = [Name(Arguments) | NextArgs].
