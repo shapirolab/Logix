@@ -39,7 +39,7 @@ debug_remove_channels(Ambient, ChannelTuple, WaitChannelTuple, Debug) :-
     tuple(ChannelTuple),
     arity(ChannelTuple, Index),
     make_tuple(Index, OutTuple) :
-    Ready = ready |
+      OutChannel = ready |
 	debug_channel_tuple,
 	debug_out(Ambient, close, FormattedChannelTuple?, Debug);
 
@@ -48,17 +48,16 @@ debug_remove_channels(Ambient, ChannelTuple, WaitChannelTuple, Debug) :-
       Debug = _,
       WaitChannelTuple = ChannelTuple.
 
-  debug_channel_tuple(Index, ChannelTuple, WaitChannelTuple,
-			OutTuple, FormattedChannelTuple, Ready) :-
-    known(Ready),
+  debug_channel_tuple(OutChannel, Index, ChannelTuple, WaitChannelTuple,
+			OutTuple, FormattedChannelTuple) :-
+    known(OutChannel),
     arg(Index, ChannelTuple, Channel),
-    arg(Index, OutTuple, OutChannel),
+    arg(Index, OutTuple, OutChannel'),
     Index-- |
-	user_macros#expand(format_channel(CHAR_d, Channel, OutChannel),
-				Ready\Ready'),
+	spi_debug # format_channel(CHAR_d, Channel, OutChannel'),
 	self;
 
-    known(Ready),
+    known(OutChannel),
     otherwise :
       Index = _,
       FormattedChannelTuple = OutTuple,
@@ -85,10 +84,50 @@ run(Commands, System, Out) :-
 	ambient + (AmbientName = public, Parent = System).
 
 /*
- * The system ambient is not a nested computation.
- * It is a normal member of its computation (usually
- * a shell computation).
- */
+** The system ambient is not a nested computation.
+** It is a normal member of its computation (usually
+** a shell computation).
+**/
+
+/*
+** serve_system monitors the command stream (In) and the events stream (Events)
+**
+** It recognises commands:
+**
+**    ambient_id(AmbientId^)
+**    done(Child, Reply^)
+**    lookup(Locus, PrivateChannel, SharedChannel?^, Addrefs)
+**    remove_channels(ChannelTuple, SubAmbient)
+**    new_child(Child)
+**    new_id(Id^)
+**    resume(Reply^)
+**    state(State^)
+**    suspend(Reply^)
+**    tree(Format, Tree^)
+**
+** and debugging commands:
+**
+**    debug(NewChannel)
+**    debug(NewStream^)
+**
+** It recognises events:
+**
+**    aborted
+**
+** State:
+**
+**   Children - list of FCP vectors to child ambients
+**   SharedChannels - list of inter-ambient channels in use by children
+**   Status - one of suspended,resumed
+**   UniqueId - integer updated and assigned to new ambients
+**
+** FCP Vectors
+**
+**   Ambient - to {Id,In}
+**   Debug - to {DebugOut} (shared by all ambients)
+**   Scheduler - to spi_monitor {Schedule} (shared by all ambients)
+*/
+
 serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 			Scheduler, Ambient, Debug) :-
 
@@ -184,22 +223,6 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	Reply = resume - false(Status),
 	self;
 
-    In ? resolvent(Resolvent),
-    Status =?= running :
-      In'' = [suspend(_Reply), resolvent(Resolvent) | In'] |
-	self;
-
-    In ? resolvent(Resolvent),
-    Status =?= suspended |
-	DEBUG(resolvent, resolving),
-	resolve_children(Children, Children', Resolvent, []),
-	self;
-
-    In ? resolvent(Resolvent),
-    Status =\= running, Status =\= suspended :
-      Resolvent = ["Can't resolve"(Status)] |
-	self;
-
 /****************************** Ambient Tree ********************************/
 
     In ? tree(channels, Tree) :
@@ -290,8 +313,8 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	Reply?(Status) = true(suspended).
 
 /*
- * Create a nested computation.
- */
+** Create a nested computation.
+**/
 ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
     vector(Parent) :
       write_vector(AMBIENT_CONTROL, new_id(UniqueId), Parent, Parent'),
@@ -389,6 +412,46 @@ serve_ambient0(In, Events, FromSub, Done,
 	       Requests, Controls, AmbientDone, Scheduler, Debug) :-
 	serve_ambient + (PublicChannels = [{0, _, -1, ""}, {[], _, -1, ""}],
 			 PrivateChannels = [], SharedChannels = []).
+
+/*
+** serve_ambient monitors the command stream (In), the events stream (Events)
+** and the delegated request stream (FromSub).
+**
+** It recognises commands:
+**
+**    ambient_id(AmbientId^)
+**    done(Child, Reply^)
+**    lookup(Locus, PrivateChannel, SharedChannel?^, Addrefs)
+**    remove_channels(ChannelTuple, SubAmbient)
+**    new_child(Child)
+**    new_id(Id^)
+**    resume(Reply^)
+**    state(State^)
+**    suspend(Reply^)
+**    tree(Format, Tree^)
+**
+** and debugging commands:
+**
+**    debug(NewChannel)
+**    debug(NewStream^)
+**
+** It recognises events:
+**
+**    aborted
+**
+** State:
+**
+**   Children - list of FCP vectors to child ambients
+**   SharedChannels - list of inter-ambient channels in use by children
+**   Status - one of suspended,resumed
+**   UniqueId - integer updated and assigned to new ambients
+**
+** FCP Vectors
+**
+**   Ambient - to {Id,In}
+**   Debug - to {DebugOut} (shared by all ambients)
+**   Scheduler - to spi_monitor {Schedule} (shared by all ambients)
+*/
 
 serve_ambient(In, Events, FromSub, Done,
 	      Ambient, Parent, Children,
@@ -726,14 +789,6 @@ serve_ambient(In, Events, FromSub, Done,
       Controls ! suspend |
 	control_children(suspend, Children, Children', ReadyChildren),
 	ambient_suspending,
-	self;
-
-    In ? resolve(Resolvent, NextResolvent),
-    read_vector(AMBIENT_ID, Ambient, AmbientId) :
-      Controls ! request(state(R)),
-      Resolvent ! AmbientId |
-	copy_resolvent(R, Resolvent', Resolvent''),
-	resolve_children(Children, Children', Resolvent'', NextResolvent),
 	self;
 
     In ? resume(Ready) :
@@ -1394,7 +1449,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
   merge_channels(FrozenAtoms, MeltedAtoms, NewArgument, Action,
 		FromAmbient, ToAmbient, In, NextIn, MeltedArgument) :-
     /* Variables are inherited by the new ambient,
-     * not by the receiver of the channel tuple.
+    ** not by the receiver of the channel tuple.
      */
     FrozenAtoms ? Variable,
     unknown(Variable) :
@@ -1879,21 +1934,6 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
       Scheduler = _,
       NewRemoved = Removed |
 	true. 
-
-
-resolve_children(Children, NewChildren, Resolvent, NextResolvent) :-
-
-    Children ? Child :
-      NewChildren ! Child',
-      write_vector(AMBIENT_CONTROL,
-		   resolve(Resolvent, Resolvent'?),
-		   Child, Child') |
-	self;
-
-    Children =?= [] :
-      NewChildren = [],
-      Resolvent = NextResolvent.
-
 
 resume_ambient_when_ready(In, Events, FromSub, Done,
 			  Ambient, Parent, Children,

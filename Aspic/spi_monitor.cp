@@ -85,7 +85,7 @@ initialize(In) :-
 ** State
 **
 **   Options - for spi_utils functions
-**   Globals - sorted (bounded) list of global channel {name,basrate}
+**   Globals - sorted (bounded) list of global channel {name,baserate}
 **   Scheduler - Channel to Scheduling input
 **
 ** Side-effects
@@ -447,8 +447,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 ** Output (Streams):
 **
 **   Debug  - scheduling debugging info
-**   Record - record start communication, complete transmission
-**            and internal clock
+**   Record - recorded actions for analysis
 **   Waiter - Logix system requests to wait for idle
 **
 ** Processing:
@@ -456,14 +455,14 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **   Maintain time  Now
 **
 ** Whenever the system becomes idle, execute(SpiOffset, {SPI_STEP, ...})
-** to select and  complete a transmission (internal execute is used when
+** to select and complete a transmission (internal execute is used when
 ** the SPI function is unknown).
 **
 ** Record:
 **
-**   Changes to  Now .
-**   Start Communication .
-**   Complete Transmission .
+**   Changes to  Now
+**   Start Communication
+**   Complete Transmission
 */
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
