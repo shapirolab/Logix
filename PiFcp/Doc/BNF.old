@@ -5,7 +5,7 @@ BNF for PiFcp
 <process_definitions>  ::= <process>
                            <process> . <process_definitions>
 
-<process>              ::= <left_hand_side> ::= <right_hand_side>
+<process>              ::= <left_hand_side> :- <right_hand_side>
 
 <left_hand_side>       ::= <atom>
                            <atom>+<stochastic_channel>
@@ -33,8 +33,8 @@ BNF for PiFcp
 <synchronized_clauses> ::= <synchronized_clause> 
                            <synchronized_clause> ; <synchronized_clauses>
 
-<synchronized_clause>  ::= <communication> , <right_hand_side>
-                           <cdr> , self
+<synchronized_clause>  ::= <communication> | <right_hand_side>
+                           <cdr> | self
 
 <communication>        ::= <receive>
                            <send>
@@ -49,18 +49,18 @@ BNF for PiFcp
 <logix_guard_clauses>  ::= <logix_guard_clause> 
                            <logix_guard_clause> ; <logix_guard_clauses>
 
-<logix_guard_clause>   ::= {<logix_guard_list>} , <right_hand_side>
+<logix_guard_clause>   ::= {<logix_guard_list>} | <right_hand_side>
 
 <logix_guard_list>     ::= <logix_ask_guard>
                            <logix_ask_guard> , <logix_guard_list>
 
 <comparison_clauses>   ::= <comparisons>
-                           <comparisons> ; otherwise , <right_hand_side>
+                           <comparisons> ; otherwise | <right_hand_side>
 
 <comparisons>          ::= <comparison_clause>
                            <comparison_clause> ; <comparisons>
 
-<comparison_clause>    ::= <comparison> , <right_hand_side>
+<comparison_clause>    ::= <comparison> | <right_hand_side>
 
 <comparison>           ::= <compare>
                            <compare> & <comparison>
@@ -69,7 +69,7 @@ BNF for PiFcp
                            <channel> =\= <channel>
 
 <body>                 ::= <call>
-                           <call> | <body>
+                           <call> , <body>
 
 <call>                 ::= <local_sum>
                            <communication>
@@ -79,7 +79,6 @@ BNF for PiFcp
                            self
 			   self( <substitution_list> )
                            true
-                           0
 
 <local_sum>            ::= <local_call>
                            <local_sum> + <local_call>
@@ -178,31 +177,31 @@ Channel typing has been omitted.
 
 The additive definition of <left_hand_side> is syntactic sugar - e.g.
 
-    P+(<channel_list>) ::= <right_hand_side>.
+    P+(<channel_list>) :- <right_hand_side>.
 
 is equivalent to:
 
-    P ::= << <channel_list> . P1 . P1 ::= <right_hand_side> >> .
+    P :- << <channel_list> . P1 . P1 :- <right_hand_side> >> .
 
 The recursive definition of <right_hand_side> is syntactic sugar - e.g.
 
-    P ::= <communication1> , ({<logix_guard_list>} , Q;
-          <communication2> , (<comparison> , R; otherwise , S).
+    P :- <communication1> | ({<logix_guard_list>} | Q;
+         <communication2> | (<comparison> | R; otherwise | S).
 
 is equivalent to:
 
-    P ::= <communication1> , << P1 . P1 ::= {<logix_guard_list>} , Q >>;
-          <communication2> , << P2 . P2 ::= <comparison> , R ; otherwise , S >>.
+    P :- <communication1> | << P1 . P1 :- {<logix_guard_list>} | Q >>;
+         <communication2> | << P2 . P2 :- <comparison> | R ; otherwise | S >>.
 
 and
 
-    P ::= <communication> , ( {<logix_guard_list1>} , Q ;
-                              {<logix_guard_list2>} , R ) .
+    P :- <communication> | ( {<logix_guard_list1>} | Q ;
+                             {<logix_guard_list2>} | R ) .
 
 is equivalent to:
 
-    P ::= <communication> , << P1 . P1 ::= {<logix_guard_list1>} , Q ;
-                                           {<logix_guard_list2>} , R >> .
+    P :- <communication> | << P1 . P1 :- {<logix_guard_list1>} | Q ;
+                                         {<logix_guard_list2>} | R >> .
 
 
 A <local_call> in a <local_sum> must be to a <process> whose <right_hand_side>
