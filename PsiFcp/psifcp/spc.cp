@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/11/06 13:37:28 $
+		       	$Date: 2000/11/26 08:42:25 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -78,25 +78,25 @@ output(In, ProcessTable, Terms) :-
 	self;
 
     In ? export(Atom, RHSS, _Procedure) :
-      Terms ! (Atom'? :- RHSS'?) |
+      Terms ! (Atom'? :- NewRHSS?) |
 	utilities#tuple_to_atom(Atom, Atom'),
 	/* Eliminate unused global channels for this export. */
 	update_globals(RHSS, RHSS', ProcessTable, ProcessTable'?),
+	kluge_globals,
 	self;
 
     /* We could add a check here for unused channels, i.e. ones
        that are not needed by the derived procedure. */
     In ? outer(Atom, RHSS, _Procedure) :
-      Terms ! (Atom' :- RHSS) |
-	utilities#tuple_to_atom(Atom, Atom'),
+      Terms ! (Atom :- NewRHSS?) |
+	kluge_news,
 	self;
 
     In ? Mode(Atom, RHSS, Procedure),
     Mode =\= outer, Mode =\= export, Mode =\= conflict,
     arg(1, Atom, Name) :
       ProcessTable ! member(Name, Channels, _Ok),
-      Terms ! (Atom'? :- NewRHSS?) |
-	utilities#tuple_to_atom(Atom, Atom'),
+      Terms ! (Atom :- NewRHSS?) |
 	prototype_channel_table,
 	utilities#untuple_predicate_list(';', RHSS, RHSS'),
 	stochastic;
@@ -190,27 +190,13 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
 
     RHSS =?=  (psi_monitor # global_channels(Globals, Scheduler), Body) :
-      NewRHSS = (psi_monitor # global_channels(NewGlobals?, Scheduler),
-						NewBody?),
-      ProcessTable = [member(Name, Channels, Ok) | NextProcessTable] |
-	extract_entry_name,
-	update_globals1,
-	update_body_list,
-	utilities#make_predicate_list(',', NewBody'?, NewBody);
+      NewRHSS = (psi_monitor # global_channels(NewGlobals?, Scheduler), Body),
+      ProcessTable = [member(Body, Channels, Ok) | NextProcessTable] |
+	update_globals1;
 
     otherwise :
       NewRHSS = RHSS,
       NextProcessTable = ProcessTable.
-
-  extract_entry_name(Body, Name, BodyList) :-
-
-    Body =?= (Assignment, Body'), Assignment =?= (_Variable = _Real) :
-      BodyList ! Assignment |
-	self;
-
-    otherwise :
-      Name = Body,
-      BodyList = [Body].
 
   update_globals1(Globals, Channels, NewGlobals, Ok) :-
 
@@ -237,33 +223,6 @@ update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
       Name = _,
       Global = _,
       NewGlobals = NextNewGlobals.
-
-
-update_body_list(BodyList, NewGlobals, NewBody) :-
-
-    BodyList ? Assignment, Assignment =?= (Variable = _Real) |
-	ignore_unused_assignment(Assignment, Variable, NewGlobals,
-					NewBody, NewBody'?),
-	self;
-
-    otherwise :
-      NewGlobals = _,
-      NewBody = BodyList.
-
-  ignore_unused_assignment(Assignment, Variable, Globals, Body, NextBody) :-
-
-    Globals ? Global, arg(3, Global, Variable) :
-      Globals' = _,
-      Body = [Assignment | NextBody];
-
-    Globals ? _Other,
-    otherwise |
-	self;
-
-    Globals =?= [] :
-      Assignment = _,
-      Variable = _,
-      Body = NextBody.
 
 
 rewrite_clauses(Communicate1, Requests, Communications, Communicate2) :-
@@ -605,3 +564,131 @@ extract_psi_channels(Variables, Channels) :-
     Variables = [] :
       Channels = [].
 
+/*
+** The following procedures are necessary because the assembler
+** cannot handle real values in a tuple, except for the last
+** element.  Note that BaseRate IS the last element of a tuple,
+** and therefor is handled correctly.
+*/
+
+kluge_news(RHSS, NewRHSS) :-
+    true :
+      NewRHSS = (NewAsks? : NewTells? | Body) |
+	partition_rhs(RHSS, Asks, Tells, Body),
+	utilities#untuple_predicate_list(",", Asks, Asks', NewConvert?),
+	utilities#untuple_predicate_list(",", Tells, Tells'),
+	kluge_new_channels + (Convert = []),
+	utilities#make_predicate_list(",", Asks'?, NewAsks),
+	utilities#make_predicate_list(",", NewTells'?, NewTells).
+
+  kluge_new_channels(Tells, Convert, NewTells, NewConvert) :-
+
+    Tells ? write_channel(new_channel(Name, Channel, ComputeWeight, BaseRate),
+				Scheduler),
+    tuple(ComputeWeight), ComputeWeight =\= `_,
+    arity(ComputeWeight, A),
+    make_tuple(A, ComputeWeight') :
+      NewTells ! write_channel(
+			new_channel(Name, Channel, ComputeWeight'?, BaseRate),
+			Scheduler) |
+	kluge_real_parameters(ComputeWeight, Convert, 0,
+				ComputeWeight', Convert'),
+	self;
+
+    Tells ? Tell,
+    otherwise :
+      NewTells ! Tell |
+	self;
+
+    Tells =?= [] :
+      NewTells = [],
+      NewConvert = Convert.
+
+	
+kluge_globals(RHSS, NewRHSS) :-
+
+    RHSS =?= (psi_monitor#global_channels(Globals, Scheduler), Goals) :
+      NewRHSS =
+	(Ask? | psi_monitor#global_channels(NewGlobals?, Scheduler), Goals) |
+	kluge_global_channels + (Convert = []),
+	utilities#make_predicate_list(",", NewConvert?, Ask);
+
+    otherwise :
+      NewRHSS = RHSS.
+
+
+  kluge_global_channels(Globals, Convert, NewGlobals, NewConvert) :-
+
+    Globals ? Global, Global =?= Name(Channel, ComputeWeight, BaseRate),
+    tuple(ComputeWeight), ComputeWeight =\= `_,
+    arity(ComputeWeight, A),
+    make_tuple(A, ComputeWeight') :
+      NewGlobals ! Name(Channel, ComputeWeight'?, BaseRate) |
+	kluge_real_parameters(ComputeWeight, Convert, 0,
+				ComputeWeight', Convert'),
+	self;
+
+    Globals ? Global,
+    otherwise :
+      NewGlobals ! Global |
+	self;
+
+    Globals =?= [] :
+      NewConvert = Convert,
+      NewGlobals = [].
+
+kluge_real_parameters(Tuple, Convert, Index, NewTuple, NewConvert) :-
+
+    Index++,
+    arg(Index', Tuple, Parameter),
+    arg(Index', NewTuple, Parameter'),
+    Index' < arity(Tuple),
+    real(Parameter),
+    convert_to_string(Parameter, String),
+    Convert =?= [] :
+      Convert' = [convert_to_real(String, `psifcp(1))],
+      Parameter' = `psifcp(1) |
+	self;
+
+    Index++,
+    arg(Index', Tuple, Parameter),
+    arg(Index', NewTuple, Parameter'),
+    Index' < arity(Tuple),
+    real(Parameter),
+    convert_to_string(Parameter, String),
+    Convert =\= [] :
+      Parameter' = `psifcp(N?) |
+	kluge_real_parameter(String, Convert, Convert, N, Convert'),
+	self;
+
+    Index++,
+    arg(Index', Tuple, Parameter),
+    arg(Index', NewTuple, Parameter'),
+    Index' < arity(Tuple),
+    otherwise :
+      Parameter = Parameter' |
+	self;
+
+    Index++,
+    arg(Index', Tuple, Parameter),
+    arg(Index', NewTuple, Parameter'),
+    Index' =:= arity(Tuple) :
+      Parameter' = Parameter,      
+      NewConvert = Convert.
+
+  kluge_real_parameter(String, Search, Convert, N, NewConvert) :-
+
+    Search ? convert_to_real(String, `psifcp(I)) :
+      Search' = _,
+      N = I,
+      NewConvert = Convert;
+
+    Search ? _,
+    otherwise |
+	self;
+
+    Search =?= [],
+    Convert = [convert_to_real(_String, `psifcp(I)) | _],
+    I++ :
+      N = I',
+      NewConvert = [convert_to_real(String, `psifcp(I')) | Convert].
