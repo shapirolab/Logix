@@ -1,0 +1,66 @@
+The Fcp module pi_monitor serves requests of the form:
+
+    unique_sender(String?, Name^)
+
+A unique Name is formed by concatenating String with a hyphen (-)
+and a unique integer.
+
+
+The Fcp module pi_utils provides three utilities:
+
+1. make_channel/1
+
+       make_channel(Channel^)
+
+   makes a pi_fcp channel of Channel = "SYSTEM"(VC, MsC),
+   where VC is an Fcp channel, and MsC is its initial
+   message stream head.
+
+       make_channel(S?)
+
+   where S is a string, makes a pi_fcp channel as
+   above, named S.
+
+   make_channel/4.
+
+       make_channel(Channel^, Creator?, VC^, MsC^)
+
+   is the same as make_channel/1, except the caller
+   supplies the functor, and the values VC and MsC
+   are returned.
+
+       make_channel(S?, Creator?, VC^, MsC^)
+
+   where S is a string, behaves like make_channel(S)
+   above, using the given Creator, and returning VC
+   and MsC.
+
+2. send/2
+
+       send(Message?, Channel?)
+
+   creates a unique message identifier, Sender, using
+   pi_monitor (Sender = "PI_UTILS.send-#".  It constructs
+   a pi_fcp message:
+
+       Sender(Message, a, _)
+
+   and writes it to the Fcp channel of Channel.
+
+   When Channel is a string, the corresponding pi_fcp
+   channel is found, and the pi_ccp message is written
+   to its Fcp channel.
+
+
+3. receive/2
+
+       receive(Channel?, Message^)
+
+   skips previously consumed messages in the message
+   stream of the pi_fcp Channel, consuming the first
+   (unconsumed) offered message by unifying its
+   ChoiceTag with its Choice.
+
+   When Channel is a string, the corresponding pi_fcp
+   channel is found, and a pi_fcp message from its
+   message stream is found and consumed as above.

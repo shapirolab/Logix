@@ -1,0 +1,135 @@
+BNF for PiFcp
+
+<program>             ::= <process_definitions> .
+
+<process_definitions> ::= <process>
+                          <process> . <process_definitions>
+
+<process>             ::= <left_hand_side> :- <right_hand_side>
+
+<left_hand_side>      ::= <atom>
+                          <atom>+<channel>
+                          <atom>+(<channel_list>)
+
+<atom>                ::= <name>
+                          <name>(<channel_list>)
+
+<channel_list>        ::= <channel>
+                          <channel>, <channel_list>
+
+<right_hand_side>     ::= <guarded_clauses>
+                          <body>
+
+<guarded_clauses>     ::= <guarded_clause> 
+                          <guarded_clause> ; <guarded_clauses>
+
+<guarded_clause>      ::= <compound_guard> | <body>
+
+<compound_guard>      ::= <guard>
+                          <guard> | <compound_guard>
+
+<guard>               ::= <communication>
+                          <compare>
+                          <compare> & <guard>
+
+<communication>       ::= <receive>
+                          <send>
+
+<receive>             ::= <channel> ? <message>
+
+<send>                ::= <channel> ! <message>
+
+<compare>             ::= <channel> =?= <channel>
+                          <channel> =\= <channel>
+                          <channel_list> =?= <channel_list>
+                          <channel_list> =\= <channel_list>
+
+<message>             ::= []
+                          {<channel_list>}
+
+<body>                ::= <call>
+                          <call> , <body>
+
+<call>                ::= <atom>
+                          <name>( <substitution_list> )
+                          <communication>
+                          << <new_scope> >>
+                          true
+                          <external_call>
+                          <logix call>
+
+<substitution_list>   ::= <substitution>
+                          <substitution> , <substitution_list>
+
+<substitution>        ::= <channel> = <channel>
+
+<new_scope>           ::= <channel_list> . <scope_content>
+                          <scope_content>
+
+<scope_content>       ::= <right_hand_side>
+                          <right_hand_side> . <process_definitions>
+
+<external_call>       ::= <logix_module_name>#<atom>
+                          <logix_module_name>#<external_call>
+
+<logix_call>          ::= <logix_module_name>#<logix_atom>
+                          <logix_module_name>#<logix_call>
+
+Primitives:
+
+
+A <channel> is an alpha-numeric string, beginning with an lower case letter,
+which may contain  an underscore (_) character, or it is just an underscore
+character.  By convention the <channel> "_" is anonymous; it does not match
+any other <channel>, not even another "_" <channel>.
+
+
+A <name> is an alpha-numeric string, beginning with a upper case letter, which
+may contain an underscore (_) character.
+
+
+A <logix_module_name> is a non-empty string.
+
+
+Notes:
+
+
+The "new" predicate has been subsumed into a prefix <channel_list> of
+a <new_scope> and the added <channel_list> of a <process>.
+
+The <channel>s in the <arguments> of a <process> are provided by a caller.
+A <channel> may be "extruded" from a <process> by a <send> to such an argument
+channel.
+
+
+If a <process> is declared at level one of a <program> definition, it may be
+called by an external process.
+
+
+Nested "new" processes are scoped with curly braces (see definition of
+<new_scope>).
+
+
+Channel typing is not (yet) explicit.  It may not be necessary.
+
+
+A <logix_atom> is any Logix procedure call.
+
+
+Reserved atoms are not (yet) specified, except for "true", which may only
+appear as the last <call> in a <body>.
+
+
+The recursive definition of <compound_guard> is syntactic sugar - e.g.
+
+    p :- <guard1> & <compound_guard1> | q;
+         <guard2> & <compound_guard2> | r.
+
+is equivalent to:
+
+    p :- <guard1> | p1;
+         <guard2> | p2.
+
+    p1 :- <compound_guard1> | q.
+
+    p2 :- <compound_guard2> | r.
