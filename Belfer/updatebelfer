@@ -1,6 +1,6 @@
 #!/bin/csh
 if !($?DOC_DIR) then
-    setenv DOC_DIR ncstrl.weizmann_il
+	setenv DOC_DIR "/WWW/dienst/db_brr/ncstrl.weizmann_il";
 endif
 if !($?BIB_DIR) then
     setenv BIB_DIR ncstrl
