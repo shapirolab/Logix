@@ -1,45 +1,39 @@
-The Logix system may be installed on linux, sgi and solaris
-platforms.  To install the Logix system (e.g. on a linux
-platform):
+The most recent release of the system is in this directory, named:
 
-    % cd Logix
-    % install LINUX -h20000
+    release.tar.gz
 
-To install on an sgi or solaris platform, substitute SGI or
-SOLARIS for LINUX.
+To copy the file, right-click on it and select "Save Link (Target) as ..."
+in Netscape or "Save Target as ..." in Microsoft Internet Explorer.  Then
+browse to the directory to which it is to be copied, and click "Save" (or
+"Save as").
 
-The generated file may be used to start a Logix session on the
-appropriate platform - e.g.s:
+To expand the release:
 
-    % Logix/linux_logix
-    % Logix/sgi_ligix
-    % Logix/solaris_logix
+    zcat release.tar.gz | tar -xf -
 
-However, do NOT run the system from within the Logix Directory,
-nor from within any of its sub-directories.
+A directory named Spi-release and a system of sub-directories will be
+expanded in the current directory.
 
-During a Logix session, enter:
+A release includes emulators for linux, sgi and solaris platforms.
+To install it on one or more of those processors, see the README file in
+Spi-release.
 
-    @h
+Additional documentation for the Logix system is in LogixDocs.
 
-for Logix help, or:
+The file:
 
-    @ph
+    update.tar.gz
 
-for Stochastic Pi Calculus help.  See user_macros.txt in sub-
-directory Documentation for details about the user macros.
+contains modifications to the release.
 
-The Documentation file includes Stochastic Pi Calculus BNF and
-various notes.
+Copy it to Spi-release (as above).  Then
 
-The files in bin are used to extract tabular information from a
-Stochastic Pi Calculus application session (see record.txt in
-sub-directory Documentation).
+    cd Spi-release
 
-Some examples of Stochastic Pi Calculus programs are included in
-sub-directory Examples.
+and expand the updates by:
 
-The BioSpi sub-directory supports applications written in Ambient
-Stochastic Pi Calculus, including examples in its sub-directory
-Examples.
+    zcat updates.tar.gz | tzr -xf -
+    rm */fcp
+
+Finally, re-install for your platform(s).
 
