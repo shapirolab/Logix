@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/24 11:35:57 $
+		       	$Date: 1999/12/29 08:08:54 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -268,7 +268,7 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
     In ? remote_call(Call1, Call2),
     arg(1, ProcessDefinition, Name) |
 	extract_arguments_or_substitutes(Name, Call1, Arguments, _Substitutes,
-			Errors, Errors'?, 2, channels),
+			Errors, Errors'?, 2, channel),
 	instantiated_local_channels(Primes, Arguments?, Arguments'),
 	complete_remote_call(ProcessDefinition, Call1, Arguments'?, Call2,
 				Errors', Errors''?),
@@ -454,11 +454,24 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 	check_for_duplicates(LocalList?, LocalList1,
 				{Name?, channel_duplicates_parameter},
 					Errors''', Errors''''?),
-	construct_lhs_atoms(Name?, ParamList1?, LocalList1?, GlobalList,
+	correct_for_duplication(LocalList?, LocalList1?, ParamList,
+				ChannelList1?, ChannelList2),
+	construct_lhs_atoms(Name?, ParamList1?, GlobalList, ChannelList2?,
 				Channels, OuterAtom, InnerAtom),
 	serve_process_scope(ProcessScope?, ProcessDefinition?,
 				Out, NextOut, Errors'''', NextErrors).
 
+  correct_for_duplication(L1, L2, P, C1, C2) :-
+
+    L1 =?= L2 :
+      P = _,
+      C2 = C1;
+
+    otherwise :
+      L1 = _,
+      C1 = _ |
+	subtract_list(L2, P, C2).
+	
 
 compute_status(NewDefinition, Status) :-
 
@@ -559,43 +572,39 @@ extract_arglist(LHS, ParamList, Errors, NextErrors) +
 	self.
 
 
-construct_lhs_atoms(Name, ParamList, LocalList, GlobalList,
+construct_lhs_atoms(Name, ParamList, GlobalList, ChannelList,
 			Channels, OuterAtom, InnerAtom) :-
 
     Name =?= "_" :
       ParamList = _,
-      LocalList = _,
       GlobalList = _,
+      ChannelList = _,
       OuterAtom = [],
       InnerAtom = [],
       Channels = [];
 
     Name =\= "_",
-    ParamList =?= LocalList :
+    ChannelList =?= [] :
       InnerAtom = OuterAtom?|
-	concatenate(LocalList, GlobalList, List),
-	check_for_duplicates(List?, Channels, "", _, _),
+	subtract_list(GlobalList, ParamList, GlobalList1),
+	concatenate(ParamList, GlobalList1?, Channels),
 	construct_atom(Name, "", Channels?, OuterAtom);
 
     Name =\= "_",
-    ParamList =\= LocalList,
-    GlobalList =?= [] :
-      Channels = LocalList |
+    ChannelList =\= [],
+    GlobalList =?= [] |
 	construct_atom(Name, "", ParamList, OuterAtom),
-	construct_atom(Name, ".", LocalList, InnerAtom);
+	concatenate(ParamList, ChannelList?, Channels),
+	construct_atom(Name, ".", Channels?, InnerAtom);
 
     Name =\= "_",
-    ParamList =\= LocalList,
+    ChannelList =\= [],
     GlobalList =\= [] |
-	concatenate(ParamList, GlobalList, OuterList),
-	check_for_duplicates(OuterList?, OuterList1, "", _, _),
-	construct_atom(Name, "", OuterList1?, OuterAtom),
-	concatenate(LocalList, GlobalList, InnerList),
-	check_for_duplicates(InnerList?, InnerList1, "", _, _),
-	partial_ordered_difference(LocalList, ParamList, NewList),
-	partial_ordered_difference(InnerList1, LocalList, GlobalList1),
-	concatenate(ParamList, GlobalList1?, OuterList2),
-	concatenate(OuterList2?, NewList?, Channels),
+	subtract_list(GlobalList, ParamList, GlobalList1),
+	subtract_list(GlobalList1, ChannelList, GlobalList2),
+	concatenate(ParamList, GlobalList2?, OuterList),
+	construct_atom(Name, "", OuterList?, OuterAtom),
+	concatenate(OuterList?, ChannelList, Channels),
 	construct_atom(Name, ".", Channels?, InnerAtom).
 
 
@@ -1427,10 +1436,7 @@ guarded_clause(RHS1, Control, Clauses, Nested, NextNested,
 
     /* Recognize compound_guard */
     RHS1 =?= (Guard | Guarded), Guarded =?= (_ | _) :
-
-      RHS1' = (Guard | `Call?) |
-	expand_new_scope([], Guarded, [], Call,
-		Nested, Nested'?, Scope, Scope'?),
+      RHS1' = (Guard | [Guarded]) |
 	self;
 
     RHS1 =?= (Guard | Body1), Body1 =\= (_ | _) :
@@ -1618,18 +1624,27 @@ concatenate(List1, List2, List3) :-
     List1 =?= [] :
       List3 = List2.
 
-partial_ordered_difference(List1, List2, List3) :-
+subtract_list(List1, List2, List3) :-
 
-    List1 ? Item,
     List2 ? Item |
+	remove_item(Item, List1, List1'),
 	self;
 
-    List2 =?= [] |
-      List3 = List1;
+    List2 = [] :
+      List3 = List1.
 
-    List1 ? Item,
-    otherwise :
-      List3 ! Item |
+
+remove_item(Item, List1, List2) :-
+
+    List1 =?= [] :
+      Item = _,
+      List2 = [];
+
+    List1 ? Item |
+	self;
+
+    List1 ? Other, Other =\= Item :
+      List2 ! Other |
 	self.
 
 
