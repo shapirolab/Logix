@@ -1,0 +1,181 @@
+#!/usr/local/bin/perl
+my $START = 'MCS';                         # default input prefix
+my @SEPARATORS = ('and', '&', ',', ';');
+my @MONTHS = (January, February, March, April, May, June, July, August, September, October, November, December);
+
+my $BIB_VERSION = "CS-TR-v2.1";
+my $MAX_BIB_LINE = 79;
+my $BIB_AUTHORITY = "ncstrl.wisdom";    # default prefix
+my $BIB_ID = "CS";                      # default id
+my $Output_Entry = "";                     # Month day, Year
+my $Output_Date = "January 1, 1998";       # ???
+
+my $Authors;
+my @Authors;
+my $Lines;
+my $OutputId;
+
+sub cumulate_lines
+{
+  my $prefix = shift;
+  my $formfeed = 0;
+
+  while (<ABSTRACTS>) {
+    chomp;
+    # Double form-feed becomes " <P>".
+    if (defined $prefix && length $_ == 0) {
+      # But don't do it twice.
+      if ($Lines !~ /.* <P>$/) {
+	$Lines .= ' <P>';
+      }
+      next;
+    }
+    # Remove trailing double-rules.
+    while ($_ =~ /(^.*)\|\|$/) {
+      $_ = $1;
+    }
+    # Fixup elipsis.
+    s/^(.*); : : :;(.*)$/$1 \.\.\.$2/g;
+
+    my $line = $_;
+    if (defined $prefix) {
+      my $p = substr $line, 0, length $prefix;
+      if ($prefix eq $p) {
+	# Strip trailing paragraph marks.
+	while ($Lines =~ s/ <P>$//g) {}
+	return substr $line, length $prefix;
+      }
+    }
+    $line =~ s/^\s+//;
+    my @more = split /\s+/, $line;
+    if (!defined($prefix) && scalar @more == 0) {
+	last;
+    }
+    $Lines .= ' ' . (join ' ', @more);
+  }
+  return undef;
+}
+
+sub format_output
+{
+  my $line = (shift) . '::';
+  my @text = split / /, shift;
+  my $min  = length($line);
+  my $word;
+
+  foreach $word (@text) {
+    if (length($line) + length($word) > $MAX_BIB_LINE - 1 &&
+        length($line) > $min) {
+      print BIB "$line\n";
+      $line = "";
+      $min = 1;
+    }
+    $line .= " $word";
+  }
+  print BIB "$line\n";
+}
+
+sub next_abstract
+{
+  my $prefix = shift;
+  while (<ABSTRACTS>) {
+    chomp;
+    my $p = substr $_, 0, length($prefix);
+    if ($prefix eq $p) {
+      return substr $_, length($prefix);
+    }
+  }
+  return undef;
+}
+
+sub extract_author
+{
+  @author = undef;
+
+  while ($Authors) {
+    my ($part, $authors) = split /\s+/, $Authors, 2;
+    $Authors = $authors;
+    if (!$part) {
+      print "No more parts\n";
+      return undef;
+    }
+    my $separator;
+    foreach $separator (@SEPARATORS) { 
+      if ($separator =~ /\W/) {
+	my $x = index $part, $separator;
+	if ($x >= 0) {
+	  if ($x > 0) {
+	    push @author, (substr $part, 0, $x);
+	  }
+	  if ($x < length($part) - 1) {
+	    $Authors = (substr $part, $x+1) . ' ' . $Author;
+	  }
+	  return @author;
+	}
+      }
+      elsif ($part eq $separator) {
+	return @author;
+      }
+    }
+    push @author, $part;
+  }
+  return @author;
+}
+
+sub extract_authors
+{
+  while ($Authors) {
+    my @author = extract_author();
+    my $name = pop @author;
+    if ($name) {
+      $name = join ' ', $name . ',', @author;
+      # Press out any double-spaces.
+      $name =~ s/^\s*(\S+)  (.*)$/$1 $2/g;
+      push @Authors, $name;
+    }
+  }
+}
+
+# main
+
+open(ABSTRACTS, "a.txt") or die "Can't open a.txt: $!\n";
+
+my ($sec, $min, $hour, $mday, $mon, $year) = localtime;
+$Output_Entry = $MONTHS[$mon] . " $mday, " . ($year +1900); 
+
+# Skip to first abstract.
+my $line = next_abstract($START);
+
+while ($line =~ /^(\d+)-(\d+)(.*)/) {
+  my $year = $1;
+  my $index = $2;
+  my $title = "";
+
+  $Lines = join ' ', (split /\s+/, $3);
+  $Lines =~ s/^\s+//;
+  cumulate_lines(undef);
+
+  if ($Lines) {
+    ($Authors, $title) = split /:/, $Lines, 2;
+    undef @Authors;
+    $title =~ s/\s+(\S.*)/$1/;
+    extract_authors();
+  }
+  my $docname = "$BIB_ID$year-$index";
+  mkdir $docname, 7*64 + 7*8 +5;
+  open(BIB, "> $docname/$docname.bib") or
+    die "Can't open : $docname/$docname.bib!\n";
+  format_output("BIB-VERSION", $BIB_VERSION);
+  format_output("ID", "$BIB_AUTHORITY//$docname");
+  format_output("ENTRY", $Output_Entry);
+  format_output("DATE", $Output_Date);
+  foreach $author (@Authors) {
+    format_output("AUTHOR", $author);
+  }
+  format_output("TITLE", $title);
+  $Lines = "";
+  $line = cumulate_lines($START);
+  format_output("ABSTRACT", $Lines);
+  close BIB;
+}
+close ABSTRACTS;
