@@ -903,7 +903,16 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
 
     string(Name),
     string_to_dlist(Name, CS1, []),
+    /* "global" for spifcp */
     string_to_dlist("global.", CS2, _Tail) :
+      CS1 = CS2,
+      Ordinal' = Ordinal,
+      Name' = Name;
+
+    string(Name),
+    string_to_dlist(Name, CS1, []),
+    /* "public" for biospi */
+    string_to_dlist("public.", CS2, _Tail) :
       CS1 = CS2,
       Ordinal' = Ordinal,
       Name' = Name;
@@ -1851,8 +1860,7 @@ do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
     ReceiveCommon =?= {_, _, _, Chosen},
     DimerCommon =?= {_, _, _, Chosen},
     arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
-    arg(SPI_MESSAGE_LINKS, DimerLinks, NextLink),
-    read_vector(SPI_NEXT_MS, NextLink, Dimer') |
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer') |
 	self;
 
     arg(SPI_MS_TYPE, Dimer, SPI_MESSAGE_ANCHOR) :
