@@ -757,16 +757,16 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
    */
   wait_done(Schedule, SpiOffsets, Done) :-
 
-    Schedule ? new_channel(_ChannelName, Channel, _BaseRate) :
+    Schedule ? new_channel(ChannelName, Channel, _BaseRate) :
       make_channel(Dummy, _) |
-	new_channel("", Channel, 0,
+	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
 		    Dummy, _, _, _, SpiOffsets),
         self;
 	     
-    Schedule ? new_channel(_ChannelName, Channel, _ComputeWeight, _BaseRate) :
+    Schedule ? new_channel(ChannelName, Channel, _ComputeWeight, _BaseRate) :
       make_channel(Dummy, _) |
-	new_channel("", Channel, 0,
+	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
 		    Dummy, _, _, _, SpiOffsets),
         self;
