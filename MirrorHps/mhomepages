@@ -7,7 +7,7 @@ my $TmpDir = "/tmp";
 my $Target = "bach";
 my $TargetDir = "/DataBase/users";
 # temporary
-my $Rmirror = "/home/www/mirror-2.9/mirror.pl";
+my $Rmirror = "/home/www/mirror-2.9/mirror";
 
 my $client = shift;
 my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
