@@ -4,12 +4,24 @@ and record its behavior.
     psi_record#run(<call program>, <time limit>)
 or
     psi_record#run(<call program>, <file_name>, <time limit>)
+or
+    psi_record#run(<call program>, <file_name>, <time limit>, <scale>)
+
+The time limit forces termination of the run, after that much internal
+time has elapsed.
+
+When the internal times are very small, or very large, you can scale 
+the output - this does not effect process behavior.
 
 You may also use the macros:
 
-    run(<call program>, <time limit>)
+    run(<quantified process set>, <time limit>)
 or
-    record(<call program>, <file_name>, <time limit>)
+    record(<quantified process set>, <file_name>, <time limit>)
+or
+    record(<quantified process set>, <file_name>, <time limit>, <scale>)
+
+See repeat.txt for the definitition of <quantified process set>.
 
 Examples:
 
@@ -25,9 +37,14 @@ Examples:
    does the same thing, and records the events of the run on file 
    fff.
 
+3. record(hysteresis#"MODULE", fff, 100, 10)
+
+   does the same thing, and records the events of the run on file 
+   fff with time values scaled times 10.
+
 The elements of the file are lines which have one of three forms.
 
-   a. A real-valued "time'
+   a. A positive real-valued time.
 
    b. +<procedure name>, which records the start of a procedure.
 
@@ -47,7 +64,7 @@ array columns is also produced.  For example:
 
 Column one of the .table file is incremented approximately by 1 between
 rows (lines).  To change the increment to another positive number, N,
-add the argument N to the call to tally - e.g.
+add the argument N to the call to psi2t - e.g.
 
   % psi2t fff 0.1
 
@@ -55,7 +72,18 @@ To combine columns sums add terms of the form:
 
     <summed_column_name>+=<absorbed_column_name>
 
+e.g.
+
   % psi2t fff A_GENE+=BASAL_A+PROMOTED_A A_GENE+=ACTIVATED_TRANSCRIPTION_A
+
+To rescale the output times, specify negative rescale value - e.g.
+
+  % psi2t fff -10
+
+to rescale output times by 1/10.
+
+Arguments following the file name may appear in any order
+
 
 To split the table into multiple 2-column files, suitable for gnuplot,
 use the PERL program "t2xys" - e.g.
@@ -65,5 +93,4 @@ use the PERL program "t2xys" - e.g.
   gnuplot> plot "fff.3" smooth unique
 
 A short shell script, psixys, combines the functions with a call to gnuplot.
-It does not support arguments other than the file name.
 
