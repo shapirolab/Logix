@@ -122,7 +122,9 @@ int insert_message_at_end_queue(heapP ChP,heapP Link,heapP Message,int Offset);
 heapP add_mess_to_messtail(heapP Message,heapP MessageTail);
 heapP set_opentry(heapP OpList);
 int set_reply_to(char *Arg,heapP Reply);
-int set_reply_trans(heapP PId1,heapP CId1,heapP PId2,heapP CId2,heapP Reply);
+int set_reply_trans(heapP SendPId, heapP SendCId,heapP SendCh,
+		    heapP ReceivePId, heapP ReceiveCId, heapP ReceiveCh,
+		    heapP Reply);
 
 int psi_weight_index(char *name);
 /*
@@ -389,17 +391,20 @@ int Size;
 
 //*********************************************************************
 
-set_reply_trans(PId,OpCId,MaCoPId,MaCId,T)
-heapP PId,OpCId,MaCoPId,MaCId,T;
+int set_reply_trans(heapP SendPId, heapP SendCId, heapP SendCh,
+		    heapP ReceivePId, heapP ReceiveCId, heapP ReceiveCh,
+		    heapP Reply)
 {
   heapP P;
  
-  deref_ptr(PId);
-  deref_ptr(OpCId);
-  deref_ptr(MaCoPId);
-  deref_ptr(MaCId);
+  deref_ptr(SendPId);
+  deref_ptr(SendCId);
+  deref_ptr(SendCh);
+  deref_ptr(ReceivePId);
+  deref_ptr(ReceiveCId);
+  deref_ptr(ReceiveCh);
   
-  if (!do_make_tuple(Word(5,IntTag))){
+  if (!do_make_tuple(Word(7,IntTag))){
     return(False);
   }
   deref(KOutA,P);
@@ -409,19 +414,25 @@ heapP PId,OpCId,MaCoPId,MaCId,T;
   if (!unify(Ref_Word((++P)),KOutA)){
     return(False);
   }
-  if (!unify(Ref_Word((++P)),Ref_Word(PId))){
+  if (!unify(Ref_Word((++P)),Ref_Word(SendPId))){
     return(False);
   }
-  if (!unify(Ref_Word((++P)),Ref_Word(OpCId))){
+  if (!unify(Ref_Word((++P)),Ref_Word(SendCId))){
     return(False);
   }
-  if (!unify(Ref_Word((++P)),Ref_Word(MaCoPId))){
+  if (!unify(Ref_Word((++P)),Ref_Word(SendCh))){
     return(False);
   }
-  if (!unify(Ref_Word((++P)),Ref_Word(MaCId))){
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceivePId))){
     return(False);
   }
-  if (!unify(Ref_Word(T),Ref_Word(P-5))){
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceiveCId))){
+    return(False);
+  }
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceiveCh))){
+    return(False);
+  }
+  if (!unify(Ref_Word(Reply),Ref_Word(P-7))){
     return(False);  
   }
   return(True);
@@ -557,9 +568,17 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply;
 	 if (!discount(Common+PSI_OP_MSLIST)){
 	   return(False);
 	 }
-	 set_reply_trans(PId,(OpEntry+PSI_MS_CID),(Common+PSI_OP_PID)
-                  ,(Ma+PSI_MS_CID),Reply);
-	 return(True);
+	 return (Index == PSI_RECEIVE_TAG) ?
+
+	   set_reply_trans(
+	      PId, (OpEntry+PSI_MS_CID), (OpEntry+PSI_MS_CHANNEL),
+	      (Common+PSI_OP_PID), (Ma+PSI_MS_CID), (Ma+PSI_MS_CHANNEL),
+	      Reply)
+	      :
+	   set_reply_trans(
+	      (Common+PSI_OP_PID), (Ma+PSI_MS_CID), (Ma+PSI_MS_CHANNEL),
+	      PId, (OpEntry+PSI_MS_CID), (OpEntry+PSI_MS_CHANNEL),
+	      Reply);
        }
      Mess=NextMes+PSI_MESSAGE_LINKS;
      deref_ptr(Mess);
@@ -1531,9 +1550,11 @@ heapP ChP,Reply;
 	     if (!discount(RMsList)){
 	       return(False);
 	     }
-	     return(set_reply_trans(SCommon+PSI_OP_PID,SMess+PSI_MS_CID,
-				    RCommon+PSI_OP_PID,
-				    RMess+PSI_MS_CID,Reply));
+	     return
+	       set_reply_trans(
+	         SCommon+PSI_OP_PID, SMess+PSI_MS_CID, SMess+PSI_MS_CHANNEL,
+		 RCommon+PSI_OP_PID, RMess+PSI_MS_CID, RMess+PSI_MS_CHANNEL,
+		 Reply);
 	   }
 	 if (!do_read_vector(Word(PSI_NEXT_MS,IntTag),
 			     Ref_Word(SendMessage+PSI_MESSAGE_LINKS))){
@@ -1635,8 +1656,11 @@ heapP ChP,Reply;
 	  if (!discount(DMsList)){
 	    return(False);
 	  }
-	  return(set_reply_trans(DCommon+PSI_OP_PID,DMess+PSI_MS_CID,
-				 RCommon+PSI_OP_PID,RMess+PSI_MS_CID,Reply));
+	  return
+	    set_reply_trans(
+	      DCommon+PSI_OP_PID, DMess+PSI_MS_CID, DMess+PSI_MS_CHANNEL,
+	      RCommon+PSI_OP_PID, RMess+PSI_MS_CID, RMess+PSI_MS_CHANNEL,
+	      Reply);
 	}
       if (!do_read_vector(Word(PSI_NEXT_MS,IntTag),
 			  Ref_Word(DMess+PSI_MESSAGE_LINKS))){
