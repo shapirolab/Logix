@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/14 13:40:45 $
+		       	$Date: 2000/03/15 13:29:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -222,8 +222,8 @@ filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
 
 validate_means(ReceiveMean, SendMean, Means, Global, Errors, NextErrors) :-
 
-    integer(ReceiveMean), 0 =< ReceiveMean,
-    integer(SendMean), 0 =< SendMean :
+    number(ReceiveMean), 0 =< ReceiveMean,
+    number(SendMean), 0 =< SendMean :
       Means = _,
       Global = _Name(ReceiveMean, SendMean),
       Errors = NextErrors;
@@ -294,30 +294,34 @@ process(RHSS, OuterLHS, InnerLHS, NewChannelList, Scope, Process, Nested) :-
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
   initialize_channels(Name, NewChannelList, Initializer) +
-			(MakeAll = More?, More) :-
+			(Body = Name, MakeAll = More?, More) :-
 
-    NewChannelList ? ChannelName(Receive, Send), list(NewChannelList') :
+    NewChannelList ? Descriptor, list(NewChannelList') :
       More = (MakeChannel?, NameChannel?, More'?) |
-	make_and_name_channel,
+	make_and_name_channel(Name, Body, Descriptor,
+			Body',MakeChannel, NameChannel),
 	self;
 
-    NewChannelList = [ChannelName(Receive, Send)] :
+    NewChannelList = [Descriptor] :
       More = (MakeChannel?, NameChannel?),
-      Initializer = (true : MakeAll | Name) |
-	make_and_name_channel.
+      Initializer = (true : MakeAll | Body'?) |
+	make_and_name_channel(Name, Body, Descriptor,
+			Body', MakeChannel, NameChannel).
 
-  make_and_name_channel(Name, ChannelName, Receive, Send, 
+  make_and_name_channel(Name, Body, Descriptor, NewBody,
 			MakeChannel, NameChannel) :-
 
+    Descriptor = ChannelName(Receive, Send),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
       MakeChannel = make_channel(`pinch(ChannelName), `pimss(ChannelName)),
       NameChannel = (`ChannelName =
 			ChannelId?(?pinch(ChannelName), ?pimss(ChannelName),
-						Receive, Send)),
+						Receive'?, Send'?)),
       PS = Suffix |
-	list_to_string(PH, ChannelId).
-
+	list_to_string(PH, ChannelId),
+	piutils#real_mean_kluge(Receive, Body, Receive', Body'),
+	piutils#real_mean_kluge(Send, Body'?, Send', NewBody).
 
 nested_procedures(Process, Nested, Terms, NextTerms) :-
 

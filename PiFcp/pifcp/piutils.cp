@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/01 08:00:14 $
+		       	$Date: 2000/03/15 13:29:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -17,6 +17,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 -export([concatenate_lists/2, make_lhs_tuple/3,
 	 make_predicate_list/3, untuple_predicate_list/3,
 	 names_to_channel_list/2,
+	 real_mean_kluge/4,
 	 remove_duplicate_strings/3, sort_out_duplicates/3,
 	 subtract_list/3, tuple_to_atom/2, update_process_mode/3,
 	 verify_channel/7]).
@@ -339,3 +340,33 @@ names_to_variables(ChannelNames, Variables, Count) +
     ChannelNames =?= [] :
       Variables = [],
       Count = Counter.
+
+real_mean_kluge(Mean, Body, Mean', Body') :-
+
+    integer(Mean) :
+      Mean' = Mean,
+      Body' = Body;
+
+    otherwise |
+	real_mean_assignment(Mean, Body, Body, Mean', Body').
+
+  real_mean_assignment(Mean, Search, Body, Mean', Body') :-
+
+    Search = (Var = Mean, _) :
+      Body = Body',
+      Mean' = Var;
+
+    Search = (_, Search'),
+    otherwise |
+	self;
+
+    Search =\= (_,_), Search =\= (_=_),
+    Body = (`pifcp(Index) = _, _),
+    Index++ :
+      Mean' = `pifcp(Index'),
+      Body' = (Mean' = Mean, Body);
+
+    otherwise :
+      Search = _,
+      Mean' = `pifcp(1),
+      Body'= (Mean' = Mean, Body).

@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/14 13:41:30 $
+		       	$Date: 2000/03/15 13:29:58 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -194,7 +194,8 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
 
 
   initialize_global_channels(Index, Tuple, GlobalDescriptors,
-			Initializer, Prefix) + (List = Tail?, Tail) :-
+				Initializer, Prefix)
+	+ (List = Tail?, Tail, Body = ProcedureName?, ProcedureName) :-
 
     Index =< arity(Tuple),
     arg(Index, Tuple, `ChannelName),
@@ -206,15 +207,17 @@ create_entry(GlobalDescriptors, GlobalNames, Prefix,
     arg(Index, Tuple, `ChannelName),
     GlobalDescriptors ? ChannelName(Receive, Send),
     Index++ :
-      Tail ! ChannelName(`ChannelName, Receive, Send) |
+      Tail ! ChannelName(`ChannelName, Receive'?, Send'?) |
+	piutils#real_mean_kluge(Receive, Body, Receive', Body'),
+	piutils#real_mean_kluge(Send, Body'?, Send', Body''),
 	self;
 
     Index > arity(Tuple),
-    arg(1, Tuple, ProcedureName),
     arg(2, Prefix, GlobalPairList) :
       GlobalDescriptors = _,
       Tail = [],
-      Initializer = (pi_monitor#Prefix, ProcedureName) |
+      Initializer = (pi_monitor#Prefix, Body) |
+	arg(1, Tuple, ProcedureName),
 	unify_without_failure(GlobalPairList, List).
 
 
@@ -548,9 +551,10 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   PiLHS is from a process/2 request.
 **
-**   Means is a pair of integer default Receive and Send means.
+**   Means is a pair of numeric default Receive and Send means.
 **
-**   GlobalNames is a list of channel descriptors which are global to the process.
+**   GlobalNames is a list of channel descriptors (<stochactic_channel_list>)
+**   which are global to the module, and which may be shared by other modules.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
 **
@@ -728,30 +732,30 @@ extract_channel_list(Channels, Means, ChannelList, NewChannelList,
 
     Channels ? ChannelName(Both),
     string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    integer(Both), Both >= 0 :
+    number(Both), Both >= 0 :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(Both, Both) |
 	self;
 
     Channels ? ChannelName(Both),
     string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    integer(Both), Both >= 0 :
+    number(Both), Both >= 0 :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(Both, Both) |
 	self;
 
     Channels ? ChannelName(Receive, Send),
     string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    integer(Receive), Receive >= 0,
-    integer(Send), Send >= 0 :
+    number(Receive), Receive >= 0,
+    number(Send), Send >= 0 :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(Receive, Send) |
 	self;
 
     Channels ? `ChannelName(Receive, Send),
     string(ChannelName), ChannelName =\= "_", ChannelName =\= "",
-    integer(Receive), Receive >= 0,
-    integer(Send), Send >= 0 :
+    number(Receive), Receive >= 0,
+    number(Send), Send >= 0 :
       ChannelList ! ChannelName,
       NewChannelList ! ChannelName(Receive, Send) |
 	self;
