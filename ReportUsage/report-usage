@@ -11,10 +11,12 @@ my $Column_Width =  6;
 my $Name_Width   = 10;
 my $Total_Width  =  7;
 my $Total_Index  =  2;
-my $First_Month  = 199709;
-my $Last_Month   = 199808;
-#my $First_Month  = 199902;
-#my $Last_Month   = 199903;
+my $First_Month  = undef;
+my $Last_Month   = undef;
+my $One_Page     = 1;
+my $Sort_By_Name = 0;
+my $Max_Width    = 1000000;
+
 my $Platform;
 my $UserList;
 my $Title;
@@ -48,7 +50,7 @@ sub format_output
       $item = substr($BLANKS, 0, $Total_Width-length($user->[$ix])) .
 	      $user->[$ix];
     }
-    if (length($line) + length($item) > 80 && $line) {
+    if (length($line) + length($item) > $Max_Width && $line) {
       --$ix;
       last;
     }
@@ -74,6 +76,7 @@ sub format_hours_and_minutes
 
 sub read_data
 {
+  open(USERS, $UserList) or die "Can't open User List";
   while(<USERS>) {
     @line = split /\s+/;
     if (scalar(@line) < 2) {
@@ -87,6 +90,7 @@ sub read_data
     $Users{$id} = scalar(@Users);
     push @Users, [$id, $name];
   }
+  close USERS;
 }
 
 
@@ -122,10 +126,17 @@ sub cumulate_usage
     my @lines = read_month($date);
     $date += 88 if (++$date % 100 > 12);
     foreach $line (@lines) {
+      my $index = undef;
       my ($id, $b, $usage) = split /\s+/, $line;
-      my $index  = $Users{$id};
+      if (!defined($UserList)) {
+	if (!exists($Users{$id})) {
+	  $Users{$id} = scalar(@Users);
+	  my @user = ($id, $id);
+	  push @Users, \@user;
+	}
+      }
+      $index  = $Users{$id};
       if (defined($index)) {
-	$usage =~ s/^(\d+)\D+$/$1/;
 	$user = $Users[$index];
 	$user->[$ix] = $usage;
 	$Totals[$ix] += $usage;
@@ -156,29 +167,95 @@ sub adjust_widths
 }
 
 
+sub extract_name
+{
+  my @name = split / /, shift;
+  my $name = pop @name;
+  unshift @name, $name;
+  $name = join " ", @name;
+}
+
+
+sub sort_users
+{
+  # The only reason I am using an insert sort here, is because
+  # I can't get the perl sort to work for @Users !??
+
+  my @Sorted = ();
+  my $ix, $is;
+
+  for ($ix = 0; $ix < scalar(@Users); $ix++) {
+    my $user = $Users[$ix];
+    my $item = undef;
+    my $name = extract_name($user->[1]);
+    for ($is = 0; $is < scalar(@Sorted); $is++) {
+      $item = $Sorted[$is];
+      if ($Sort_By_Name) {
+	last if extract_name($item->[1]) ge $name;
+      }
+      else {
+	last if $item->[$Total_Index] >= $user->[$Total_Index];
+      }
+    }
+    if (defined($item)) {
+      splice @Sorted, $is, 0, $user;
+    }
+    else {
+      $Sorted[$is] = $user;
+    }
+  }
+  @Users = @Sorted;
+}
+
 sub print_options
 {
   my $quit = shift;
-  print "report-usage version $VERSION.\n" .
-        "Options are: -h, -t<title>, -m<first month>-<last month>\n" .
-        "   where <month> has the form yyyymm, and\n" .
-        "   <first month> does not exceed <last month>.\n";
+  print "report_usage - version $VERSION.\n" .
+        "call: report-usage [options] [[User List] Platform]\n" .
+        "options: -h -m<first_month>-<last_month> -s<type> -t<title> -w<width>\n" .
+        "   -m... - default is this year.\n" .
+        "       <... month> has the form yyyymm, and\n" .
+        "       <first_month> must not exceed <last_month>.\n" .
+        "       -<last month> may be omitted - default <first month> + 11 months.\n" .
+        "   -w... - default no limit on number of columns in report;\n" .
+        "       <width> may be omitted - default 80 columns;\n" .
+        "   -s... - default sort by usage, and\n" .
+        "       <type> is 'name' or 'usage' - default sort by name;\n";
   if (defined $quit) {
     exit $quit;
   }
 }
 
-sub initialize
+
+sub read_arguments
 {
   my $ix = 0;
+  my $help = 0;
   while ($ix < scalar @ARGV) {
     my $arg = $ARGV[$ix];
     if ($arg =~ /^-(.*)$/) {
       if ($arg =~ /^-h(.*)$/) {
-	print_options(0);
+	$help = 1;
+      }
+      elsif ($arg =~ /^-s$/ || $arg =~ /^-sname$/) {
+	$Sort_By_Name = 1;
+      }
+      elsif ($arg =~ /^-susage$/) {
+	$Sort_By_Name = 0;
       }
       elsif ($arg =~ /^-t(.*)$/) {
 	$Title = $1;
+      }
+      elsif ($arg =~ /^-w(\d*)$/) {
+	$Max_Width = $1 ? $1 : 80;
+	$One_Page = 0;
+      }
+      elsif ($arg =~ /^-m(\d*)$/) {
+	$First_Month = $1;
+	$Last_Month = $First_Month + 99;
+	if ($Last_Month % 100 == 0) {
+	  $Last_Month -= 88;
+	}
       }
       elsif ($arg =~ /^-m(\d*)\W(\d*)$/) {
 	$First_Month = $1;
@@ -195,9 +272,34 @@ sub initialize
   if ($First_Month > $Last_Month) {
     print_options(1);
   }
+  if ($help) {
+    print_options(scalar(@ARGV) ? undef : 0);
+  }
+  if (scalar(@ARGV) == 0) {
+    print "No Platform or User List specified.\n";
+    exit 1;
+  }
+  if (scalar(@ARGV) > 1) {
+    $UserList = shift @ARGV;
+  }
   $Platform = shift @ARGV;
-  $UserList = shift @ARGV;
-  open(USERS, $UserList) or die "Can't open input";
+
+  if (!defined($First_Month)) {
+    my ($sec, $min, $hour, $mday, $mon, $year) = localtime();
+    $mon-- if $mday == 1;
+    if ($mon <= 1) {
+      print "No data available for this year.\n";
+      exit 0;
+    }
+    $First_Month = (1900 + $year)*100 + 1;
+    $Last_Month = $First_Month + $mon - 1;
+  }
+}
+
+
+sub initialize
+{
+  read_arguments();
 
   unshift @Months, "", "User Name";
   make_months();
@@ -212,7 +314,9 @@ sub initialize
 
   unshift @Totals, "", "Total";
 
-  read_data();
+  if (defined $UserList) {
+    read_data();
+  }
 }
 
 
@@ -225,6 +329,7 @@ my $ix;
 my @line;
 
 cumulate_usage();
+sort_users();
 for ($ix = 0; $ix < scalar @Users; $ix++) {
   format_hours_and_minutes($Users[$ix]);
 }
@@ -235,12 +340,12 @@ unshift @Users, \@Months, \@line2;
 push @Users, \@line2, \@Totals;
 
 my $ax = 0;
-my $outfile = 1;
+my $outfile = $One_Page ? "txt" : 1;
 while (1) {
   my $filename = "$Platform-$First_Month.$outfile";
   open(STDOUT, "> $filename") or
     die "Can't open : file '$filename'";
-  print "$Title\n\n" if ($outfile++ == 1);
+  print "$Title\n\n" if ($outfile++ == 1 || $outfile == "txt");
   foreach $user (@Users) {
     $ix = format_output($user, $ax);
   }
