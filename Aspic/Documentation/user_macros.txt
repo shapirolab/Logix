@@ -1,6 +1,8 @@
-The macro commands supplied for Spi include and in some cases replace
-the user macros of the Logix system.  They fall into three major
-categories:
+User macros are available as command line entries during a Logix session.
+
+The user macro commands supplied for Stochastic Pi Calculus include and 
+in some cases replace the user macros of the Logix system.  They fall
+into three major categories:
 
   * Channel management and message transmission;
 
@@ -11,12 +13,12 @@ categories:
 Channels
 --------
 
-The macros:
+The user macros:
 
     pc(C)
     pc(C,S,B)
 
-are used to create channels.  The former macro creates an "instantaneous"
+are used to create channels.  The former user macro creates an "instantaneous"
 (infinite rate) channel C.  The latter creates a "based" channel C,whose
 name is derived from the string S, and whose base rate is specified by
 the non-negative number B (When B is 0, the created channel is a "sink" -
@@ -24,7 +26,7 @@ i.e. all sends and receives on the channel are discarded, and no actual
 transmission occurs.)
 
 
-The macros:
+The user macros:
 
     ps(M,C)
     ps(M,C,N)
@@ -33,7 +35,7 @@ offer to send message M on channel C, where N is a positive integer multiplier;
 the likelihood that C will be selected for transmission increases with N.
 
 
-The macros:
+The user macros:
 
     pr(C,M)
     pr(C,M,N)
@@ -42,7 +44,7 @@ offer to receive message M on channel C, where N is a positive integer
 multiplier, as above.
 
 
-The macro:
+The user macro:
 
     weighter(W)
 
@@ -62,8 +64,8 @@ The system creates a computation, uniquely identified by a positive
 integer throughout the session.
 
 
-To execute a Spi program, e.g. RunTT in module booland in directory
-boolean, call:
+To execute a Stochastic Pi Calculus program, e.g. RunTT in module booland
+in directory boolean, call:
 
     boolean#booland#"RunTT"
 
@@ -74,30 +76,31 @@ treats names beginning with a capital letter or an underscore as logic
 variables.
 
 
-The macros:
+The user macros:
 
     run(<goals>)
-    run(<goals>, <limit>
+    run(<goals>, <limit>)
 
 execute all of the goals as a single computation: the first form continues
 indefinitely; the second continues until <limit> units of internal time have 
 elapsed.  See  repeat.txt  for details on specification of multiple goals.
 
 
-The macro:
+The user macro:
 
-    record(<goals>, <file name>, <limit>
+    record(<goals>, <file name>, <limit>)
 
 also executes all of the goals until <limit>, and records their behavior
 on the named file.  See  repeat.txt  for details on specification of
-multiple goals.  See  record.txt  for details about the file.
+multiple goals.  See  record.txt  for details about the file and about
+the arguments of the user macro.
 
 
 A computation may be  suspended ,  resumed  or  aborted.  You may also
 inspect its resolvent - the set of unterminated processes (see Debugging
 below).
 
-The macros:
+The user macros:
 
     s
     suspend
@@ -110,7 +113,7 @@ suspend the current or the specified computation(s) (N or all).  The last
 two forms also reset the current computation number.
 
 
-The macros:
+The user macros:
 
     re
     resume
@@ -121,7 +124,7 @@ The macros:
 resume the current or the specified computation(s), as above.
 
 
-The macros:
+The user macros:
 
     a
     abort
@@ -136,10 +139,10 @@ abort the current or the specified computation(s), as above.
 Debugging
 ---------
 
-Debugging aids consist of inspection and execution control macros.
+Debugging aids consist of inspection and execution control user macros.
 
 
-The macros:
+The user macros:
 
     options(New)
     options(New,Old)
@@ -160,12 +163,12 @@ An example list is:
 
     [active,sender]
 
-In the macros below, options may be specified explicitly in one variant
+In the user macros below, options may be specified explicitly in one variant
 of most groups.  When the options are specified, they override the
-global options set by the options macro above.
+global options set by the options user macro above.
 
 
-The macros:
+The user macros:
 
    spg
    spg(N)
@@ -175,7 +178,7 @@ display the goals of the current or of the specified computation.  The last
 two forms also reset the current computation number.
 
 
-The macros:
+The user macros:
 
    spr
    spr(N)
@@ -184,7 +187,7 @@ The macros:
 display the resolvent of the current or of the specified computation, as above.
 
 
-The macros:
+The user macros:
 
     spc(C)
     spc(C,Options)
@@ -192,7 +195,7 @@ The macros:
 display the channel C.
 
 
-The macros:
+The user macros:
 
     spgcs
     spgcs(Options)
@@ -200,7 +203,7 @@ The macros:
 display the global channels.
 
 
-The macros:
+The user macros:
 
     pdb(RPC)
     pdb(RPC,Options)
@@ -209,12 +212,12 @@ start debugging of the Remote Process Call (e.g. hysteresis#"MODULE").
 The debugger provides help in reponse to the command "help".
 
 
-The macro:
+The user macro:
 
     vtree(Path,Goal,Tree)
 
 executes Goal, with respect to Path and prepares Tree, which may be
-displayed using macros below.  For example, if Path is boolean#booland
+displayed using user macros below.  For example, if Path is boolean#booland
 and goal is "RunTT", Tree represents the execution of the RPC:
 
     boolean#booland#"RunTT"
@@ -222,7 +225,7 @@ and goal is "RunTT", Tree represents the execution of the RPC:
 Ordinarily, you should wait until the system becomes idle, or the
 computation has been suspended before attempting to view Tree.
 
-To view Tree, use either of the macros:
+To view Tree, use either of the user macros:
 
     ptree(Tree)
     ptree(Tree,Options)
@@ -234,7 +237,7 @@ Additional options which may be specified are:
   * execute	Display Tree in execution order.
 
 
-The macro:
+The user macro:
 
     ctree(Tree)
 
@@ -242,10 +245,10 @@ may be used to close the execution tree; this terminates the system's
 participation in the execution of the computation.
 
 
-Miscellaneous Macros
---------------------
+Miscellaneous User Macros
+-------------------------
 
-The macros:
+The user macros:
 
     i(Path)
     input(Path)
@@ -256,7 +259,7 @@ the commands contained in the file test in sub-directory scripts:
     input(scripts#test)
 
 
-The macro:
+The user macro:
 
     {<logix string>}
 
@@ -266,13 +269,14 @@ may be used to execute a UNIX command directly.  Examples:
     {"cat notes"}
 
 
-The macro:
+The user macro:
 
     ^
+
 may be used to display all named Logix variables.
 
 
-The macro:
+The user macro:
 
     VariableName^
 
