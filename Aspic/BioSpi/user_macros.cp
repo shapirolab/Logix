@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/08/16 08:44:53 $
+		       	$Date: 2002/08/27 09:22:41 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -78,10 +78,13 @@ expand(Command, Cs) :-
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
-		" at / at(Service)   - attributes(Service)",
 		" atr / atr(Ambient) - ambient tree",
-		" btr / atr(Ambient) - ambient tree with busy channels",
-		" atr / atr(Ambient) - ambient tree with communicating channels",
+		" btr / btr(Ambient) - ambient tree with busy channels",
+		" c / c(Module)      - compile(Module)",
+		" cno / cno(No)      - current computation number",
+		" bta                - busy channels table",
+		" cta                - communicating channels table",
+		" ctr / ctr(Ambient) - ambient tree with communicating channels",
 		" i(File)            - input file",
 		" options(New, Old)  - default BioSpi Options",
 		" pc(C)              - make BioSpi channel C",
@@ -89,6 +92,7 @@ expand(Command, Cs) :-
 		" pr(C,M)            - receive M from BioSpi channel C",
 		" prgcs              - reset BioSpi global channels",
 		" ps(M,C)            - send M on BioSpi channel C",
+		" rtr / rtr(Ambient) - ambient tree with resolvent",
 		" spc(C)             - Show BioSpi channel",
 		" spgcs              - Show BioSpi global channels",
 		" record(GS, F, L)   - run Goals, record to File until Limit.",
@@ -306,10 +310,12 @@ expand(Command, Cs) :-
     Command = Xtr(Selector),
     string_to_dlist(Xtr,[X, CHAR_t, CHAR_r], []),
     CHAR_a =< X, X =< CHAR_d :
+      ExtraCommand = _,
+      Aux = channels(X, [], []),
       Cs = [state(No,Goal,_,_),
-	    to_context(utils # append_strings(["<",No,"> "], IdG))
-           | Commands]\Commands1 |
-	xtr_tree(Goal, X, Selector, Out),
+	    to_context(utils # append_strings(["<",No,">"], IdG))
+	   | Commands]\Commands1 |
+	ambient_tree,
 	stream_out(Out?, true, IdG, Commands, Commands1);
 
     Command = c :
@@ -318,6 +324,14 @@ expand(Command, Cs) :-
       Cs = [compile(Computation)|Commands]\Commands ;
     Command = c(Computation,Options) :
       Cs = [compile(Computation,Options)|Commands]\Commands ;
+
+    Command = cno :
+      Cs = [state(No,_,_,_),
+	    to_context([computation#display(term, (computation_number = No), 
+	    				    known(No))])
+	   |Commands]\Commands ;
+    Command = cno(No) :
+      Cs = [state(No,_,_,_)|Commands]\Commands ;
 
     Command = d(I) :
       Cs = [debug(I)|Commands]\Commands ;
@@ -373,11 +387,31 @@ expand(Command, Cs) :-
       Commands ! to_context(processor # device(quit, _Ok)) ;
 
     Command = r :
-      Command' = r(_) |
+      Cs = [resolvent|Commands]\Commands ;
+    Command = r(Computation), integer(Computation) :
+      Cs = [resolvent(Computation)|Commands]\Commands ;
+
+    Command = r(Ids), "" @< Ids :
+      Cs = [computation(CO), display(stream, Goals, prefix(CN))|Commands]\Commands |
+	utils # append_strings(["<",CO,">"], CN),
+        resolvent # extract(CO, Ids, Goals);
+    Command = r(CO, Ids) :
+      Cs = [display(stream, Goals, prefix(CN))|Commands]\Commands |
+	utils # append_strings(["<",CO,">"], CN),
+        resolvent # extract(CO, Ids, Goals);
+
+    Command = rtr :
+      Command' = rtr("") |
 	expand;
-    Command = r(No) :
-      Cs = [state(No,Goal,_,_) | Commands]\Commands1 |
-	ambient_resolvent(No, Goal, Commands, Commands1);
+    Command = rtr(Selector) :
+      Cs = [state(No,Goal,_,_),
+	    to_context([utils # append_strings(["<",No,">"], IdG),
+			spi_monitor # options(Options, Options),
+			spi_utils#Requests?]),
+			ExtraCommand | Commands]\Commands1,
+      Aux = resolvent(Options, Requests, []) |
+	stream_out(Out?, true, IdG, Commands, Commands1),
+	ambient_tree;
 
     Command = re :
       Command' = re(_) |
@@ -422,34 +456,88 @@ expand(Command, Cs) :-
       Cs = [Command | Commands]\Commands .
 
 
+ambient_tree(Selector, Aux, Goal, No, ExtraCommand, Out) :-
 
-ambient_resolvent(No, Goal, Commands, Commands1) :-
-
-    Goal =?= ambient_server#run(_Goals, Root),
+    Goal =?= ambient_server#Run,
+    arg(1, Run, run),
+    arg(3, Run, Root),
+    arg(1, Aux, Type),
     channel(Root) :
-      write_channel(resolvent(R), Root),
-      Commands = [to_context([spi_monitor # options(O, O),
-			      spi_utils # show_resolvent(R?, O, Vs),
-			      utils # append_strings(["<",No,">"], IdG),
-			      computation # display(stream, Vs?,
-						    [prefix(IdG), known(IdG)])
-			     ])
-		 | Commands1];
+      No = _,
+      write_channel(tree(Type, Tree), Root),
+      ExtraCommand = true |
+	ambient_tree1 + (Out1 = []);
 
-    Goal =?= ambient_server#run(_Goals, Root, _Debug),
-    channel(Root) :
-      write_channel(resolvent(R), Root),
-      Commands = [to_context([spi_monitor # options(O, O),
-			      spi_utils # show_resolvent(R?, O, Vs),
-			      utils # append_strings(["<",No,">"], IdG),
-			      computation # display(stream, Vs?,
-						    [prefix(IdG), known(IdG)])
-			     ])
-		 | Commands1];
-
-    otherwise :
+    otherwise,
+    Aux =?= _Type(_Arg, Requests, NextRequests) :
       Goal = _,
-      Commands = [resolvent(No) | Commands1].
+      Selector = _,
+      Requests = NextRequests,
+      ExtraCommand = resolvent(No),
+      Out = [].
+
+  ambient_tree1(Selector, Aux, Tree, Out, Out1) :-
+
+    Tree =?= _Type(Id, List, SubTree),
+    Selector =?= "",
+    Id =?= system |
+	format_tree_parts;
+
+    Tree =?= _Type(Id, List, SubTree),
+    Selector =?= "",
+    Id =\= system :
+      Out ! "+" |
+	format_tree_parts + (Out1 = ["-" | Out1]);
+
+    Tree =?= _Type(Id, List, SubTree),
+    Selector =?= Id |
+	format_tree_parts;
+
+    Tree =?= _Type(Id, List, SubTree),
+    Id =?= Selector(_Index) |
+	format_tree_parts;
+
+    Tree =?= _Type(Id, List, SubTree),
+    Id =?= _Name(Selector) :
+      Selector' = "" |
+	format_tree_parts;
+
+    Tree =?= _Type(Id, List, SubTree),
+    Id =?= _Name(I),
+    I =:= -Selector |
+	format_tree_parts;
+
+    Tree =?= _Type(_Id, _List, SubTree),
+    otherwise |
+	ambient_tree2.
+
+  ambient_tree2(Selector, Aux, SubTree, Out, Out1) :-
+
+    SubTree ? Tree,
+    Aux = Type(Arg, Requests, Requests1) :
+      Aux' = Type(Arg, Requests', Requests1) |
+	ambient_tree1(Selector, Type(Arg, Requests, Requests'?), Tree, Out, Out'?),
+	self;
+
+    SubTree =?= [],
+    Aux =?= _Type(_Arg, Requests, NextRequests) :
+      Requests = NextRequests,
+      Selector = _,
+      Out = Out1.
+
+format_tree_parts(Selector, Aux, SubTree, Out, Out1, Id, List) :-
+
+    Aux =?= channels(Kind, _Requests, _NextRequests) :
+      Out = [Id, "+", "+" | Out'?] |
+	format_channels(Kind, List, Out', ["-", "-" | Out''?]),
+	ambient_tree2(Selector, Aux, SubTree, Out'', Out1);
+
+    Aux =?= resolvent(Options, Requests, NextRequests) :
+      Requests ! show_resolvent(List, Options, Vs),
+      Out = [Id, "+", "+" | Out'?],
+      Aux' = resolvent(Options, Requests', NextRequests) |
+	copy_list(Vs?, Out', ["-", "-" | Out''?]),
+	ambient_tree2(Selector, Aux', SubTree, Out'', Out1).
 
 
 ambient_run(Goals, Run, Action, Cs) :-
@@ -636,7 +724,7 @@ copy_list(In, Out, Next) :-
 	self;
 
     In =?= [] :
-      Out = Next.
+      Out = Next .
 
 
 stream_out(Terms, Done, IdG, Commands, Commands1) + (Indent = "") :-
@@ -664,8 +752,8 @@ stream_out(Terms, Done, IdG, Commands, Commands1) + (Indent = "") :-
     string_to_dlist(Indent, LI, []),
     list_to_string(LIdG, P) :
       Commands ! to_context(computation#display(term, Term,
-						[prefix(P), type(ground),
-						known(Done),
+						[prefix(P),
+						known(Done), known(Term),
 						close(Done, Done')])) |
 	self;
 
@@ -712,112 +800,6 @@ spi_channels(Kind, Status, Out) :-
       Channels = Channels1.
     
 
-/*
-** Goal =?= ambient_server#run(_Goals, Root)
-** Kind == ascii a | b | c | d
-** integer(Index) (negative implies only one ambient, -Index)
-** Out = display_stream
-*/
-xtr_tree(Goal, Kind, Selector, Out) :-
-
-    Goal =?= ambient_server#run(_Goals, Root),
-    channel(Root) |
-	format_xtr(Kind, Selector, [Root], Out, []);
-
-    Goal =?= ambient_server#run(_Goals, Root, _Debug),
-    channel(Root) |
-	format_xtr(Kind, Selector, [Root], Out, []);
-
-    otherwise :
-      Selector = _,
-      Kind = _,
-      Out = ["No ambient tree" - Goal].
-
-  format_xtr(Kind, Selector, Ambients, Out, Out1) :-
-
-    Ambients ? Ambient,
-    vector(Ambient) :
-      write_channel(state(State), Ambient) |
-	extract_ambient_state,
-	format_xtr_parts(Kind, Selector, Id, Channels, Children, Out, Out'),
-	self;
-
-    Ambients ? _ClosedAmbient,
-    otherwise |
-	self;
-
-    Ambients = [] :
-      Selector = _,
-      Kind = _,
-      Out = Out1.
-
-  extract_ambient_state(State, Id, Channels, Children) :-
-
-    State ? id(Id^) |
-	self;
-
-    State ? children(Children^) |
-	self;
-
-    State ? private(PrivateChannels) |
-	copy_list(PrivateChannels, Channels, Channels'),
-	self;
-
-    State ? global(GlobalChannels) |
-	copy_list(GlobalChannels, Channels, Channels'),
-	self;
-
-    State ? shared(SharedChannels) |
-	copy_list(SharedChannels, Channels, Channels'),
-	self;
-
-    State ? _Other,
-    otherwise |
-	self;
-
-    State =?= [] :
-      Children = _,
-      Id = _,
-      Channels = [] .
-
-
-format_xtr_parts(Kind, Selector, Id, Channels, Children, Out, Out1) :-
-
-    Selector =?= "",
-    Id =?= system |
-	format_xtr_parts1;
-
-    Selector =?= "",
-    Id =\= system :
-      Out ! "+" |
-	format_xtr_parts1 + (Out1 = ["-" | Out1]);
-
-    Selector =?= system,
-    Id =?= system |
-	format_xtr_parts1;
-
-    Id =?= Selector(_Index) |
-	format_xtr_parts1;
-
-    Id =?= _Name(Selector) :
-      Selector' = "" |
-	format_xtr_parts1;
-
-    Id =?= _Name(I),
-    I =:= -Selector |
-	format_xtr_parts1;
-
-    otherwise :
-      Channels = _,
-      Id = _ |
-	format_xtr(Kind, Selector, Children, Out, Out1).
-
-  format_xtr_parts1(Kind, Selector, Id, Channels, Children, Out, Out1) :-
-    true :
-      Out = [Id, "+", "+" | Out'] |
-	format_channels(Kind, Channels, Out', ["-", "-" | Out'']),
-	format_xtr(Kind, Selector, Children, Out'', Out1).
-
 format_channels(Kind, Channels, Out, Out1) :-
 
     Kind =?= CHAR_a :
@@ -851,7 +833,6 @@ format_channels(Kind, Channels, Out, Out1) :-
     Type =?= SPI_BIMOLECULAR,
     read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
-    /* Eventually use c-extencion (spifcp.c) to compute weight */
     Weight := SendWeight + ReceiveWeight,
     Weight =:= 0,
     Kind =?= CHAR_d :
@@ -927,6 +908,7 @@ format_channels(Kind, Channels, Out, Out1) :-
     SendWeight =\= 0, ReceiveWeight =\= 0,
     CHAR_b =< Kind, Kind =< CHAR_c,
     read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    /* Eventually use c-extension (spifcp.c) to compute weight */
     Weight := Rate * SendWeight * ReceiveWeight :
       Refs = _,
       FormattedChannel = Name(Weight);
