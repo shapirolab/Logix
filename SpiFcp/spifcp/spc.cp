@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/04/30 07:04:37 $
+		       	$Date: 2003/06/20 13:52:18 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/SpiFcp/spifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -496,7 +496,7 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
     RHSS ? RHS,
     ChannelTables ? Table :
       Table ! entries(Entries),
-      Rhss ! (NewAsk'? : NewTell'? | NewBody?) |
+      Rhss ! (NewAsk'? : NewTell'? | Body?) |
 	partition_rhs(RHS, Ask, Tell, Body),
 	reduce_channel_table(Entries, ForkAsk, ForkTell, Close, Table'),
 	fork_and_close,
@@ -553,50 +553,58 @@ update_rhss(RHSS, ChannelTables, Rhss) :-
       Close = close(Channels?) |
 	list_to_tuple(CloseList, Channels).
 
-  fork_and_close(ForkAsk, ForkTell, Close, Body, AddAsk, AddTell, NewBody) :-
+  fork_and_close(Body, ForkAsk, ForkTell, Close, AddAsk, AddTell) :-
 
     ForkTell =?= [],
     Close =?= [] :
       ForkAsk = _,
-      AddAsk = [],
-      NewBody = Body |
+      AddAsk = [] |
 	continue_with_scheduler;
 
     ForkTell =?= [],
     Close =\= [] :
+      Body = _,
       ForkAsk = _,
       AddAsk = [],
-      AddTell = [write_channel(Close?, `"Scheduler.")],
-      NewBody = Body;
+      AddTell = [write_channel(Close?, `"Scheduler.")];
 
-    ForkTell =?= [_],
+    ForkTell =?= [_Update],
     Close =?= [] :
+      Body = _,
       AddAsk = ForkAsk,
-      AddTell = ForkTell,
-      NewBody = Body;
+      AddTell = ForkTell;
+
+    ForkTell =?= [Update],
+    Close =\= [] :
+      Body = _,
+      AddAsk = ForkAsk,
+      AddTell = [Update, write_channel(Close?, `"Scheduler.")];
+
+    ForkTell =?= [_Update1, _Update2 | _],
+    Close =?= [] :
+      Body = _,
+      AddAsk = [],
+      AddTell = [write_channel(update_references(List?), `"Scheduler.")] |
+	make_update_channel_refs_list;
 
     otherwise :
+      Body = _,
       ForkTell = _,
       AddAsk = [],
-      AddTell = [],
-      NewBody = (spi_update_channel_refs(List?, `"Scheduler.", `"Scheduler.'"),
-		 Body) |
+      AddTell = [write_channel(update_references(List?),
+			       `"Scheduler.", `"Scheduler.'"),
+		 write_channel(Close?, `"Scheduler.'")] |
 	make_update_channel_refs_list.
-
-  make_update_channel_refs_list(ForkAsk, Close, List) :-
+ 
+  make_update_channel_refs_list(ForkAsk, List) :-
 
     ForkAsk ? _,
     ForkAsk' ? (`spirefs'(ChName) := `spirefs(ChName) + N) :
-      List ! {N, `ChName} |
+      List ! {`ChName, N} |
 	self;
 
-    ForkAsk =?= [],
-    Close =?= [] :
-      List = [];
-
-    ForkAsk =?= [],
-    Close =\= [] :
-      List = [Close].
+    ForkAsk =?= [] :
+      List = [].
 
   /* A little kluge for lint */
   continue_with_scheduler(Body, AddTell) :-
