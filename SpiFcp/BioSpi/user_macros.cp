@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/15 08:10:09 $
+		       	$Date: 2002/06/05 18:36:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -446,6 +446,17 @@ ambient_resolvent(No, Goal, Commands, Commands1) :-
 			     ])
 		 | Commands1];
 
+    Goal =?= ambient_server#run(_Goals, Root, _Debug),
+    channel(Root) :
+      write_channel(resolvent(R), Root),
+      Commands = [to_context([spi_monitor # options(O, O),
+			      spi_utils # show_resolvent(R?, O, Vs),
+			      utils # append_strings(["<",No,">"], IdG),
+			      computation # display(stream, Vs?,
+						    [prefix(IdG), known(IdG)])
+			     ])
+		 | Commands1];
+
     otherwise :
       Goal = _,
       Commands = [resolvent(No) | Commands1].
@@ -461,7 +472,15 @@ ambient_signal(Signal, No, Goal, Commands, Commands1) :-
 				      [prefix(IdG),known(IdG),known(Reply)])])
 		 | Commands1];
 
-    Goal =\= ambient_server#run(_, _) :
+    Goal =?= ambient_server#run(_Goals, Root, _Debug),
+    channel(Root) :
+      write_channel(Signal(Reply), Root),
+      Commands = [to_context([utils # append_strings(["<",No,">"], IdG),
+		  computation#display(term, Reply,
+				      [prefix(IdG),known(IdG),known(Reply)])])
+		 | Commands1];
+
+    Goal =\= ambient_server#run(_, _), Goal =\= ambient_server#run(_,_,_) :
       Commands = [Signal(No) | Commands1];
 
     otherwise :
@@ -480,6 +499,14 @@ assign(	_, Id, _, _,
 ambient_tree(No, Goal, Commands, Commands1) :-
 
     Goal =?= ambient_server#run(_Goals, Root),
+    channel(Root) :
+      Commands = [to_context([utils # append_strings(["<",No,">"], IdG),
+		  computation#display(stream, Tree,
+				      [prefix(IdG),known(IdG), type(ground)])])
+		 | Commands1] |
+	format_ambient_tree([Root], "", Tree, []);
+
+    Goal =?= ambient_server#run(_Goals, Root, _Debug),
     channel(Root) :
       Commands = [to_context([utils # append_strings(["<",No,">"], IdG),
 		  computation#display(stream, Tree,
