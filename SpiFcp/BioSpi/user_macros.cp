@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/06/05 18:36:08 $
+		       	$Date: 2002/06/07 12:34:56 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -169,48 +169,31 @@ expand(Command, Cs) :-
 			spi_utils # show_value(Gs, Options, Gs')]) 
 	   | Commands]\Commands;
 
-    Command = record(Goals, File, Limit) :
-      Cs = [ambient_server#run(spi_record#run(repeat#run(Goals), File, Limit),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit) |
+	ambient_run(Goals, Run, spi_record#run(Run, File, Limit), Cs);
 
-    Command = record(Goals, File, Limit, Scale) :
-      Cs = [ambient_server#run(spi_record#run(repeat#run(Goals), File,
-					      Limit, Scale),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit, Scale) |
+	ambient_run(Goals, Run, spi_record#run(Run, File, Limit, Scale), Cs);
 
-    Command = record(Goals, File, Limit, Scale, Format) :
-      Cs = [ambient_server#run(spi_record#run(repeat#run(Goals), File, 
-					      Limit, Scale, Format),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = record(Goals, File, Limit, Scale, Format) |
+	ambient_run(Goals, Run,
+		    spi_record#run(Run, File, Limit, Scale, Format), Cs);
 
-    Command = run(Goals) :
-      Cs = [ambient_server#run(repeat#run(Goals), _ControlChannel)
-	   | Commands]\Commands;
+    Command = run(Goals) |
+	ambient_run(Goals, Run, Run, Cs);
 
-    Command = run(Goals, Limit) :
-      Cs = [ambient_server#run(spi_record#run(repeat#run(Goals), Limit),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = run(Goals, Limit) |
+	ambient_run(Goals, Run, spi_record#run(Run, Limit), Cs);
 
-    Command = trace(Goals, File, Limit) :
-      Cs = [ambient_server#run(spi_trace#run(repeat#run(Goals), File, Limit),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit) |
+	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
 
-    Command = trace(Goals, File, Limit, Scale) :
-      Cs = [ambient_server#run(spi_trace#run(
-				  repeat#run(Goals), File, Limit, Scale),
-			       _ControlChannel)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit, Scale) |
+	ambient_run(Goals, Run, trace#run(Run, File, Limit, Scale), Cs);
 
-    Command = trace(Goals, File, Limit, Scale, Format) :
-      Cs = [ambient_server#run(spi_trace#run(
-				repeat#run(Goals), File, Limit, Scale, Format),
-				_ControlChannel)
-	   | Commands]\Commands;
+    Command = trace(Goals, File, Limit, Scale, Format) |
+	ambient_run(Goals, Run,
+		    spi_trace#run(Run, File, Limit, Scale, Format), Cs);
 
     Command = weighter(Weighter) :
       Cs = [to_context([spi_utils # weighter(Weighter)])
@@ -461,6 +444,23 @@ ambient_resolvent(No, Goal, Commands, Commands1) :-
       Goal = _,
       Commands = [resolvent(No) | Commands1].
 
+
+ambient_run(Goals, Run, Action, Cs) :-
+
+    Goals =?= (Service # _Call) :
+      Run = Goals |
+      Cs = [ambient_server#run(Action, _ControlChannel),
+	    service(Service?) | Commands]\Commands;
+
+    Goals =?= (# Call) :
+      Run = (Service? # Call),
+      Cs = [service(Service),
+	    ambient_server#run(Action, _ControlChannel),
+	    service(Service?) | Commands]\Commands;
+
+    otherwise :
+       Run = repeat#run(Goals),
+       Cs = [ambient_server#run(Action, _ControlChannel) | Commands]\Commands.
 
 ambient_signal(Signal, No, Goal, Commands, Commands1) :-
 
