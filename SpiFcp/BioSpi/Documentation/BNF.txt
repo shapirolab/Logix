@@ -29,8 +29,8 @@ BNF for BioFcp
                            <weighter>(<weighter_parameter_list>)
 
 <weighter_parameter_list>
-                       ::= <waiter_parameter>
-                           <waiter_parameter> , <weighter_parameter_list>
+                       ::= <weighter_parameter>
+                           <weighter_parameter> , <weighter_parameter_list>
 
 <channel_declaration_list>
                        ::= <channel_declaration>
