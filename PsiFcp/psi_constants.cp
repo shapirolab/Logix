@@ -5,7 +5,7 @@ TRUE  => 1.
 
 /* Action Codes for the Foreign Kernel */
 
-PSI_TRANSMIT =>        1.
+PSI_POST =>            1.
 PSI_CLOSE =>           2.
 PSI_STEP =>            3.
 
