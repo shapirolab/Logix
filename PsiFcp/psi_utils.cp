@@ -1,5 +1,5 @@
 -language(compound).
--mode(failsafe).
+-mode(trust).
 -export([make_channel/1, make_channel/2, make_channel/3,
 	 make_channel/4,
 	 "SPC"/1, "SPC"/2,
@@ -208,8 +208,8 @@ show_named_channel(Channel, Options, Display, Reply) :-
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	channel_argument + (PiMacro = false, Display = Content,
-				Left = Display, Right = (Name : Content));
+	channel_argument + (Display = Content,
+		Left = Display, Right = (Name : Content));
 
     /* closed channel */
     otherwise :
@@ -327,8 +327,8 @@ show_channel_content(Stream, Which, Depth, Sender, Content, Left, Right) :-
       Clarified = SendMessage.
 
 
-show_message(Id, Message, Tag, Chosen, Stream, Which, Depth, Sender, Content,
-		Left, Right) :-
+show_message(Kind, Id, Message, Tag, Chosen, Stream, Which, Depth, Sender,
+		Content, Left, Right) :-
 
     Which =?= active,
     we(Chosen) :
@@ -345,6 +345,7 @@ show_message(Id, Message, Tag, Chosen, Stream, Which, Depth, Sender, Content,
 	show_channel_content;
 
     otherwise :
+      Kind = _,
       Id = _,
       Message = _,
       Tag = _,
@@ -372,8 +373,14 @@ show_message(Id, Message, Tag, Chosen, Stream, Which, Depth, Sender, Content,
       Type = cancelled.
     
 
-condense_message(Type, Id, Message, Which, Depth, Sender, Condensed,
+condense_message(Kind, Id, Message, Type, Which, Depth, Sender, Condensed,
 			Left, Right) :-
+
+    unknown(Message) :
+      Which = _,
+      Depth = _,
+      Sender = _ |
+	id_and_message + (Msg = Type);
 
     known(Type),
     Message =?= [] :
@@ -382,6 +389,7 @@ condense_message(Type, Id, Message, Which, Depth, Sender, Condensed,
 	id_and_message + (Msg = Type([]));
 
     known(Type),
+    Depth > 1,
     tuple(Message),
     arity(Message, Index),
     Index++,
@@ -392,23 +400,29 @@ condense_message(Type, Id, Message, Which, Depth, Sender, Condensed,
 	id_and_message + (Left = Left, Right = Left'?),
 	show_message_args;
 
+    known(Type),
+    Depth =< 1 :
+      Message = _,
+      Which = _,
+      Depth = _ |
+	id_and_message + (Msg = Type);
+
     otherwise :
       Which = _,
       Depth = _,
-      Sender = _,
-      Message = _ |
-	id_and_message + (Msg  = Type(Message)).
+      Sender = _ |
+	id_and_message + (Msg = Type(Message)).
 
-  id_and_message(Sender, Id, Msg, Condensed, Left, Right) :-
+  id_and_message(Kind, Id, Msg, Sender, Condensed, Left, Right) :-
 
     Sender =?= sender :
-      Condensed = {Id, Msg},
+      Condensed = {Id, Kind - Msg},
       Left = Right;
 
     otherwise :
       Sender = _,
       Id = _,
-      Condensed = Msg,
+      Condensed = Kind - Msg,
       Left = Right.
 
 
@@ -418,7 +432,7 @@ show_message_args(Message, Which, Depth, Sender, Index, Msg, Left, Right) :-
     arg(Index, Msg, Display),
     Index--,
     arg(Index', Message, Argument) |
-	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
+	show_argument + (Left = Left, Right = Left'?),
 	self;
 
     Index =?= 1 :
@@ -436,7 +450,7 @@ show_tuple_args(Tuple, Which, Depth, Sender, Index, Args, Left, Right) :-
     arg(Index, Args, Display),
     arg(Index, Tuple, Argument),
     Index-- |
-	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
+	show_argument + (Left = Left, Right = Left'?),
 	self;
 
     Index =:= 0 :
@@ -457,9 +471,9 @@ show_value(Argument, Options, Display) :-
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	show_argument + (PiMacro = false, Left = Display, Right = Display'?).
+	show_argument + (Left = Display, Right = Display'?).
 
-show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
+show_argument(Argument, Which, Depth, Sender, Display, Left, Right) :-
 
     Argument = Name(FcpChannel, {_L, _R}), string(Name), channel(FcpChannel) |
 	show_channel_argument;
@@ -468,28 +482,13 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiMacro = _,
       Display = Argument,
       Left = Right;
-
-    tuple(Argument),
-    PiMacro = true,
-    arity(Argument, Index),
-    Index++,
-    make_tuple(Index', Msg),
-    arg(1, Msg, String) :
-      Depth = _,
-      Depth' = 0,
-      Message = Argument,
-      Display = Msg,
-      String = message |
-	show_message_args;
 
     ro(Argument) :
       Which = _,
       Depth = _,
       Sender = _,
-      PiMacro = _,
       Display = Argument,
       Left = Right;
 
@@ -497,31 +496,25 @@ show_argument(Argument, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
       Which = _,
       Depth = _,
       Sender = _,
-      PiMacro = _,
       Display = Argument,
       Left = Right;
 
-    Argument = Name(_FcpChannel, _Circuit), unknown(Name) :
-      PiMacro = _ |
+    Argument = Name(_FcpChannel, _Circuit), unknown(Name) |
 	show_compound;
 
-    Argument = _Name(FcpChannel, _Circuit), unknown(FcpChannel) :
-      PiMacro = _ |
+    Argument = _Name(FcpChannel, _Circuit), unknown(FcpChannel) |
 	show_compound;
 
-    Argument = _Name(_FcpChannel, Circuit), unknown(Circuit) :
-      PiMacro = _ |
+    Argument = _Name(_FcpChannel, Circuit), unknown(Circuit) |
 	show_compound;
 
-    Argument = _Name(_FcpChannel, Circuit), Circuit =\= {_, _} :
-      PiMacro = _ |
+    Argument = _Name(_FcpChannel, Circuit), Circuit =\= {_, _} |
 	show_compound;
 
-    otherwise :
-      PiMacro = _ |
+    otherwise |
 	show_compound.
 
-show_channel_argument(Name, FcpChannel, Which, Depth, Sender, PiMacro, Display,
+show_channel_argument(Name, FcpChannel, Which, Depth, Sender, Display,
 				Left, Right) :-
 
     true :
@@ -534,47 +527,60 @@ show_channel_argument(Name, FcpChannel, Which, Depth, Sender, PiMacro, Display,
       Which = _,
       Depth = _,
       Sender = _,
-      PiMacro = _,
       Display = [Name],
       Left = Right.
 
-channel_argument(Status, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
+channel_argument(Status, Which, Depth, Sender, Display, Left, Right) :-
 
     Depth =\= 0,
-    Status =?= [_Type(Creator, [])] :
+    Status =?= [_Type(CreatorBase, [])] :
       Which = _,
       Depth = _,
       Sender = _,
-      PiMacro = _,
-      Display = Creator,
-      Left = Right;
+      Display = Creator?,
+      Left = Right |
+	channel_creator;
 
     Depth =\= 0,
-    Status =?= [_Type(Creator, Stream)], Stream =\= [],
+    Status =?= [_Type(CreatorBase, Stream)], Stream =\= [],
     Which =?= none |
       Sender = _,
-      PiMacro = _,
-      Display = (Creator!),
-      Left = Right;
+      Display = (Creator? !),
+      Left = Right,
+	channel_creator;
 
     Depth =\= 0,
-    Status =?= [_Type(Creator, Stream)], Stream =\= [],
+    Status =?= [_Type(CreatorBase, Stream)], Stream =\= [],
     Which =\= none :
-      PiMacro = _,
-      Display = (Creator = Content) |
+      Display = (Creator? = Content) |
+	channel_creator,
 	show_channel_content;
 
     Depth =?= 0 :
-    Status =?= [_Type(Creator, _Stream)],
+    Status =?= [_Type(CreatorBase, _Stream)],
       Status = _,
       Which = _,
       Sender = _,
-      PiMacro = _,
-      Display = Creator,
-      Left = Right.
+      Display = Creator?,
+      Left = Right |
+	channel_creator.
+
+  channel_creator(CreatorBase, Creator) :-
+
+    CreatorBase = ProcessName(infinite) :
+      Creator = ProcessName;
+
+    CreatorBase = ProcessName(RealInteger),
+    convert_to_integer(RealInteger, I),
+    convert_to_real(I, R),
+    R =:= RealInteger :
+      Creator = ProcessName(I);
+
+    otherwise :
+      Creator = CreatorBase.
 
 
-  show_compound(Argument, Which, Depth, Sender, Display, Left, Right) :-
+show_compound(Argument, Which, Depth, Sender, Display, Left, Right) :-
 
     tuple(Argument),
     arity(Argument, Index),
@@ -585,8 +591,8 @@ channel_argument(Status, Which, Depth, Sender, PiMacro, Display, Left, Right) :-
 
     Argument ? A :
       Display ! D |
-	show_argument(A, Which, Depth, Sender, false, D, Left, Left'?),
-	show_argument + (PiMacro = false);
+	show_argument(A, Which, Depth, Sender, D, Left, Left'?),
+	show_argument;
 
    otherwise :
       Which = _,
@@ -617,7 +623,7 @@ show_goal(Goal, Options, PiFcp, Left, Right) :-
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	goal_channels;
+	show_goal2;
 
     Goal =?= (Service#Goal') :
       PiFcp = (Service#PiFcp') |
@@ -641,7 +647,7 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
     tuple(Goal), Goal =\= (_#_),
     arg(1, Goal, Name), string(Name),
     arity(Goal, Index) |
-	goal_channels;
+	show_goal2;
 
     Goal =?= (Service#Goal') :
       PiFcp = (Service#PiFcp') |
@@ -655,59 +661,88 @@ show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
       PiFcp = non_goal(Goal),
       Left = Right.
 
+  show_goal2(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right, Name) :-
 
-goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+    nth_char(1, Name, Char1),
+    ascii('A') =< Char1, Char1 =< ascii('Z') |
+	goal_channels;
 
-/* Exclude trailing non-pi arguments (mostly) */
-
-    Index > 1, arg(Index, Goal, Arg),
-    we(Arg),
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Arg),
-    ro(Arg),
-    Index-- |
-	self;
-
-    Index > 1, arg(Index, Goal, Arg),
-    channel(Arg),
-
-    Index-- |
-	self;
+    nth_char(1, Name, Char1),
+    Char1 =:= ascii('.'),
+    nth_char(2, Name, Char2),
+    ascii('A') =< Char2, Char2 =< ascii('Z') |
+	goal_channels;
 
     otherwise,
-    arg(1, Goal, Name),
     make_tuple(Index, Tuple),
     arg(1, Tuple, N) :
       N = Name,
       PiFcp = Tuple |
 	goal_channels1.
 
-goal_channels1(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
 
-    Index =?= 3,
-    arg(1, Goal, pi_send),
-    arg(Index, Goal, Argument),
-    arg(Index, PiFcp, Display),
+goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+
+/* Exclude trailing non-pi arguments (mostly) */
+
+    Index > 1, arg(Index, Goal, Argument),
+    we(Argument),
     Index-- |
-	show_argument + (PiMacro = true, Left = Left, Right = Left'?),
 	self;
 
-    Index =?= 3,
-    arg(1, Goal, pi_receive),
-    arg(Index, Goal, Argument),
-    arg(Index, PiFcp, Display),
+    Index > 1, arg(Index, Goal, Argument),
+    ro(Argument),
     Index-- |
-	show_argument + (PiMacro = true, Left = Left, Right = Left'?),
 	self;
+
+    Index > 1, arg(Index, Goal, Argument),
+    Argument = Name(_FcpChannel, _Circuit), unknown(Name),
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Argument),
+    Argument = _Name(FcpChannel, _Circuit), unknown(FcpChannel),
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Argument),
+    Argument = _Name(_FcpChannel, Circuit), unknown(Circuit),
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Argument),
+    Argument = _Name(_FcpChannel, Circuit), Circuit =\= {_, _},
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Argument),
+    Argument = Id(FcpChannel, {_L, _R}), string(Id), channel(FcpChannel),
+    make_tuple(Index, Tuple),
+    arg(1, Goal, Name),
+    arg(1, Tuple, N) :
+      N = Name,
+      PiFcp = Tuple |
+	goal_channels1;
+
+    Index-- > 1,
+    otherwise |
+	self;
+
+    Index =< 1,
+    arg(1, Goal, Name) :
+      Which = _,
+      Depth = _,
+      Sender = _,
+      PiFcp = Name,
+      Left = Right.
+
+  goal_channels1(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
 
     Index > 1,
-    otherwise,
     arg(Index, Goal, Argument),
     arg(Index, PiFcp, Display),
     Index-- |
-	show_argument + (PiMacro = false, Left = Left, Right = Left'?),
+	show_argument + (Left = Left, Right = Left'?),
 	self;
 
     Index = 1 :
