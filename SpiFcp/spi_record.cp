@@ -139,6 +139,14 @@ filter_none(Stream, Events, Out, Scale) :-
       Out ! String |
 	self;
 
+/* For ambient merge */
+    Stream ? reset(Prefix),
+    convert_to_string(Prefix, SPrefix),
+    string_to_dlist(SPrefix, LPrefix, [CHAR_EOL]),
+    list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
+      Out ! ResetPrefix? |
+	self;
+
     otherwise |
 	filter_end;
 
@@ -247,6 +255,15 @@ filter_process(Stream, Events, Out, Scale) :-
 	self,
 	list_to_string([CHAR_MINUS | CP], String);
 
+/* For ambient merge */
+    Stream ? reset(_FromName(FromId)),
+    convert_to_string(FromId, SFromId),
+    string_to_dlist(SFromId, LFromId, [CHAR_SPACE, CHAR_EOL]),
+    string_to_dlist(reset, Prefix, [CHAR_SPACE | LFromId]) :
+      Out ! ResetPrefix? |
+	list_to_string(Prefix, ResetPrefix),
+	self;
+
    otherwise |
 	filter_end;
 
@@ -337,6 +354,15 @@ filter_creator(Stream, Events, Out, Scale) :-
 	list_to_string([CHAR_MINUS | CN], String),
 	self;
 
+/* For ambient merge */
+    Stream ? reset(_FromName(FromId)),
+    convert_to_string(FromId, SFromId),
+    string_to_dlist(SFromId, LFromId, [CHAR_SPACE, CHAR_EOL]),
+    string_to_dlist(reset, Prefix, [CHAR_SPACE | LFromId]) :
+      Out ! ResetPrefix? |
+	list_to_string(Prefix, ResetPrefix),
+	self;
+
     otherwise |
 	filter_end;
 
@@ -416,7 +442,7 @@ filter_full(Stream, Events, Out, Scale) :-
 	self,
 	list_to_string([CHAR_MINUS | CP], String);
 
-    Stream ? end(Name(self(exit ChannelName), Action, exit CreatedId)),
+    Stream ? end(Name(self(exit ChannelName), Action, expel CreatedId)),
     string_to_dlist(CreatedId, CI, [CHAR_EOL]),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(" expel ", CEXPEL, CN),
@@ -555,6 +581,15 @@ filter_full(Stream, Events, Out, Scale) :-
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
       Out ! String |
 	list_to_string([CHAR_MINUS | CP], String),
+	self;
+
+/* For ambient merge */
+    Stream ? reset(_FromName(FromId)),
+    convert_to_string(FromId, SFromId),
+    string_to_dlist(SFromId, LFromId, [CHAR_SPACE, CHAR_EOL]),
+    string_to_dlist(reset, Prefix, [CHAR_SPACE | LFromId]) :
+      Out ! ResetPrefix? |
+	list_to_string(Prefix, ResetPrefix),
 	self;
 
     otherwise |
