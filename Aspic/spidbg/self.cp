@@ -4,9 +4,9 @@ Main control of Stochastic Pi Calulus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill SIlverman
 
 Last update by          $Author: bill $
-			$Date: 2002/08/14 08:31:43 $
+			$Date: 2003/04/30 07:06:28 $
 Currently locked by     $Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -212,7 +212,7 @@ filter(Id, In, IO, Events, OldSpiOptions, OutStreams) :-
 procedure shutdown(Id, In, CloseIOs, Events, OldSpiOptions, ChokeStreams).
 shutdown(Id, In, CloseIOs, Events, OldSpiOptions, ChokeStreams) :-
 	ChokeStreams = {Commands, Requests, System} :
-	    Commands=[], Requests=[], System = In |
+	    Commands=[abort], Requests=[], System = In |
 		computation # shell(pop_prompt),
 		complete_io(Id, CloseIOs),
 		print_all_events(Id, Events),
@@ -485,6 +485,10 @@ request(I, O, Requests, Requests') :-
 	I = parent(_Ok) : Requests!I, O = [];
 
 	I = trace(_Tree) : Requests!I, O = [];
+
+	I = _child(U, _), unknown(U) : I = O, Requests = Requests';
+
+	I = _behavior(U, _, _), unknown(U) : I = O, Requests = Requests';
 
 	otherwise : I = O, Requests = Requests'.
 
