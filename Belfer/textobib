@@ -7,6 +7,8 @@ my @MONTHS = (January, February, March, April, May, June, July, August, Septembe
 my $BIB_VERSION = "CS-TR-v2.1";
 my $MAX_BIB_LINE = 79;
 my $BIB_AUTHORITY = "ncstrl.weizmann_il";  # default prefix
+my $DEFAULT_DATE = "January 1";
+
 my $Output_Entry = "";                     # Month day, Year
 my $This_Year = "";
 my $InputFile = "abstracts.tex";
@@ -274,6 +276,7 @@ sub extract_title
     $Date = $rest;
     $Title = $title;
   }
+  $Title = "~~$Title";
   $Lines =~ s/^\s*(\S.*)$/$1/;
 }
 
@@ -298,7 +301,7 @@ sub   check_date
     $Date = "$1 $2, $3";
   }
   else {
-    $Date = "January $This_Year";
+    $Date = "$DEFAULT_DATE, $This_Year";
   }
 }
 

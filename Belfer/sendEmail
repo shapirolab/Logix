@@ -1,0 +1,30 @@
+#!/usr/local/bin/perl
+
+use Sys::Hostname;
+
+# Usage: sendEmail file To Subject
+# 
+# Subject may be omitted.
+# If Subject and To are omitted, the file is ent to root.
+#
+# Examples:
+#
+# sendEmail junk bill "Here's some junk!"
+# sendEmail root_stuff
+#
+
+my $host_name =  hostname();
+my $host_type = `uname -s`;
+chomp $host_type;
+my $MAIL = ($host_type eq "IRIX" || $host_type eq "IRIX64") ? "Mail" : "mail";
+
+my ($file_name, $to_name, $subject)  = @ARGV;
+
+if (!$subject) {
+  $subject = "message from $host_name";
+}
+if (!$to_name) {
+  $to_name = "root";
+}
+system("cat $file_name | $MAIL -s \"$subject\" $to_name ")
+  if -s $file_name;
