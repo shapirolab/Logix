@@ -1,7 +1,8 @@
 -language(compound).
 -mode(failsafe).
 -export([make_channel/1, make_channel/4,
-	 show_channel/3, show_goal/3, show_tree/3, close_tree/1,
+	 show_channel/3, show_goal/3, show_resolvent/3,
+	 show_tree/3, close_tree/1,
 	 receive/2, send/2]).
 
 
@@ -106,9 +107,9 @@ show_named_channel(Channel, Options, Display, Reply) :-
 
     Reply =?= true,
     Channel = Name(Vector, Stream), string(Name), vector(Vector) :
-      make_channel(Order, _),
+      make_channel(BadOption, _),
       Display = (Name : Content) |
-	parse_options(Options, Depth(1), Order(Order),
+	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
 	show_channel_content;
 
@@ -379,9 +380,10 @@ show_goal(Goal, Options, PiFcp) :-
     arg(1, Goal, Name), string(Name),
     arity(Goal, Index),
     make_tuple(Index, Result) :
-      PiFcp = Result |
+      PiFcp = Result,
+      make_channel(BadOption, _) |
 	arg(1, Result, Name),
-	parse_options(Options, Depth(1), order(order),
+	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
 	goal_channels;
 
@@ -462,7 +464,7 @@ close_tree(Tree) :-
 show_tree(Tree, Options, TreeTrace) :-
 
 	parse_options(Options, Depth(1), Order(prefix),
-		      Sender(no_sender), Which(active)),
+		      Sender(no_sender), Which(none)),
 	nodes([Tree], [Depth, Sender, Which], 0, 0, Head, []),
 	display_tree(Head, Order, TreeTrace).
 
@@ -471,7 +473,7 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
     Nodes ? tree(TreeId, Context, BranchList) :
       Level = _,
       Head ! begin(PiTreeId?, Context, _Link) |
-	show_goal(TreeId, [0], PiTreeId),
+	show_treeid,
 	nodes(BranchList, Options, 0, Time,
 		Head', [end(PiTreeId?) | Head'']),
 	nodes;
@@ -493,6 +495,23 @@ nodes(Nodes, Options, Level, Time, Head, Tail) :-
       Level = _,
       Time = _,
       Head = Tail .
+
+  show_treeid(TreeId, PiTreeId) :-
+
+    TreeId = (ServiceId#TreeId') :
+      PiTreeId = (ServiceId#PiTreeId') |
+	self;
+
+    TreeId ? Goal :
+      PiTreeId ! PiFcp? |
+	show_goal+(Options = [0]),
+	self;
+
+    TreeId = [] :
+      PiTreeId = [];
+
+    otherwise |
+	show_goal(TreeId, [0], PiTreeId).
 
 executed(PiGoal, Level, Time, Executed, BranchList, Nodes) :-
 
@@ -525,7 +544,7 @@ display_tree(Head, Order, TreeTrace) :-
   display_execute_order(Sorted, TreeTrace) :-
 
     Sorted ? {Operator, Goal, _, _}, Operator =\= "|" :
-      TreeTrace ! (Operator, "", Goal) |
+      TreeTrace ! {Operator, "", Goal} |
 	self;
 
     Sorted ? {"|", Goal, _, _} :
@@ -598,7 +617,7 @@ sort_on_time(List, Sorted) + (Tail =[]) :-
     List = [] :
       Sorted = Tail.
 
-partition(X, List, Small, Large) :-
+  partition(X, List, Small, Large) :-
 
     List ? begin(_, _, _) |
 	self;
@@ -620,3 +639,40 @@ partition(X, List, Small, Large) :-
       X = _,
       Small = [],
       Large = [].
+
+
+show_resolvent(Resolvent, Options, Stream) :-
+
+    true :
+      make_channel(BadOption, _) |
+	parse_options(Options, Depth(1), BadOption(BadOption),
+		      Sender(no_sender), Which(active)),
+	show_resolvent_stream(Resolvent, [Depth?, Sender?, Which?], Stream).
+
+  show_resolvent_stream(Resolvent, Options, Stream) :-
+
+    Resolvent ? Call,
+    Call = call(_, _) :
+      Stream ! call /* Call ? */ |
+	self;
+
+    Resolvent ? [Name | _] # Goals |
+	show_resolvent_goals(Name, Options, Goals, Stream, Stream'),
+	self;
+
+    Resolvent = [] :
+      Options = _,
+      Stream = [].
+
+
+  show_resolvent_goals(Name, Options, Goals, Stream, NextStream) :-
+
+    Goals ? Goal :
+      Stream ! (Name # PiFcp?) |
+	show_goal,
+	self;
+
+    Goals =?= [] :
+      Name = _,
+      Options = _,
+	Stream = NextStream.
