@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2002/09/06 05:10:57 $
+		       	$Date: 2002/09/15 11:33:19 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.10 $
+			$Revision: 1.11 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -90,11 +90,9 @@ expand(Command, Cs) :-
 		" pc(C)              - make BioSpi channel C",
 		" ph                 - get this list",
 		" pr(C,M)            - receive M from BioSpi channel C",
-		" prgcs              - reset BioSpi global channels",
 		" ps(M,C)            - send M on BioSpi channel C",
 		" rtr / rtr(Ambient) - ambient tree with resolvent",
 		" spc(C)             - Show BioSpi channel",
-		" spgcs              - Show BioSpi global channels",
 		" record(GS, F, L)   - run Goals, record to File until Limit.",
 		" record(GS,F,L,S,O) - run Goals, record to File until Limit,",
 		"                      scaled by Scale, with format Option.",
@@ -162,18 +160,6 @@ expand(Command, Cs) :-
       Cs = [state(No, Goal, _, _),
 	    to_context([spi_utils # show_goal(Goal, Options, Term),
 			computation # display(term, Term, known(Term))]) 
-	   | Commands]\Commands;
-
-    Command = spgcs :
-      Cs = [to_context([spi_monitor # [options(O, O),get_global_channels(Gs)], 
-			spi_utils # show_value(Gs, O?, Gs'),
-			computation # display(stream, Gs', [])]) 
-	   | Commands]\Commands;
-
-    Command = spgcs(Options) :
-      Cs = [to_context([computation # display(stream, Gs', []),
-			spi_monitor # get_global_channels(Gs),
-			spi_utils # show_value(Gs, Options, Gs')]) 
 	   | Commands]\Commands;
 
     Command = record(Goals, File, Limit) |
@@ -861,16 +847,19 @@ format_channels(Kind, Channels, Out, Out1) :-
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Type =?= SPI_HOMODIMERIZED,
+    read_vector(SPI_BLOCKED, Channel, Blocked),
     read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
-    DimerWeight > 0 |
+    DimerWeight > 0,
+    read_vector(SPI_DIMER_ANCHOR, Channel, DimerAnchor) |
+	count_requests(DimerAnchor, DimerRequests),
 	format_channel_h;
 
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Type =?= SPI_INSTANTANEOUS,
-    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),  
-    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor) |
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
+    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor) |
 	count_requests(SendAnchor, SendRequests),
 	count_requests(ReceiveAnchor, ReceiveRequests),
 	format_channel_i;
@@ -898,20 +887,23 @@ format_channels(Kind, Channels, Out, Out1) :-
   format_channel_b(Channel, Kind, SendWeight, ReceiveWeight, Name, Refs,
 				FormattedChannel) :-
 
-    SendWeight * ReceiveWeight =:= 0,
-    Kind =?= CHAR_b :
-      Channel = _,
-      Name = _,
-      Refs = _,
-      FormattedChannel = "";
-
     SendWeight =\= 0, ReceiveWeight =\= 0,
+    read_vector(SPI_BLOCKED, Channel, Blocked),
+    Blocked =?= FALSE,
     CHAR_b =< Kind, Kind =< CHAR_c,
     read_vector(SPI_CHANNEL_RATE, Channel, Rate),
     /* Eventually use c-extension (spifcp.c) to compute weight */
     Weight := Rate * SendWeight * ReceiveWeight :
       Refs = _,
       FormattedChannel = Name(Weight);
+
+    SendWeight =\= 0, ReceiveWeight =\= 0,
+    read_vector(SPI_BLOCKED, Channel, Blocked),
+    Blocked =?= TRUE,
+    Kind >= CHAR_c :
+      Refs = _,
+      QM = "?" |
+      FormattedChannel = (Name : blocked(SendWeight!, QM(ReceiveWeight)));
 
     Kind =?= CHAR_c,
     SendWeight =?= 0 :
@@ -927,49 +919,55 @@ format_channels(Kind, Channels, Out, Out1) :-
       FormattedChannel = Name(SendWeight!);
 
     Kind =?= CHAR_d,
+    read_vector(SPI_BLOCKED, Channel, Blocked),
     read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),  
     read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor) :
       ReceiveWeight = _,
       SendWeight = _ |
 	count_requests(SendAnchor, SendRequests),
 	count_requests(ReceiveAnchor, ReceiveRequests),
-	format_d_channel_b.
+	format_d_channel_b;
 
-  format_d_channel_b(Name, Refs, SendRequests, ReceiveRequests,
+    otherwise :
+      Channel = _,
+      Kind = _,
+      Name = _,
+      ReceiveWeight = _,
+      Refs = _,
+      SendWeight = _,
+      FormattedChannel = "".
+
+
+  format_d_channel_b(Name, Blocked, Refs, SendRequests, ReceiveRequests,
 				FormattedChannel) :-
 
     SendRequests =?= 0 :
+      Blocked = _,
       QM = "?",
       FormattedChannel = Name(QM(ReceiveRequests)) - Refs;
 
     ReceiveRequests =?= 0 :
+      Blocked = _,
       FormattedChannel = Name(SendRequests!) - Refs;
 
-    otherwise :
+    otherwise,
+    Blocked = FALSE :
       QM = "?",
-      FormattedChannel = Name(SendRequests!, QM(ReceiveRequests)) - Refs.
+      FormattedChannel = Name(SendRequests!, QM(ReceiveRequests)) - Refs;
 
-  format_channel_h(Channel, Kind, DimerWeight, Name, Refs,
-				FormattedChannel) :-
+    otherwise,
+    Blocked = TRUE :
+      QM = "?",
+      FormattedChannel = (Name : blocked(SendRequests!, QM(ReceiveRequests))
+				- Refs).
 
-    Kind =?= CHAR_b,
-    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
-    Weight := Rate*DimerWeight*(DimerWeight - 1),
-    Weight =?= 0 :
-      Channel = _,
-      Name = _,
-      Refs = _,
-      FormattedChannel = "";
+  format_channel_h(Channel, Kind, Blocked, DimerWeight, DimerRequests, Name,
+			Refs, FormattedChannel) :-
 
-    Kind =?= CHAR_b,
-    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
-    Weight := Rate*DimerWeight*(DimerWeight - 1),
-    Weight =\= 0 :
-      Channel = _,
-      Refs = _,
-      FormattedChannel = Name(Weight);
 
-    Kind =?= CHAR_c,
+    CHAR_b =< Kind, Kind =< CHAR_c,
+    DimerRequests >= 2,
+    Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_RATE, Channel, Rate),
     Weight := Rate*DimerWeight*(DimerWeight - 1) :
       Channel = _,
@@ -977,11 +975,59 @@ format_channels(Kind, Channels, Out, Out1) :-
       FormattedChannel = Name(Weight);
 
     Kind =?= CHAR_d,
-    read_vector(SPI_SEND_ANCHOR, Channel, DimerAnchor) :
+    DimerRequests >= 2,
+    Blocked =?= FALSE,
+    read_vector(SPI_CHANNEL_RATE, Channel, Rate),
+    Weight := Rate*DimerWeight*(DimerWeight - 1) :
+      Channel = _,
+      Refs = _,
+      FormattedChannel = Name(Weight) - Refs;
+
+    Kind =?= CHAR_b,
+    otherwise :
+      Blocked = _,
+      Channel = _,
+      DimerRequests = _,
       DimerWeight = _,
+      Name = _,
+      Refs = _,
+      FormattedChannel = "";
+
+    Kind =?= CHAR_c,
+    DimerRequests < 2 :
+      Blocked = _,
+      Channel = _,
+      DimerWeight = _,
+      Refs = _,
       QM = "?",
-      FormattedChannel = Name(QM(DimerRequests!)) - Refs |
-	count_requests(DimerAnchor, DimerRequests).
+      FormattedChannel = Name(QM(DimerRequests!));
+
+    Kind =?= CHAR_d,
+    DimerRequests < 2 :
+      Blocked = _,
+      Channel = _,
+      DimerWeight = _,
+      Refs = _,
+      QM = "?",
+      FormattedChannel = Name(QM(DimerRequests!)) - Refs;
+
+    Kind =?= CHAR_c,
+    Blocked = TRUE :
+      Blocked = _,
+      Channel = _,
+      DimerWeight = _,
+      Refs = _,
+      QM = "?",
+      FormattedChannel = (Name : blocked(QM(DimerRequests!)));
+
+    Kind =?= CHAR_d,
+    Blocked = TRUE :
+      Blocked = _,
+      Channel = _,
+      DimerWeight = _,
+      Refs = _,
+      QM = "?",
+      FormattedChannel = (Name : blocked(QM(DimerRequests!)) - Refs).
 
 
   format_channel_i(Kind, SendRequests, ReceiveRequests, Name, Refs,
@@ -991,13 +1037,6 @@ format_channels(Kind, Channels, Out, Out1) :-
     ReceiveRequests =:= 0,
     Kind =?= CHAR_d :
       FormattedChannel = Name - Refs;
-
-    SendRequests =:= 0,
-    ReceiveRequests =:= 0,
-    Kind =\= CHAR_d :
-      Name = _,
-      Refs = _,
-      FormattedChannel = "";
 
     SendRequests > 0,
     ReceiveRequests =:= 0,
@@ -1030,14 +1069,17 @@ format_channels(Kind, Channels, Out, Out1) :-
 
     SendRequests > 0,
     ReceiveRequests > 0,
-    Kind =?= CHAR_d :
-      FormattedChannel = (Name : blocked(SendRequests, ReceiveRequests) - Refs);
+    Kind =?= CHAR_c :
+      Refs = _,
+      QM = "?",
+      FormattedChannel = (Name : blocked(SendRequests!, QM(ReceiveRequests)));
 
     SendRequests > 0,
     ReceiveRequests > 0,
-    Kind =\= CHAR_d :
-      Refs = _,
-      FormattedChannel = (Name : blocked(SendRequests, ReceiveRequests));
+    Kind =?= CHAR_d :
+      QM = "?",
+      FormattedChannel = (Name : blocked(SendRequests!, QM(ReceiveRequests))
+				- Refs);
 
     otherwise :
       Kind = _,

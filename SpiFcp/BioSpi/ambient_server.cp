@@ -50,7 +50,7 @@ run(Commands, System, Out) :-
 	computation # events(Events),
 	computation # self # service_id(SId),
 	serve_system + (Ambient = System, UniqueId = 0, Status = running),
-	ambient + (AmbientName = global, Parent = System).
+	ambient + (AmbientName = public, Parent = System).
 
 /*
  * The system ambient is not a nested computation.
@@ -355,12 +355,12 @@ serve_ambient0(In, Events, FromSub, Done,
 	       Ambient, Parent,
 	       Children,
 	       Requests, Controls, AmbientDone, Scheduler, Debug) :-
-	serve_ambient + (GlobalChannels = [{0, _, -1, ""}, {[], _, -1, ""}],
-			 LocalChannels = [], SharedChannels = []).
+	serve_ambient + (PublicChannels = [{0, _, -1, ""}, {[], _, -1, ""}],
+			 PrivateChannels = [], SharedChannels = []).
 
 serve_ambient(In, Events, FromSub, Done,
 	      Ambient, Parent, Children,
-	      LocalChannels, GlobalChannels, SharedChannels,
+	      PrivateChannels, PublicChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug) :-
 
@@ -393,22 +393,35 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? Close, Close =?= close(ChannelTuple) :
       write_channel(close(ChannelTuple, Reply), Scheduler) |
-	DEBUG(close - Reply - ChannelTuple - LocalChannels - SharedChannels,
+	DEBUG(close - Reply - ChannelTuple - PrivateChannels - SharedChannels,
 		scheduler),
 	remove_local_channels(Reply, ChannelTuple,
-			      LocalChannels, LocalChannels',
+			      PrivateChannels, PrivateChannels',
 			      SharedChannels, SharedChannels', Unremoved),
 	pass_unremoved;
 
+/* Obsolescent global channel declarations */
     In ? global_channels(List) |
 	DEBUG(global/1, scheduler),
-	merge_global_channels(List, GlobalChannels, GlobalChannels',
+	merge_public_channels(List, PublicChannels, PublicChannels',
 			      Scheduler),
 	self;
 
     In ? global_channels(List, Ambient^) |
 	DEBUG(global/2, scheduler),
-	merge_global_channels(List, GlobalChannels, GlobalChannels',
+	merge_public_channels(List, PublicChannels, PublicChannels',
+			      Scheduler),
+	self;
+
+    In ? public_channels(List) |
+	DEBUG(public/1, scheduler),
+	merge_public_channels(List, PublicChannels, PublicChannels',
+			      Scheduler),
+	self;
+
+    In ? public_channels(List, Ambient^) |
+	DEBUG(public/2, scheduler),
+	merge_public_channels(List, PublicChannels, PublicChannels',
 			      Scheduler),
 	self;
 
@@ -417,12 +430,12 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/3 + "local" + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(LocalChannels, SC1s),
-	        format_channel_list(LocalChannels', SC2s)
+	        format_channel_list(PrivateChannels, SC1s),
+	        format_channel_list(PrivateChannels', SC2s)
 	       )
         ),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
-	       LocalChannels, LocalChannels', Scheduler, Ambient, Debug),
+	       PrivateChannels, PrivateChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
@@ -430,33 +443,33 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/4 + "local"(AddRefs) + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(LocalChannels, SC1s),
-	        format_channel_list(LocalChannels', SC2s)
+	        format_channel_list(PrivateChannels, SC1s),
+	        format_channel_list(PrivateChannels', SC2s)
 	      )
 	),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs,
-	       LocalChannels, LocalChannels', Scheduler, Ambient, Debug),
+	       PrivateChannels, PrivateChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
-    Locus =?= global,
+    Locus =?= public,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id),
     string(Id),
     string_length(Id) > 7,
     string_to_dlist(Id, IdL, []),
-    string_to_dlist("global.", Prefix, NL) :
+    string_to_dlist("public.", Prefix, NL) :
       IdL = Prefix |
-	DEBUGT(lookup/3 + global + PC + SC1s + SC2s, search ,
+	DEBUGT(lookup/3 + public + PC + SC1s + SC2s, search ,
 	       (format_channel(PrivateChannel, PC),
-	        copy_global_channels(GlobalChannels, GCsBefore),
+	        copy_public_channels(PublicChannels, GCsBefore),
 	        format_channel_list(GCsBefore, SC1s),
-	        copy_global_channels(GlobalChannels', GCsAfter),
+	        copy_public_channels(PublicChannels', GCsAfter),
 	        format_channel_list(GCsAfter, SC2s)
 	       )
 	),
 	list_to_string(NL, Name),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
-	       GlobalChannels, GlobalChannels', Scheduler, Ambient, Debug),
+	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
@@ -510,14 +523,14 @@ serve_ambient(In, Events, FromSub, Done,
     In ? New, New = new_channel(_Creator, Channel, _BaseRate) :
       write_channel(New, Scheduler) |
 	DEBUG(new_channel/3, scheduler),
-	add_local_channel(Channel, LocalChannels, LocalChannels'),
+	add_local_channel(Channel, PrivateChannels, PrivateChannels'),
 	self;
 
     In ? New, New = new_channel(_Creator, Channel, _ComputeWeight,
 					_BaseRate) :
       write_channel(New, Scheduler) |
 	DEBUG(new_channel/4, scheduler),
-	add_local_channel(Channel, LocalChannels, LocalChannels'),
+	add_local_channel(Channel, PrivateChannels, PrivateChannels'),
 	self;
 
     In ? new_locals(Locals, NewLocals) |
@@ -532,8 +545,12 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? Start, Start =?= start(Signature, Operations, Message, Chosen),
     read_vector(AMBIENT_ID, Ambient, AmbientId),
-    AmbientId =?= _AmbientName(UniqueId) :
-      Start' = start(Signature, Operations, Message, Chosen, UniqueId),
+    AmbientId =?= AmbientName(UniqueId),
+    convert_to_string(UniqueId, UIS),
+    string_to_dlist(UIS, UIL, [CHAR_RIGHT_BRACKET]),
+    string_to_dlist(AmbientName, ANL, [CHAR_LEFT_BRACKET | UIL]),
+    list_to_string(ANL, AID) :
+      Start' = start(Signature, Operations, Message, Chosen, AID),
       write_channel(Start', Scheduler) |
 	DEBUGT(Start, Ch-scheduler,
 	       (Operations? = [Op | _],arg(SPI_MS_CHANNEL,Op,SCh),
@@ -558,19 +575,19 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
-    Locus =?= global,
+    Locus =?= public,
     AddRefs--,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id),
     string(Id),
     string_length(Id) > 7,
     string_to_dlist(Id, IdL, []),
-    string_to_dlist("global.", Prefix, NL) :
+    string_to_dlist("public.", Prefix, NL) :
       IdL = Prefix |
-	DEBUG(lookup/4 - global(AddRefs') - PrivateChannel -
-		GlobalChannels - GlobalChannels', search),
+	DEBUG(lookup/4 - public(AddRefs') - PrivateChannel -
+		PublicChannels - PublicChannels', search),
 	list_to_string(NL, Name),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs',
-	       GlobalChannels, GlobalChannels', Scheduler, Ambient, Debug),
+	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
@@ -659,9 +676,9 @@ serve_ambient(In, Events, FromSub, Done,
         TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	remove_shared_communications(Ambient, SharedChannels, Scheduler,
 					Reply1),
-	copy_global_channels,
+	copy_public_channels,
 	remove_all_communications(Channels?, Reply2),
-	remove_all_communications(LocalChannels, Reply3),
+	remove_all_communications(PrivateChannels, Reply3),
 	resume_controls_when_ready(Reply1, Reply2, Reply3, Ready,
 					Controls, Controls'),
 	self;
@@ -693,8 +710,8 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? tree(channels, AllChannels, SubTrees) |
-	copy_global_channels,
-	concatenate_lists([SharedChannels, Channels, LocalChannels],
+	copy_public_channels,
+	concatenate_lists([SharedChannels, Channels, PrivateChannels],
 			  AllChannels),
 	ambient_tree(channels, Children, Children', SubTrees),
 	self;
@@ -725,10 +742,10 @@ serve_ambient(In, Events, FromSub, Done,
     In ? state(State),
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
       State = [id(AmbientId), self(Ambient), parent(Parent),
-		children(Children), private(LocalChannels),
-		global(Channels?), shared(SharedChannels),
+		children(Children), private(PrivateChannels),
+		public(Channels?), shared(SharedChannels),
 		debug(Debug)] |
-	copy_global_channels,
+	copy_public_channels,
 	self;
 /***************************************************************************/
 
@@ -740,23 +757,43 @@ serve_ambient(In, Events, FromSub, Done,
 	fail(ambient(AmbientId) ? Other, unknown),
 	self;
 
-    Events ? Global,
-    Global =?= event(global_channels(List)) |
-	DEBUG(delegated-Global, scheduler),
-	merge_global_channels(List, GlobalChannels, GlobalChannels',
+    /* Obsolescent global_channels */
+    Events ? Public,
+    Public =?= event(global_channels(List)) |
+	DEBUG(delegated-Public, scheduler),
+	merge_public_channels(List, PublicChannels, PublicChannels',
 			      Scheduler),
 	self;
 
-    Events ? Global,
-    Global =?= event(global_channels(List, AmbientChannel)) |
-	DEBUG(delegated-Global, scheduler),
+    Events ? Public,
+    Public =?= event(global_channels(List, AmbientChannel)) |
+	DEBUG(delegated-Public, scheduler),
 	unify_without_failure(AmbientChannel, Ambient),
-	merge_global_channels(List, GlobalChannels, GlobalChannels',
+	merge_public_channels(List, PublicChannels, PublicChannels',
+			      Scheduler),
+	self;
+
+    Events ? Public,
+    Public =?= event(public_channels(List)) |
+	DEBUG(delegated-Public, scheduler),
+	merge_public_channels(List, PublicChannels, PublicChannels',
+			      Scheduler),
+	self;
+
+    Events ? Public,
+    Public =?= event(public_channels(List, AmbientChannel)) |
+	DEBUG(delegated-Public, scheduler),
+	unify_without_failure(AmbientChannel, Ambient),
+	merge_public_channels(List, PublicChannels, PublicChannels',
 			      Scheduler),
 	self;
 
     Events ? Event,
-    Event =\= event(global_channels(_)), Event =\= event(global(_, _)) |
+    Event =\= event(public_channels(_)),
+    Event =\= event(public_channels(_, _)),
+    /* Obsolescent global_channels */
+    Event =\= event(global_channels(_)),
+    Event =\= event(global_channels(_, _)) |
 	serve_event;
 
     FromSub ? delegated([], CCC),
@@ -788,10 +825,10 @@ serve_ambient(In, Events, FromSub, Done,
       Controls = [],
       Requests = [],
       AmbientDone = done |
-	DEBUG(closed, detach(LocalChannels, Channels, SharedChannels) - quit),
+	DEBUG(closed, detach(PrivateChannels, Channels, SharedChannels) - quit),
 	detach_channel_list(SharedChannels, Scheduler),
-	detach_channel_list(LocalChannels, Scheduler),
-	copy_global_channels,
+	detach_channel_list(PrivateChannels, Scheduler),
+	copy_public_channels,
 	detach_channel_list(Channels, Scheduler),
 	ambient_done.
 
@@ -818,7 +855,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   ambient_lookup(In, Events, FromSub, Done,
 		 Ambient, Parent, Children,
-		 LocalChannels, GlobalChannels, SharedChannels,
+		 PrivateChannels, PublicChannels, SharedChannels,
 		 Requests, Controls, AmbientDone,
 		 Scheduler, Debug,
 		 SharedChannel) :-
@@ -861,7 +898,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   pass_unremoved(In, Events, FromSub, Done,
 	      Ambient, Parent,
-	      Children, LocalChannels, GlobalChannels, SharedChannels,
+	      Children, PrivateChannels, PublicChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug,
 	      Unremoved) :-
@@ -914,7 +951,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   serve_event(In, Events, FromSub, Done,
 	      Ambient, Parent, Children,
-	      GlobalChannels, LocalChannels, SharedChannels,
+	      PublicChannels, PrivateChannels, SharedChannels,
 	      Requests, Controls, AmbientDone,
 	      Scheduler, Debug,
 	      Event) :-
@@ -955,7 +992,7 @@ serve_ambient(In, Events, FromSub, Done,
 
   children_to_merged_ambient(In, Events, FromSub, Done,
 			     Ambient, Parent, Children,
-			     GlobalChannels, LocalChannels, SharedChannels,
+			     PublicChannels, PrivateChannels, SharedChannels,
 			     Requests, Controls, AmbientDone,
 			     Scheduler, Debug,
 			     MergedAmbient, Goals, Ready) :-
@@ -1011,8 +1048,8 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 	DEBUG(lookup, mismatch - Id =\= OtherId),
 	self;
 
-    ChannelList = [Global | _],
-    Global =?= Id(Channel, _ComputeWeight, _BaseRate),
+    ChannelList = [Public | _],
+    Public =?= Id(Channel, _ComputeWeight, _BaseRate),
     vector(Channel),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Refs += AddRefs :
@@ -1033,7 +1070,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 
     ChannelList =?= [Name1(_, _, _) | _],
     Last @< Id, Id @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Id, NL, []),
     AddRefs++,
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
@@ -1043,10 +1080,10 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       Debug = _,
       NewChannelList =
 	[Id(SharedChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate?) | ChannelList],
-      write_channel(new_channel(GlobalId, NewChannel, Rate), Scheduler),
+      write_channel(new_channel(PublicId, NewChannel, Rate), Scheduler),
       GT = NL |
-	list_to_string(GL, GlobalId),
-	DEBUG(lookup, new - GlobalId - PrivateChannel),
+	list_to_string(GL, PublicId),
+	DEBUG(lookup, new - PublicId - PrivateChannel),
 	rate_to_baserate,
 	update_new_channel;
 
@@ -1133,18 +1170,19 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 	screen#display("shared type conflict!" - Id(Type =\= SharedType)).
     
 
-add_local_channel(Channel, LocalChannels, NewLocalChannels) :-
+add_local_channel(Channel, PrivateChannels, NewPrivateChannels) :-
 
     vector(Channel),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     Name =?= _String(_PrivateId) :
-      NewLocalChannels = [Channel | LocalChannels];
+      NewPrivateChannels = [Channel | PrivateChannels];
 
     otherwise :
       Channel = _,
-      NewLocalChannels = LocalChannels.
+      NewPrivateChannels = PrivateChannels.
 
-remove_local_channels(Indices, ChannelTuple, LocalChannels, NewLocalChannels,
+remove_local_channels(Indices, ChannelTuple,
+	PrivateChannels, NewPrivateChannels,
 	SharedChannels, NewSharedChannels, Unremoved) :-
 
     Indices =?= true(Indices') |
@@ -1156,7 +1194,7 @@ remove_local_channels(Indices, ChannelTuple, LocalChannels, NewLocalChannels,
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     Name =?= _String(LocalId),
     number(LocalId) |
-	remove_channel(Channel, LocalChannels, LocalChannels',
+	remove_channel(Channel, PrivateChannels, PrivateChannels',
 			UnremovedLocal, []),
 	unremoved_local_channel,
 	self;
@@ -1166,8 +1204,8 @@ remove_local_channels(Indices, ChannelTuple, LocalChannels, NewLocalChannels,
     vector(Channel),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     string(Name) |
-	/* Global Channel - ignore - they're all going at once ? */
-	screen#display("remove global channel" - Name),
+	/* Public Channel - ignore - they're all going at once ? */
+	screen#display("remove public channel" - Name),
 	self;
 
     Indices ? Index,
@@ -1190,7 +1228,7 @@ remove_local_channels(Indices, ChannelTuple, LocalChannels, NewLocalChannels,
 
     Indices =?= [] :
       ChannelTuple = _,
-      NewLocalChannels = LocalChannels,
+      NewPrivateChannels = PrivateChannels,
       NewSharedChannels = SharedChannels,
       Unremoved = [].
 
@@ -1326,7 +1364,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
     string(ChannelName),
     Action =\= pass :
-      In ! lookup(global, Channel, NewChannel),
+      In ! lookup(public, Channel, NewChannel),
       MeltedAtoms ! NewChannel? |
 	remove_one_reference,
 	self;
@@ -1338,7 +1376,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     string(ChannelName),
     Action =?= pass,
     read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
-      In ! lookup(global, Channel, NewChannel, Refs),
+      In ! lookup(public, Channel, NewChannel, Refs),
       MeltedAtoms ! NewChannel? |
 	self;
 
@@ -1417,57 +1455,57 @@ read_vector(SPI_CHANNEL_NAME, Channel, CId),
       FromAmbient = _.
 
 
-merge_global_channels(List, GlobalChannels, NewGlobalChannels, Scheduler) 
+merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler) 
 			+ (Last = "") :-
 
     List =?= [] :
       Last = _,
       Scheduler = _,
-      NewGlobalChannels = GlobalChannels;
+      NewPublicChannels = PublicChannels;
 
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
     we(NewChannel),
-    GlobalChannels ? Global,
-    Global = Name(SpiChannel, _ComputeWeight, BaseRate),
+    PublicChannels ? Public,
+    Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
       Last = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewGlobalChannels ! Global,
+      NewPublicChannels ! Public,
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate),
-    GlobalChannels ? Entry,
+    PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewGlobalChannels ! Entry |
-	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+      NewPublicChannels ! Entry |
+	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
-    GlobalChannels ? Entry,
+    PublicChannels ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
       Last = _,
-      NewGlobalChannels ! Entry |
+      NewPublicChannels ! Entry |
 	self;
 
     List ? Name(NewChannel, BaseRate),
     we(NewChannel),
-    GlobalChannels =?= [Name1(_, _, _) | _],
+    PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
     Last @< Name, Name @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
-      GlobalChannels' =
+      PublicChannels' =
 	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate)
-	| GlobalChannels],
+	| PublicChannels],
       write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
 				BaseRate), Scheduler),
       GT = NL |
@@ -1477,46 +1515,46 @@ merge_global_channels(List, GlobalChannels, NewGlobalChannels, Scheduler)
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
     we(NewChannel),
-    GlobalChannels ? Global,
-    Global = Name(SpiChannel, _ComputeWeight, BaseRate),
+    PublicChannels ? Public,
+    Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
       Last = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewGlobalChannels ! Global,
+      NewPublicChannels ! Public,
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate),
-    GlobalChannels ? Entry,
+    PublicChannels ? Entry,
     Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewGlobalChannels ! Entry |
-	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+      NewPublicChannels ! Entry |
+	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
-    GlobalChannels ? Entry,
+    PublicChannels ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
       Last = _,
-      NewGlobalChannels ! Entry |
+      NewPublicChannels ! Entry |
 	self;
 
     List ? Name(NewChannel, BaseRate),
     we(NewChannel),
-    GlobalChannels =?= [Name1(_, _, _) | _],
+    PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
     Last @< Name, Name @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
-      GlobalChannels' =
+      PublicChannels' =
 	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate)
-	| GlobalChannels],
+	| PublicChannels],
       write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
 				BaseRate), Scheduler),
       GT = NL |
@@ -1526,8 +1564,8 @@ merge_global_channels(List, GlobalChannels, NewGlobalChannels, Scheduler)
     List ? Name(NewChannel, CW, BaseRate),
     Last @< Name,
     we(NewChannel),
-    GlobalChannels ? Global,
-    Global = Name(SpiChannel, ComputeWeight, BaseRate),
+    PublicChannels ? Public,
+    Public = Name(SpiChannel, ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
@@ -1535,44 +1573,44 @@ merge_global_channels(List, GlobalChannels, NewGlobalChannels, Scheduler)
       CW = ComputeWeight?,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewGlobalChannels ! Global,
+      NewPublicChannels ! Public,
       Last' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate, _),
-    GlobalChannels ? Entry, Entry = Name(_SpiChannel, OtherBaseRate, _),
+    PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherBaseRate, _),
     BaseRate =\= OtherBaseRate :
-      NewGlobalChannels ! Entry |
-	fail(global_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
+      NewPublicChannels ! Entry |
+	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List ? Name(_NewChannel, ComputeWeight, _),
-    GlobalChannels ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
+    PublicChannels ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight :
-      NewGlobalChannels ! Entry |
-	fail(global_channel(compute_weight_conflict(Name -
+      NewPublicChannels ! Entry |
+	fail(public_channel(compute_weight_conflict(Name -
 				ComputeWeight =\= OtherComputeWeight))),
 	self;
 
     List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
-    GlobalChannels ? Entry,
+    PublicChannels ? Entry,
     Entry = Last'(_, _, _),
     Last' @< Name :
       Last = _,
-      NewGlobalChannels ! Entry |
+      NewPublicChannels ! Entry |
 	self;
 
     List ? Name(NewChannel, ComputeWeight, BaseRate),
     we(NewChannel),
-    GlobalChannels =?= [Name1(_, _, _) | _],
+    PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
     Last @< Name, Name @< Name1,
-    string_to_dlist("global.", GL, GT),
+    string_to_dlist("public.", GL, GT),
     string_to_dlist(Name, NL, []) :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
-      GlobalChannels' = [Name(SpiChannel?, ComputeWeight, BaseRate)
-			| GlobalChannels],
+      PublicChannels' = [Name(SpiChannel?, ComputeWeight, BaseRate)
+			| PublicChannels],
       write_channel(new_channel(Id?, SpiChannel, ComputeWeight, BaseRate),
 			Scheduler),
       GT = NL |
@@ -1582,21 +1620,21 @@ merge_global_channels(List, GlobalChannels, NewGlobalChannels, Scheduler)
     otherwise :
       Last = _,
       Scheduler = _,
-      NewGlobalChannels = GlobalChannels |
-	fail(merge_global_channels(List)).
+      NewPublicChannels = PublicChannels |
+	fail(merge_public_channels(List)).
 
 
 /***************************** Utilities ************************************/
 
 
 ambient_suspending(ReadyChildren,
-		   GlobalChannels, LocalChannels, SharedChannels,
+		   PublicChannels, PrivateChannels, SharedChannels,
 		   Ready) :-
 
     known(ReadyChildren) |
-	copy_global_channels,
+	copy_public_channels,
 	remove_all_communications(Channels?, Reply1),
-	remove_all_communications(LocalChannels, Reply2),
+	remove_all_communications(PrivateChannels, Reply2),
 	remove_all_communications(SharedChannels, Reply3),
 	suspended_when_ready.
 
@@ -1672,19 +1710,19 @@ control_children(Control, Children, NewChildren, Ready) + (Done = done) :-
       Ready = true.
 
 
-copy_global_channels(GlobalChannels, Channels) :-
-    GlobalChannels ? _Head |
+copy_public_channels(PublicChannels, Channels) :-
+    PublicChannels ? _Head |
 	copy_interior.
 
-  copy_interior(GlobalChannels, Channels) :-
+  copy_interior(PublicChannels, Channels) :-
 
-    GlobalChannels ? Entry,
-    GlobalChannels' =\= [],
+    PublicChannels ? Entry,
+    PublicChannels' =\= [],
     arg(2, Entry, Channel) :
       Channels ! Channel |
 	self;
 
-    GlobalChannels = [_] :
+    PublicChannels = [_] :
       Channels = [].
 
 
@@ -1814,16 +1852,16 @@ resolve_children(Children, NewChildren, Resolvent, NextResolvent) :-
 
 resume_ambient_when_ready(In, Events, FromSub, Done,
 			  Ambient, Parent, Children,
-			  GlobalChannels, LocalChannels,
+			  PublicChannels, PrivateChannels,
 			  Requests, Controls, AmbientDone,
 			  Scheduler, Debug,
 			  Ready) :-
 
     known(Ready) :
       Controls ! resume |
-	DEBUG(resume_when_ready, detach(LocalChannels, Channels)),
-	detach_channel_list(LocalChannels, Scheduler),
-	copy_global_channels,
+	DEBUG(resume_when_ready, detach(PrivateChannels, Channels)),
+	detach_channel_list(PrivateChannels, Scheduler),
+	copy_public_channels,
 	detach_channel_list(Channels, Scheduler),
 	serve_ambient0.
 
