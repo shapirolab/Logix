@@ -1,5 +1,5 @@
 -language(compound).
--mode(trust).
+-mode(interpret).
 -export(run/1).
 
 run(Specs) :-
