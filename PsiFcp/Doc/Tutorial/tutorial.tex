@@ -692,10 +692,10 @@ previous sections.  In general, an RPC has the form:
 \noindent
 LogixPath may be the name of a module or a transformation of a UNIX path:
 
-\[dir1_{1}/dir_{2}/ \cdots /dir_{n}/module.cp  \Rightarrow  dir_{1}\#dir_{2}\# \cdots \#dir_{n}\#module\]
+\[dir_{1}/dir_{2}/ \cdots /dir_{n}/module.cp  \Rightarrow  dir_{1}\#dir_{2}\# \cdots \#dir_{n}\#module\]
 
 \noindent
-where $dir_{i}$ is a directory which is an immediate sub-directory
+where $dir_{1}$ is a directory which is an immediate sub-directory
 of the current directory, or which contains the current directory.
 Since LOGIX treats an alphanumeric name which begins with a lower-case
 letter as a string, such directory names need not be quoted - all
@@ -707,10 +707,12 @@ beginning with an upper-case letter or underscore), should be quoted -
     tests#"Cases"#"#13"#sub_cases#Module#"TestIt"
 \end{verbatim}
 
+Where Module is a LOGIX variable which should be instantiated to a
+directory name.
 \noindent
-LogixGoal may be any atom, referring to a process defined within
+LogixGoal may be any atom, referring to a process which is exported by
 the target module.  Since a PSI process has a an alpha-numeric name
-beginning with an upper-case letter, it's name must be quoted.
+beginning with an upper-case letter, its name must be quoted.
 
 \section{Debugging}
 \label{debugger}
@@ -726,6 +728,7 @@ inspected.  Here are some simple examples using the module bland -
 see Section \ref{bland}.
 
 \subsection{Trace a Computation}
+\label{debug trace}
 
 Following a \verb+ query -> + prompt, enter the command \verb+ trace +.
 
@@ -797,6 +800,34 @@ Following a \verb+ query -> + prompt, enter the command \verb+ trace +.
   <1> terminated
   @
 \end{verbatim}
+
+Each traced reduction above has the form;
+
+\begin{verbatim}
+  bland  <process name>(<channels>) :-
+         <derived goals>
+\end{verbatim}
+
+\noindent
+Channels which are annotated with a suffix exclamation are
+active at the time at which the reduction is displayed\footnote{
+The debugger displays the reductions after they have occured,
+but not synchronized with the reduction itself.}
+
+\noindent
+Channels which are diplayed within square brackets have been
+closed, and are no longer available for communication.
+
+\noindent
+The suffixes following many process names, indicate a derived
+sub-process, which may result from prefix guards or from new
+scope declarations.  Where the suffix ends in ``.comm'', the
+sub-process is one which completes a communication.
+
+\noindent
+Where a process is reduced to multiple parallel prcesses, they
+are separted by commas, instead of PARs.
+
 \subsection{Interrupt and Inspect a Computation}
 
 Following a \verb+ query -> + prompt, enter a \verb+ break + command.
@@ -926,8 +957,12 @@ all further construction.
 \end{verbatim}
 
 \noindent
+The meaning of the suffixes and annotation is the same as for
+debugging in Section \ref{debug trace}.
+
+\noindent
 Indentation illustrates the depth of call within a module.
-The prefix ``$|$'' indicates a reduced goal;
+The prefix ``$|$'' indicates a reduced goal; the prefix
 ``\#'' indicates a remote process call; the prefix,
 ``?''  indicates a goal which has not been reduced.  The
 prefixes ``begin :'' and ``end :'' delimit a remote process
@@ -950,15 +985,49 @@ The following process sends {\bf N} nil messages to channel {\bf c}.
 
 \begin{verbatim}
 
-    Send(N, c) ::=
-      << I .
-         {I = 0} |
-              << {I++ < N}, c ! [], self;
-                 {I >= N }, screen#display(sent - R*[])
-              >>
-      >>
+    Send(N, c) + I ::= {I = 0} | SendAndCount.
+
+    SendAndCount(I, N, c) ::=
+        {I++ < N}, SendNil(c) | self;
+        {I >= N }, screen#display(sent - I*[])
+    .
+
+    SendNil(c) ::= c ! [], 0.
     .
 \end{verbatim}
+
+\noindent
+A process argument may be a LOGIX variable - in this case, ``N''.
+Such a variable may be passed to another process, or it may be
+tested or operated upon in a LOGIX guard or a LOGIX goal.
+
+\noindent
+Similarly, a LOGIX variable may be declared in an added argument
+list or in a declaration list - in this example, ``I'' is declared
+as an added argument.
+
+\noindent
+The LOGIX goal \verb+ {I = 0} + presets I to 0.
+\noindent
+The LOGIX guards test I, comparing it to N.
+The LOGIX guard \verb# {I++ < N} # also increments I, for the
+recursive call, self, to the process SendAndCount.
+
+\noindent
+The first process may be rewritten:
+
+\begin{verbatim}
+    Send(N, c) + I ::= {(true : I = 0} , SendAndCount.
+\end{verbatim}
+
+\noindent
+to synchronize the initiallization of I.  This makes no difference
+in this example, since the process SendAndCount cannot be reduced
+until I is instantiated.
+
+\noindent
+Many other LOGIX guards and goals may be employed in PSI processes -
+see \cite{logix:user-man} Appendix 1.
 
 \appendix
 \chapter{BNF}
