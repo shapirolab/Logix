@@ -133,9 +133,10 @@ while ($line = <TEMP>) {
   $line =~ /^(..)(.*)\n$/;
   my $k = $1;
   my $j = $2;
+  my $l = length($j);
   if ($k eq "xx") {
     foreach $process (@Processes) {
-      if ($process =~ /^$j/) {
+      if ($j eq substr($process, 0, $l)) {
 	$Columns[$Processes{$process}] = 0;
       }
     }
