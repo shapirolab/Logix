@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/rename/clause.cp,v 1.1 1999/07/09 07:03:13 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/rename/clause.cp,v 1.2 2002/06/07 11:59:21 bill Exp $ */
 /*
  *  Split a clause into its component atoms; each of the atoms is
  *  renamed as appropriate.
@@ -6,7 +6,7 @@
 
 -export([transform/4]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 /************************* T R A N S F O R M / 4 *****************************/
 

@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/tree/rename/self.cp,v 1.1 1999/07/09 07:03:13 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/tree/rename/self.cp,v 1.2 2002/06/07 11:59:21 bill Exp $ */
 /*
  *  Rename Atoms for all procedural clauses of module.
  */
 
 -export([clauses/6, goal/4]).
 -language(compound).
--mode(trust).
+%-mode(trust).
 
 /************************* C L A U S E S / 6 *********************************/
 
