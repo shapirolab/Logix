@@ -7,7 +7,7 @@ Bill Silverman - 11/89
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/dictionary_server/self.cp,v $
 
 Copyright (C) 1989, Weizmann Institute of Science - Rehovot, ISRAEL

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase0/flow_analysis.cp,v 1.1 1999/07/09 07:03:06 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase0/flow_analysis.cp,v 1.1.1.1 1999/07/09 07:03:06 bill Exp $ */
 -export([flow_analysis/2]).
 -language(compound).
 -mode(trust).

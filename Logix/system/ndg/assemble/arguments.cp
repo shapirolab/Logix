@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/arguments.cp,v 1.1 1999/07/09 07:02:59 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/arguments.cp,v 1.1.1.1 1999/07/09 07:02:59 bill Exp $ */
 -export([encode/7, encode/8]).
 -mode(trust).
 -include(dg_opcodes).

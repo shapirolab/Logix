@@ -5,7 +5,7 @@ incremental display or grounding of variables.
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:02:54 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/incremental_display.cp,v $
 
 Copyright (C) 1987, Weizmann Institute of Science - Rehovot, ISRAEL

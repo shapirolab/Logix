@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/array.cp,v 1.1 1999/07/09 07:02:53 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/array.cp,v 1.1.1.1 1999/07/09 07:02:53 bill Exp $ */
 -mode(failsafe).
 -export([make/3]).
 -language(compound).

@@ -1,4 +1,4 @@
-/*  $Header: /home/qiana/Repository/Logix/system/Doors/id_card.cp,v 1.1 1999/07/09 07:03:25 bill Exp $ */
+/*  $Header: /home/qiana/Repository/Logix/system/Doors/id_card.cp,v 1.1.1.1 1999/07/09 07:03:25 bill Exp $ */
 
 -language([dfcp]).
 -mode(interrupt).

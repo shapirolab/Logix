@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/assign.cp,v 1.1 1999/07/09 07:02:58 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/assign.cp,v 1.1.1.1 1999/07/09 07:02:58 bill Exp $ */
 -export([multiple_copy/6, assignment/6, multiple_assignment/7]).
 -mode(trust).
 -include(dg_opcodes).

@@ -6,7 +6,7 @@ William Silverman - 3/89
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:02:56 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/file.cp,v $
 
 Copyright (C) 1989, Weizmann Institute of Science - Rehovot, ISRAEL

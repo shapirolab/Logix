@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/self.cp,v 1.1 1999/07/09 07:03:19 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/self.cp,v 1.1.1.1 1999/07/09 07:03:19 bill Exp $ */
 
 /*
 Driver for lpi transformation - logic programs with inheritance.

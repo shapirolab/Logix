@@ -8,7 +8,7 @@ Adapted by Norm McCain, Phil Thrift
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:34 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/sio_server/line_editor.cp,v $
 
 Copyright (C) Texas Instruments Inc. 1986

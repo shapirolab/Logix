@@ -7,7 +7,7 @@ William Silverman - 12/86
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:02:53 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/trap.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL

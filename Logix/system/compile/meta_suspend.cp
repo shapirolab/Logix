@@ -3,7 +3,7 @@
 Precompiler for FCP - meta-interpreter plus clause form
 Bill Silverman, 20 May, 1987
 
-$Header: /home/qiana/Repository/Logix/system/compile/meta_suspend.cp,v 1.1 1999/07/09 07:03:35 bill Exp $
+$Header: /home/qiana/Repository/Logix/system/compile/meta_suspend.cp,v 1.1.1.1 1999/07/09 07:03:35 bill Exp $
 
 Copyright (C) 1987, Weizmann Institute of Science - Rehovot, ISRAEL
 

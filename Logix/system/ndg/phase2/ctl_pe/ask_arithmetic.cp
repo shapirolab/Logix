@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_arithmetic.cp,v 1.1 1999/07/09 07:03:00 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_arithmetic.cp,v 1.1.1.1 1999/07/09 07:03:00 bill Exp $ */
 -language(compound).
 -export([arithmetic/16]).
 -mode(trust).

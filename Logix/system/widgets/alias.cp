@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/widgets/alias.cp,v 1.1 1999/07/09 07:03:22 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/widgets/alias.cp,v 1.1.1.1 1999/07/09 07:03:22 bill Exp $ */
 /*
    Create a local service which is a new activation of a prototype service
 

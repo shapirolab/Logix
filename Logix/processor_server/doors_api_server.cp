@@ -7,7 +7,7 @@ Doors Api interface process
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:38 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/processor_server/doors_api_server.cp,v $
 
 Copyright (C) 1994, Ubique Ltd. - Rehovot, ISRAEL

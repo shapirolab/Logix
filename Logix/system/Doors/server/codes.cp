@@ -1,4 +1,4 @@
-/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/codes.cp,v 1.1 1999/07/09 07:03:28 bill Exp $ */
+/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/codes.cp,v 1.1.1.1 1999/07/09 07:03:28 bill Exp $ */
 
 -language(dfcp).
 -include([api_includes, server_includes]).

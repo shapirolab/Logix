@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/rename.cp,v 1.1 1999/07/09 07:03:18 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/lpi/rename.cp,v 1.1.1.1 1999/07/09 07:03:18 bill Exp $ */
 /*
 
 Replacement dictionary for lpi.

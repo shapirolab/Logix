@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/evaluate.cp,v 1.1 1999/07/09 07:03:15 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/evaluate.cp,v 1.1.1.1 1999/07/09 07:03:15 bill Exp $ */
 -language(compound).
 -export([clauses/3, transform/5]).
 -mode(trust).

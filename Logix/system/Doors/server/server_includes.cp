@@ -1,4 +1,4 @@
-/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/server_includes.cp,v 1.1 1999/07/09 07:03:28 bill Exp $ */
+/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/server_includes.cp,v 1.1.1.1 1999/07/09 07:03:28 bill Exp $ */
 -language([nil]).
 -mode(interrupt).
 

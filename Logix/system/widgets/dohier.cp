@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/widgets/dohier.cp,v 1.1 1999/07/09 07:03:22 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/widgets/dohier.cp,v 1.1.1.1 1999/07/09 07:03:22 bill Exp $ */
 -language(compound).
 -export([modules/3, directors/3]).
 

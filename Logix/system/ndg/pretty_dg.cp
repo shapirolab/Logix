@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/pretty_dg.cp,v 1.1 1999/07/09 07:02:57 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/pretty_dg.cp,v 1.1.1.1 1999/07/09 07:02:57 bill Exp $ */
 -export([pretty/4]).
 -language(compound).
 -mode(trust).

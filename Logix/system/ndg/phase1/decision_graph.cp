@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase1/decision_graph.cp,v 1.1 1999/07/09 07:03:06 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase1/decision_graph.cp,v 1.1.1.1 1999/07/09 07:03:06 bill Exp $ */
 -export([decision_graph/7]).
 -language(compound).
 -mode(trust).

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/immediate/immediate_activation.cp,v 1.1 1999/07/09 07:03:04 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/immediate/immediate_activation.cp,v 1.1.1.1 1999/07/09 07:03:04 bill Exp $ */
 -language(compound).
 -export([immediate_activation/8]).
 -mode(trust).

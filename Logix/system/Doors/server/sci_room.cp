@@ -1,4 +1,4 @@
-/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/sci_room.cp,v 1.1 1999/07/09 07:03:27 bill Exp $ */
+/*  $Header: /home/qiana/Repository/Logix/system/Doors/server/sci_room.cp,v 1.1.1.1 1999/07/09 07:03:27 bill Exp $ */
 
 
 -language(dfcp).

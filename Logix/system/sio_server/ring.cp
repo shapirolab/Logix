@@ -7,7 +7,7 @@ Date: 10 Jan 86
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:34 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/sio_server/ring.cp,v $
 
 Copyright (C) Texas Instruments Inc. 1986

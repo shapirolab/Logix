@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_binary.cp,v 1.1 1999/07/09 07:03:03 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_binary.cp,v 1.1.1.1 1999/07/09 07:03:03 bill Exp $ */
 -language(compound).
 -export([binary_arith/13]).
 -mode(trust).

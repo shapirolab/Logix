@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/block/self.cp,v 1.1 1999/07/09 07:03:11 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/block/self.cp,v 1.1.1.1 1999/07/09 07:03:11 bill Exp $ */
 /*
  *  This module is the (self of the) root of the blocker
  *  It  processs the options of the initial call.

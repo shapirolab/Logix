@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_utils.cp,v 1.1 1999/07/09 07:03:00 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_utils.cp,v 1.1.1.1 1999/07/09 07:03:00 bill Exp $ */
 -language(compound).
 -export([compile_guard/12,
 	select_sdgs/9]).

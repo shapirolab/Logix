@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/decode/output.cp,v 1.1 1999/07/09 07:03:31 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/decode/output.cp,v 1.1.1.1 1999/07/09 07:03:31 bill Exp $ */
 -export([server/3]).
 -include(dg_opcodes).
 -include(escapes).

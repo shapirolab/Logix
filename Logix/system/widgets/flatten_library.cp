@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/widgets/flatten_library.cp,v 1.1 1999/07/09 07:03:23 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/widgets/flatten_library.cp,v 1.1.1.1 1999/07/09 07:03:23 bill Exp $ */
 -language([compound,colon]).
 -mode(interrupt).
 

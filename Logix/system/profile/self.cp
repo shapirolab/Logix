@@ -8,7 +8,7 @@ Yossie Lichentenstein, Bill Silverman
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:37 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/profile/self.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL

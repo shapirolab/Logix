@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/transform/nil.cp,v 1.1 1999/07/09 07:03:17 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/transform/nil.cp,v 1.1.1.1 1999/07/09 07:03:17 bill Exp $ */
 -export([transform/5]).
 -mode(trust).
 

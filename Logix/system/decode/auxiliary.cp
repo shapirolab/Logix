@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/decode/auxiliary.cp,v 1.1 1999/07/09 07:03:31 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/decode/auxiliary.cp,v 1.1.1.1 1999/07/09 07:03:31 bill Exp $ */
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([labels/6, arguments/6, escape/5, guard/5, do_vars/4]).

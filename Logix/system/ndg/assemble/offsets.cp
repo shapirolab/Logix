@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/offsets.cp,v 1.1 1999/07/09 07:02:59 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/offsets.cp,v 1.1.1.1 1999/07/09 07:02:59 bill Exp $ */
  -language([evaluate,compound,colon]).
 -include(ctl_values).
 -include(registers).

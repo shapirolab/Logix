@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/cache_link.cp,v 1.1 1999/07/09 07:02:55 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/cache_link.cp,v 1.1.1.1 1999/07/09 07:02:55 bill Exp $ */
 -export([stream/5, named/4]).
 -mode(trust).
 -language(compound).

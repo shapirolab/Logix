@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_term_creation.cp,v 1.1 1999/07/09 07:03:04 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ask_term_creation.cp,v 1.1.1.1 1999/07/09 07:03:04 bill Exp $ */
 -language(compound).
 -export([term_creation/6]).
 -mode(trust).

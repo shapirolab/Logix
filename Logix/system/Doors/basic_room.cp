@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/Doors/basic_room.cp,v 1.1 1999/07/09 07:03:24 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/Doors/basic_room.cp,v 1.1.1.1 1999/07/09 07:03:24 bill Exp $ */
 -language(dfcp).
 -mode(interrupt).
 -export([create, basic_room, show_doors, show_filtered_doors,

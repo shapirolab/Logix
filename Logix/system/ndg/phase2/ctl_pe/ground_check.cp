@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ground_check.cp,v 1.1 1999/07/09 07:03:04 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/ground_check.cp,v 1.1.1.1 1999/07/09 07:03:04 bill Exp $ */
 -language(compound).
 -export([check_ground/3,
 	get_vars/2,

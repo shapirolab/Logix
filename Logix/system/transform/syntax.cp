@@ -10,7 +10,7 @@ Convert an operator declaration file to a normal source file.
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:03:16 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/system/transform/syntax.cp,v $
 
 Copyright (C) 1986, Weizmann Institute of Science - Rehovot, ISRAEL

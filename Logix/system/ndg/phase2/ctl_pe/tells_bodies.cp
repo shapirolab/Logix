@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/tells_bodies.cp,v 1.1 1999/07/09 07:03:02 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/tells_bodies.cp,v 1.1.1.1 1999/07/09 07:03:02 bill Exp $ */
 -language(compound).
 -export([tells_bodies/8]).
 -mode(trust).

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/widgets/vanilla.cp,v 1.1 1999/07/09 07:03:23 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/widgets/vanilla.cp,v 1.1.1.1 1999/07/09 07:03:23 bill Exp $ */
 /*
    Meta-interpret a conjunction, producing either an execution tree or a
    trace of executed goals.

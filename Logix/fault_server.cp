@@ -7,7 +7,7 @@ Fault manager process
 Last update by		$Author: bill $
 		       	$Date: 1999/07/09 07:02:51 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.1.1.1 $
 			$Source: /home/qiana/Repository/Logix/fault_server.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/self.cp,v 1.1 1999/07/09 07:03:11 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/self.cp,v 1.1.1.1 1999/07/09 07:03:11 bill Exp $ */
 /*
  *
  * lint: an FCP verification program.

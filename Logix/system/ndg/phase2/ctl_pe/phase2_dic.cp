@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/phase2_dic.cp,v 1.1 1999/07/09 07:03:02 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase2/ctl_pe/phase2_dic.cp,v 1.1.1.1 1999/07/09 07:03:02 bill Exp $ */
 -language(compound).
 -export([dic/4,add_i/5,add_ch_i/7,add_child/4,look_child/5,look/3]).
 -mode(trust).

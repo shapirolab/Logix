@@ -4,7 +4,7 @@ Top level of the compiler - put's all the pieces together.
 
 William Silverman, Michael Hirsch 
 
-$Header: /home/qiana/Repository/Logix/system/compile/self.cp,v 1.1 1999/07/09 07:03:35 bill Exp $
+$Header: /home/qiana/Repository/Logix/system/compile/self.cp,v 1.1.1.1 1999/07/09 07:03:35 bill Exp $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
 

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/phase1/self.cp,v 1.1 1999/07/09 07:03:07 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/phase1/self.cp,v 1.1.1.1 1999/07/09 07:03:07 bill Exp $ */
 -language(compound).
 -scope(ndg).
 -export([dgs/4,dts/4]).

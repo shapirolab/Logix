@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/Doors/application.cp,v 1.1 1999/07/09 07:03:24 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/Doors/application.cp,v 1.1.1.1 1999/07/09 07:03:24 bill Exp $ */
 
 -language([inherit,dfcp]).
 -export(generic_data_to_snapshot).

@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/self.cp,v 1.1 1999/07/09 07:02:59 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/assemble/self.cp,v 1.1.1.1 1999/07/09 07:02:59 bill Exp $ */
 -language(compound).
 -export([ctl/2, ctl/4]).
 -mode(trust).
