@@ -489,39 +489,65 @@ show_goal(Goal, Options, Output) :-
     Options =?= fcp :
       Output = Goal;
 
-    Options =\= fcp |
-	show_goal(Goal, Options, PiFcp, Output, PiFcp?).
-
-show_goal(Goal, Options, PiFcp, Left, Right) :-
-
-    string(Goal) :
-      Options = _,
-      PiFcp = Goal,
-      Left = Right;
-
-    tuple(Goal), Goal =\= (_#_),
-    arg(1, Goal, Name), string(Name),
-    arity(Goal, Index),
-    make_tuple(Index, Tuple),
-    arg(1, Tuple, N) :
-      N = Name,
-      PiFcp = Tuple,
+    Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	goal_channels;
+	remote_goal([], Goal, Goal', PiFcp, PiFcp'),
+	show_goal1(Goal'?, Which?, Depth?, Sender?, PiFcp', Output, PiFcp?).
 
-    Goal =?= (Service#Goal') :
-      PiFcp = (Service#PiFcp') |
-	self;
+show_goal1(Goal, Which, Depth, Sender, PiFcp, Left, Right) :-
+
+    string(Goal) :
+      Which = _,
+      Depth = _,
+      Sender = _,
+      PiFcp = Goal,
+      Left = Right;
+
+    tuple(Goal),
+    arg(1, Goal, Name), string(Name),
+    arity(Goal, Index) |
+	goal_channels;
 
     otherwise :
       Goal = _,
-      Options = _,
+      Which = _,
+      Depth = _,
+      Sender = _,
       PiFcp = non_goal(Goal),
       Left = Right.
 
-  goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+
+goal_channels(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
+
+/* Exclude trailing non-pi arguments (mostly) */
+
+    Index > 1, arg(Index, Goal, Arg),
+    we(Arg),
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Arg),
+    ro(Arg),
+    Index-- |
+	self;
+
+    Index > 1, arg(Index, Goal, Arg),
+    vector(Arg), arity(Arg, 1),
+    Index-- |
+	self;
+
+    otherwise,
+    arg(1, Goal, Name),
+    make_tuple(Index, Tuple),
+    arg(1, Tuple, N) :
+      N = Name,
+      PiFcp = Tuple |
+	goal_channels1.
+
+
+goal_channels1(Goal, Index, Which, Depth, Sender, PiFcp, Left, Right) :-
 
     Index =?= 3,
     arg(1, Goal, pi_send),
@@ -780,17 +806,19 @@ show_goals(Goals, Options, Output) :-
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
 		      Sender(no_sender), Which(active)),
-	show_goals(Goals, [Depth?, Sender?, Which?], Result, Output, Result?).
+	show_goals(Goals, Which?, Depth?, Sender?, Result, Output, Result?).
 
-  show_goals(Goals, Options, Result, Left, Right) :-
+  show_goals(Goals, Which, Depth, Sender, Result, Left, Right) :-
 
     Goals =?= (Goal, Goals') :
-      Result = (Goal'?, Result') |
-	show_goal(Goal, Options, Goal', Left, Left'),
+      Result = (PiFcp?, Result') |
+	remote_goal([], Goal, Goal', PiFcp, PiFcp'),
+	show_goal1,
 	self;
 
     Goals =\= (_, _) |
-	show_goal(Goals, Options, Result, Left, Right).
+	remote_goal([], Goals, Goal, Result, PiFcp),
+	show_goal1.
 
 
 show_resolvent(Resolvent, Options, Stream) :-
@@ -802,14 +830,14 @@ show_resolvent(Resolvent, Options, Stream) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(active)),
+		      Sender(no_sender), Which(none)),
 	show_resolvent_stream(Resolvent, [Depth?, Sender?, Which?], Stream).
 
   show_resolvent_stream(Resolvent, Options, Stream) :-
 
     Resolvent ? Call,
-    Call = call(_, _) :
-      Stream ! Call |
+    Call = call(_, _) | /* :
+      Stream ! Call |   */
 	self;
 
     Resolvent ? [Name | _] # Goals |
@@ -822,7 +850,8 @@ show_resolvent(Resolvent, Options, Stream) :-
 	self;
 
     Resolvent ? Goals,
-      Goals =\= (_#_) |
+    Goals =\= call(_, _),
+    Goals =\= (_#_) |
 	show_resolvent_goals([], Options, Goals, Stream, Stream'),
 	self;
 
@@ -834,25 +863,42 @@ show_resolvent(Resolvent, Options, Stream) :-
   show_resolvent_goals(Name, Options, Goals, Stream, NextStream) :-
 
     Goals ? Goal,
-    Name =\= [] |
-	show_goal(Goal, Options, PiFcp, Stream, [(Name # PiFcp?) | Stream'?]),
+    Goal =\= pi_wait_to_receive(_, _, _),
+    Goal =\= pi_wait_to_send(_, _),
+    Options = [Depth, Sender, Which] :
+      Stream ! PiFcp? |
+	remote_goal(Name, Goal, Goal', PiFcp, PiFcp'),
+	show_goal1 + (Left = Stream', Right = Stream''?),
 	self;
 
-    Goals ? Goal,
-    Name =?= [] |
-	show_goal(Goal, Options, PiFcp, Stream, [PiFcp? | Stream'?]),
+    Goals ? _Wait,
+    otherwise |
 	self;
 
-    Goals =\= [_|_], Goals =\= [],
-    Name =\= [] |
-	show_goal(Goals, Options, PiFcp, Stream,
-	    [(Name # PiFcp?) | NextStream]);
-
-    Goals =\= [_|_], Goals =\= [],
-    Name =?= [] |
-	show_goal(Goals, Options, PiFcp, Stream, [PiFcp? | NextStream]);
+    Goals =\= [_ | _],
+    Goals =\= [] :
+      Goals' = [Goals] |
+	self;
 
     Goals =?= [] :
       Name = _,
       Options = _,
-	Stream = NextStream.
+      Stream = NextStream.
+
+
+remote_goal(Name, Goal, OutGoal, PiFcp, OutPiFcp) :-
+
+    Name =\= [] :
+      Name' = [],
+      PiFcp = Name#PiFcp'? |
+	self;
+
+    Name =?= [],
+    Goal =?= Target#Goal' :
+      PiFcp = Target#PiFcp'? |
+	self;
+
+    Name =?= [],
+    Goal =\= _#_ :
+      OutGoal = Goal,
+      OutPiFcp = PiFcp.
