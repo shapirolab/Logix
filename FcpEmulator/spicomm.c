@@ -281,14 +281,12 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
      }
      switch (ChannelType & SPI_TYPE_MASK) {
           case SPI_BIMOLECULAR:
-          case SPI_BIMOLECULAR_PRIME:
           case SPI_INSTANTANEOUS:
 		  if (!(MsType==SPI_SEND||MsType==SPI_RECEIVE))
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
 		  break;
           case SPI_HOMODIMERIZED:
-          case SPI_HOMODIMERIZED_PRIME:
                   if (!(MsType==SPI_DIMER))
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
@@ -988,11 +986,12 @@ int *ChannelType;
       set_reply_to("Error - Unrecognized message type", Reply);
       return(True);
   }
+  FinalType |= RandomFlag;
   if (!do_store_vector(Word(SPI_CHANNEL_TYPE,IntTag),
-			 Word(FinalType,IntTag),Ref_Word(ChP))){
+		       Word(FinalType,IntTag),Ref_Word(ChP))){
     return(False);
   }
-  *ChannelType = FinalType | RandomFlag;
+  *ChannelType = FinalType;
  return(True); 
 }
 
@@ -1248,7 +1247,6 @@ heapP Now ,Anchor ,NowP ,Reply ;
        switch(ChannelType & SPI_TYPE_MASK)
 	 {     
 	 case SPI_BIMOLECULAR :
-	 case SPI_BIMOLECULAR_PRIME :
 	   if (!get_sum_weight(ChP, ChannelType, &Result, Reply))
 	     return(False);
 	   if (!IsVar(*Reply))
@@ -1256,7 +1254,6 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	   SumWeights += Result;
 	   break;
 	 case SPI_HOMODIMERIZED:
-	 case SPI_HOMODIMERIZED_PRIME:
 	   if (more_than_one_ms(ChP)) {  
 	     if (!get_sum_weight(ChP, ChannelType, &Result, Reply))
 	       return(False);
@@ -1302,7 +1299,6 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	 switch(ChannelType & SPI_TYPE_MASK)
 	   {     
 	   case SPI_BIMOLECULAR :	 
-	   case SPI_BIMOLECULAR_PRIME :
 	     if (!get_selector(ChP, ChannelType, &Result))
 	       return(False);
 	     Selector -= Result;
@@ -1312,7 +1308,6 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	     }
 	     break;
 	   case SPI_HOMODIMERIZED:
-	   case SPI_HOMODIMERIZED_PRIME:
 	     if (more_than_one_ms(ChP)) {
 	       if (!get_selector(ChP, ChannelType, &Result))
 		 return(False);
@@ -1436,7 +1431,6 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
     switch (Type & SPI_TYPE_MASK)
       {
       case SPI_BIMOLECULAR:
-      case SPI_BIMOLECULAR_PRIME:
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
 	  return(False);
 	deref_val(KOutA);
@@ -1455,7 +1449,6 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
 	  *Result = BaseRate*SendWeight*ReceiveWeight;
 	return True;
       case SPI_HOMODIMERIZED:
-      case SPI_HOMODIMERIZED_PRIME:
 	DimerWeight=SendWeight;         
 	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	  *Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
@@ -1520,7 +1513,6 @@ int get_selector(heapP ChP, int Type, double *Result)
     switch (Type & SPI_TYPE_MASK)
       {
       case SPI_BIMOLECULAR: 
-      case SPI_BIMOLECULAR_PRIME: 
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
 	  return(False);
 	deref_val(KOutA);
@@ -1535,7 +1527,6 @@ int get_selector(heapP ChP, int Type, double *Result)
 	}
 	break;
       case SPI_HOMODIMERIZED:
-      case SPI_HOMODIMERIZED_PRIME:
 	DimerWeight = SendWeight;
 	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	  *Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
@@ -1931,7 +1922,6 @@ heapP Channel, Weight, Reply ;
   switch (ChannelType & SPI_TYPE_MASK)
     {
     case SPI_BIMOLECULAR: 
-    case SPI_BIMOLECULAR_PRIME: 
       {
 	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	  Result = spi_compute_bimolecular_weight(WeightIndex, BaseRate,
@@ -1942,7 +1932,6 @@ heapP Channel, Weight, Reply ;
       }
       break;
     case SPI_HOMODIMERIZED:
-    case SPI_HOMODIMERIZED_PRIME:
       DimerWeight = SendWeight;
       if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
