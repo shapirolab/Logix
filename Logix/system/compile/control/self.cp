@@ -5,9 +5,9 @@ Michael Hirsch,  27 January 1985
 Bill Silverman, 5 September 1985
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:37 $
+		       	$Date: 2002/06/07 12:11:12 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/compile/control/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -21,7 +21,12 @@ Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
 	]
 ).
 -mode(trust).
--language(compound).
+-language([evaluate, compound, colon]).
+
+/* This is only generated (so far) by biospi.  It might be derived from the
+** language attribute - but then what about blocked input?
+*/
+SECOND_PHASE_SUFFIX => 39. % Prime (')
 
 List ::= [Any].
 
@@ -87,9 +92,10 @@ interpret(Linkage, Precompiled, Protected) :-
  */
 
 protect(Linkage, Program, NewProgram, Mode) :-
+	stream#hash_table(PIds?),
 	reduce_mode(Mode, Linkage, Program, Mode'),
-	start_new_program(Mode', Linkage, NewProgram, Procedures),
-	add_short_circuit(Mode', Program, Procedures).
+	start_new_program(Mode', Linkage, NewProgram, Procedures, PIds'),
+	add_short_circuit(Mode', Program, Procedures, PIds, PIds'?).
 
 
 monitor(Linkage, Program, NewProgram, Mode, Type) :-
@@ -112,7 +118,7 @@ monitor(Linkage, Program, NewProgram, Mode, Type) :-
 		      )
 	             | Tail ] |
 	reduce_mode(Mode, Linkage, [], Mode'),
-	add_short_circuit(Mode', Rest, Tail),
+	add_short_circuit(Mode', Rest, Tail, _, _),
 	rewrite_bodies(Body, 0, Mode', Body', [], R).
 	
 
@@ -132,25 +138,28 @@ start_new_program(	Mode,
 				    ]
 			  )
 		        | More ]^,
-			More
+			More,
+			PIds
 ) :-
     true :
       Unknown = '_unknown'(`'Goal', `'L', `'R', `'V') |
-	make_select(Mode, ExportedIds, Selects, Unknown),
+	make_select(Mode, ExportedIds, Selects, Unknown, PIds),
 	make_write_exception(unknown, `'Goal', Write).
 
 
-make_select(Mode, Ids, Selects, Unknown) :-
+make_select(Mode, Ids, Selects, Unknown, PIds) :-
 
-    Mode = trust(Imps) |
+    Mode = trust(Imps) :
+      PIds = [] |
 	select_trust(Ids, Imps, Selects, Unknown);
 
-    Mode = failsafe |
+    Mode = failsafe :
+      PIds = [] |
 	select_failsafe(Ids, Selects, Unknown);
 
     Mode = interrupt(Resumes) |
 	select_resume(Ids, Resumes, SelectIds),
-	select_interrupt(SelectIds, Selects, Unknown).
+	select_interrupt(SelectIds, Selects, Unknown, PIds).
 
 
 select_resume(Ids, Resumes, SelectIds) :-
@@ -191,7 +200,8 @@ select_trust(Ids, Imps, Selects, Unknown) :-
 	select_trust,
 	factor_ident(Id, _Function, Functor, Alias, Arguments),
 	importing(Alias/Arguments, Imps, Reply),
-	generate_heads(trust, Functor,  Alias', Arguments, External, Internal),
+	generate_heads(trust, Functor,  Alias', Arguments,
+			External, Internal),
 	trust_internal(Reply, Alias, Internal, Alias', Internal', L, R);
 
     Ids = [] : Imps = _ |
@@ -232,23 +242,44 @@ select_failsafe(Ids, Selects, Unknown) :-
 	select_others(failsafe, Selects, Unknown).
 
 
-select_interrupt(Ids, Selects, Unknown) :-
+select_interrupt(Ids, Selects, Unknown, PIds) :-
 		 
     Ids ? SId :
-      Selects ! {'_select'({Function, External}, `'Controls'),
+      PIds ! member(Functor?, Value, Ok),
+/**** Selects ! {'_select'({Function, External}, `'Controls'), ****/
+      Selects ! {'_select'({`'_', External}, `'Controls'),
 			{ [],
 			  [`'Controls' = procedures(`'S', `'L', `'R', `'V') ]
 			},
 			[ Internal ]
 		} |
 	select_interrupt,
-	factor_ident(SId, Function, Functor, Alias, Arguments),
-	generate_heads(interrupt(_), Functor, Alias, Arguments,
-			External, Internal
-	);
+	factor_ident(SId, Function, Functor, _Alias, Arguments),
+	call_alias(Ok?, Value?, Function?, Functor?, Alias,
+			Arguments?, Arguments'),
+	generate_heads(interrupt(_), Functor?, Functor?, Arguments?,
+			External, _),
+	generate_heads(interrupt(_), Alias?, Alias?, Arguments'?,
+			_, Internal);
 
-    Ids = [] |
+    Ids = [] :
+      PIds = [] |
 	select_others(interrupt, Selects, Unknown).
+
+  call_alias(Ok, Value, Function, Functor, Alias, Arguments, AliasArguments) :-
+
+    Ok =?= true,
+    /* An exported procedure cannot be a communication procedure. */ 
+    Function =?= reduce :
+      Arguments = _,
+      Functor = _,
+      Value = Alias/AliasArguments;
+
+    Ok =?= false :
+      Function = _,
+      Value = _,
+      Alias = Functor,
+      AliasArguments = Arguments.
 
 
 select_others(Mode, Selects, Unknown) :-
@@ -277,18 +308,29 @@ make_write_exception(Reason, Goal,
 ).
 
 
-add_short_circuit(Mode, Program, NewProgram) :-
+add_short_circuit(Mode, Program, NewProgram, PIds, TIds) :-
 
     Program ? procedure(Ident, Clauses) :
-      NewProgram ! procedure(NewIdent, NewClauses) |
+      NewProgram ! procedure(NewIdent, NewClauses),
+      Value = Functor? / Arguments?,
+      PIds ! lookup(SecondPhaseFunctor?, Value, Value, Status) |
+/****/	add_lookup(Status?) = add_lookup(new), /** This should NOT fail. **/
 	add_short_circuit,
 	new_ident(Ident,  Mode, NewIdent, Reply),
 	factor_ident(Ident, _Function, Functor, _Alias, Arguments),
+	/*
+	** If there is a matching functor, ending in the SECOND_PHASE_SUFFIX,
+	** when that process is suspended it should resume in this procedure
+	** (at the first phase).
+	*/
+	string_to_dlist(Functor?, FL, [SECOND_PHASE_SUFFIX]),
+	list_to_string(FL?, SecondPhaseFunctor),
 	clauses(Reply, Clauses, Arguments, Mode, NewClauses, LastClauses),
 	second_last_clause(Mode, Functor, Arguments, LastClauses);
 
     Program = [] : Mode = _,
-      NewProgram = [] |
+      NewProgram = [],
+      PIds = TIds |
 	true.
 
 
@@ -493,7 +535,8 @@ second_last_clause(trust(_), _, _, []^).
 second_last_clause(Mode, Functor, Arguments, Last) :-
     otherwise :
       Last ! { Internal, { [ otherwise | Unknown ], [ Write ] }, [] } |
-	generate_heads(Mode, Functor, Functor, Arguments, External, Internal),
+	generate_heads(Mode, Functor, Functor, Arguments,
+			External, Internal),
 	add_unknown(Mode, Unknown),
 	make_write_exception(failed, External, Write),
 	last_clause(Mode, Functor, Arguments, Last').
