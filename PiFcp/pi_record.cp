@@ -1,6 +1,6 @@
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([file/1, file/2, run/1, run/2, run/3]).
+-export([run/2, run/3]).
 
 EOL => 10.
 PLUS => 43.
@@ -11,8 +11,16 @@ MAXINT => 3354431.
 
 REALTIME => 12.
 
-file(File) + (Cutoff = MAXINT) :-
-	run([], File, Cutoff).
+run(Goal, Cutoff) :-
+
+    Goal =?= _#_,
+    Cutoff >= 0 |
+	pi_monitor#scheduler(Scheduler),
+	write_channel(cutoff(Cutoff), Scheduler),
+	computation#Goal;
+
+    otherwise |
+	fail(run(Goal, Cutoff)).
 
 run(Goal, File, Cutoff) :-
     Goal =?= _#_,
