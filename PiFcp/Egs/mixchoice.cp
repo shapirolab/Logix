@@ -29,33 +29,36 @@ testin(A, B, C) :-
 /*************************************************/
 
   "Mix"(A, B, C) :-
-    A = _(VA, _) :
+    A = _(VA, _),
+    /* Get the receive stream of B. */
+    B = _(VB, _),
+    read_vector(2, VB, MsB) :
       /* Offer a message on channel a. */
-      write_channel(Sender?([], 1, Choice), VA) |
+      write_vector(1, Sender?([], 1, Chosen), VA) |
         pi_monitor#unique_sender("Mix", Sender),
         "Mix.mixed".
 
-  "Mix.mixed"(A, B, C, Chosen, Sender) :-
+  "Mix.mixed"(A, B, C, Chosen, Sender, MsB) :-
 
     /* Test offer accepted. */
-    Choice = 1 |
+    Chosen = 1 |
+        pi_send("Mix.c", {B}, C);
 
-        pi_send("Mix.c"({B}, 1, _), VC);
-
-    /* Skip messages that have already been consumed. */    
-    B = NCB(VB, MsB), MsB ? _(_, _, Choice),
-    not_we(Choice) :
-      B' = NCB(VB, MsB') |
+    /* Skip messages that have already been consumed. */
+    
+    MsB ? _(_, _, Choice),
+    not_we(Choice) |
 	self;
     /* Ignore any message offered by the associated reduction of Mix. */
-    B = NCB(VB, MsB), MsB ? Sender(_, _, _) :
-      B' = NCB(VB, MsB') |
-        "Mix.mixed";
+    MsB ? Sender(_, _, _) |
+        self;
     /* Consume the independantly offered message. */
-    B = NCB(VB, MsB), MsB ? NSB([], N, Choice),
+    MsB ? MsgSender([], N, Choice),
     we(Choice),
-    NSB =\= Sender :
-
+    MsgSender =\= Sender,
+    B = _(VB, _) :
+      /* Update Channel B. */
+      store_vector(2, MsB', VB),
       Choice = N,
       /* Withdraw the offered message. */
       Chosen = 0 |

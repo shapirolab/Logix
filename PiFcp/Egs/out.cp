@@ -10,13 +10,11 @@
 /****  Code for testing the generated program ****/
 
 test(A) :-
-	pi_utils#make_channel(A, "test.A", _, _),
+	pi_utils#make_channel(A, "test.A"),
 	main.
 
 /*************************************************/
 
   main(A) :-
-    A = _(VA, _) :
-      /* A send in the body is not synchronized.
-         But it is moved to the guard.           */
-      write_channel("main.A"([], 1, _), VA).
+	/* A send in the body is not synchronized. */
+	pi_send("main.a", [], A).

@@ -26,17 +26,23 @@ sends(A, B, N) + (Counter = 0, HoldA = A):-
 /*************************************************/
 
   p(A, B) :-
+    A = _(VA, _),
+    read_vector(2, VA, MsA) |
+	"P.receive"(A,B,MsA).
 
+  "P.receive"(A, B, MsA) :-
     /* Cdr down the stream to find an unconsumed message. */
-    A = NCA(VA, MsA),
     MsA ? _(_, _, Choice),
-    not_we(Choice) :
-      A' = NCA(VA, MsA') |
-        p;
-    A = _(_, MsA),
-    B = _(VB, _), channel(VB),
+    not_we(Choice) |
+        self;
     MsA ? _([], N, Choice),
-    we(Choice) :
+    we(Choice),
+    A = _(VA, _) :
+
       /* Consume the message by unifying the choice_tag with the choice. */
-      Choice = N |
-	write_channel(p([], 1, _), VB).
+      Choice = N,
+
+      /* Update channel A. */
+      store_vector(2, MsA', VA) |
+
+	pi_send("P.b", [], B).

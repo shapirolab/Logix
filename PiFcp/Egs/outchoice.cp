@@ -27,24 +27,26 @@ testB(A, B) :-
 
   choose(A, B) :-
     true :
-      make_channel(VC, MsC), C = "Choose.c"(VC, MsC),
-      make_channel(VD, MsD), D = "Choose.d"(VD, MsD) |
+      make_vector(2, VC, SC), SC = {MsC, _}, store_vector(2, MsC, VC),
+      C = "Choose.c"(VC, {0, 0}),
+      make_vector(2, VD, SD), SD = {MsD, _}, store_vector(2, MsD, VD),
+      D = "Choose.d"(VD, {0, 0}) |
         "Choose.".
 
   "Choose."(A, B, C, D) :-
     A = _(VA, _),
     B = _(VB, _) :
       /* Offer the messages. */
-      write_channel("Choose."({C}, 1, Choice), VA),
-      write_channel("Choose."({D}, 2, Choice), VB) |
-        "Choose.choice".
+      write_vector(1, "Choose.a"({C}, 1, Choice), VA),
+      write_vector(1, "Choose.b"({D}, 2, Choice), VB) |
+        "Choose.send".
 
-  "Choose.choice"(A, B, C, D, Choice) :-
+  "Choose.send"(A, B, C, D, Choice) :-
 
     /* Commit to the one which is read. */
     Choice = 1,
     A = _(VA, _) :
-      write_channel("Choose.b"({C}, 1, _), VA);
+      write_vector(1, "Choose.a"({C}, 1, _), VA);
     Choice = 2,
     B = _(VB, _) :
-      write_channel("Choose.a"({D}, 2, _), VB).
+      write_vector(1, "Choose.b"({D}, 2, _), VB).

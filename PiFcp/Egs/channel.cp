@@ -8,7 +8,10 @@
 
 -language(compound).
 
-  make+(A) :-
+  make(A) :-
     true :
-      make_channel(VA, MsA), A = "pichannel.a"(VA, MsA) |
+      make_vector(2, VA, Streams),
+      Streams = {MsA, _},
+      store_vector(2, MsA, VA),
+      A = "pichannel.a"(VA, {0, 0}) |
 	screen#display(A, [known(A)]).
