@@ -328,11 +328,11 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
     Refs > 0 :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-			Sender(no_sender), Which(none), Format(short)),
+			Sender(no_sender), Which(note), Format(short)),
 %	inspect_channel(SpiChannel, Format, Result),
 	inspect_channel(SpiChannel, Result),
 	format_channel_name,
-	channel_argument + (Display = Content, Status = [Result],
+	channel_argument + (Display = Content, Status = Result,
 		Left = Display, Right = (FormattedName? : Content));
 
     /* closed channel */
@@ -352,10 +352,9 @@ inspect_channel(SpiChannel/*, Format*/, Status) :-
     read_vector(SPI_SEND_ANCHOR, SpiChannel, SendAnchor),
     read_vector(SPI_RECEIVE_ANCHOR, SpiChannel, ReceiveAnchor),
     read_vector(SPI_CHANNEL_NAME, SpiChannel, Name) :
-      Status = {Kind?, NameRate?, Sends?} |
-%	format_channel_name(Name, Format, Name'),
+      Status = {Kind?, NameRate?, Sends?, Receives?} |
 	name_rate_to_namerate,
-	list_messages(SendAnchor, Sends, Receives?),
+	list_messages(SendAnchor, Sends, []),
 	list_messages(ReceiveAnchor, Receives, []).
 
   name_rate_to_namerate(Type, Name, Rate, Kind, NameRate) :-
@@ -475,6 +474,10 @@ parse_options(Options, Depth, Order, Sender, Which, Format) :-
       Which = Option(_) |
 	parse_options;
 
+    Option = note :
+      Which = Option(_) |
+	parse_options;
+
     Option = active :
       Which = Option(_) |
 	parse_options;
@@ -504,30 +507,19 @@ parse_options(Options, Depth, Order, Sender, Which, Format) :-
 	parse_options.
 
 
-show_channel_content(Stream, Which, Depth, Sender, Format,
-			Content, Left, Right) :-
+show_channel_content(Stream, Depth, Sender, Format, Content, Left, Right) :-
 
     Stream =?= [] :
-      Which = _,
       Depth = _,
       Sender = _,
       Format = _,
       Content = [],
       Left = Right;
 
-    Which =\= none,
     Stream ? Kind(PId, CId, Multiplier) :
       Content ! Condensed? |
 	id_and_message,
-	self;
-
-    Which =?= none,
-    Stream =\= [] :
-      Depth = _,
-      Sender = _,
-      Format = _,
-      Content = "!",
-      Left = Right.
+	self.
 
   id_and_message(Kind, PId, CId, Multiplier, Sender, Condensed, Left, Right) :-
 
@@ -578,7 +570,7 @@ show_value(Argument, Options, Display) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-			Sender(no_sender), Which(none), Format(short)),
+			Sender(no_sender), Which(note), Format(short)),
 	show_cdr.
 
 show_cdr(Argument, Which, Depth, Sender, Format, Display) :-
@@ -648,7 +640,7 @@ show_channel_argument(Name, SpiChannel, Which, Depth, Sender, Format, Display,
       Name = _ |
 	inspect_channel(SpiChannel, Result),
 %	inspect_channel(SpiChannel, Format, Result),
-	channel_argument + (Status = [Result]);
+	channel_argument + (Status = Result);
 
     otherwise :
       SpiChannel = _,
@@ -663,7 +655,7 @@ show_channel_argument(Name, SpiChannel, Which, Depth, Sender, Format, Display,
 channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 
     Depth =\= 0,
-    Status =?= [_Type(CreatorBase, [])] :
+    Status =?= _Type(CreatorBase, [], []):
       Which = _,
       Depth = _,
       Sender = _,
@@ -673,8 +665,19 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 	channel_creator;
 
     Depth =\= 0,
-    Status =?= [_Type(CreatorBase, Stream)], Stream =\= [],
+    Status =?= _Type(CreatorBase, Sends, Receives),
+    {Sends, Receives} =\= {[], []},
     Which =?= none :
+      Sender = _,
+      Format = _,
+      Display = Creator?,
+      Left = Right |
+	channel_creator;
+
+    Depth =\= 0,
+    Status =?= _Type(CreatorBase, Sends, []),
+    Sends =\= [],
+    Which =?= note :
       Sender = _,
       Format = _,
       Display = (Creator? !),
@@ -682,14 +685,41 @@ channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 	channel_creator;
 
     Depth =\= 0,
-    Status =?= [_Type(CreatorBase, Stream)], Stream =\= [],
-    Which =\= none :
+    Status =?= _Type(CreatorBase, [], Receives),
+    Receives =\= [],
+    Which =?= note :
+      Sender = _,
+      Format = _,
+      QM = "?",
+      Display = QM(Creator?),
+      Left = Right |
+	channel_creator;
+
+    Depth =\= 0,
+    Status =?= _Type(CreatorBase, Sends, Receives),
+    Sends =\= [],
+    Receives =\= [],
+    Which =?= note :
+      Sender = _,
+      Format = _,
+      QM = "?",
+      Display = QM(Creator? !),
+      Left = Right |
+	channel_creator;
+
+    Depth =\= 0,
+    Status =?= _Type(CreatorBase, Sends, Receives),
+    Sends =\= [],
+    Receives =\= [],
+    Which =?= active :
       Display = (Creator? = Content) |
 	channel_creator,
+	utils#list_to_tuple(Sends, ST),
+	utils#tuple_to_dlist(ST, Stream, Receives),
 	show_channel_content;
 
     Depth =?= 0,
-    Status =?= [_Type(CreatorBase, _Stream)] :
+    Status =?= _Type(CreatorBase, _Sends, _Receives) :
       Status = _,
       Which = _,
       Sender = _,
@@ -885,7 +915,7 @@ show_goal(Goal, Options, SpiFcp, Left, Right) :-
     arity(Goal, Index) :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(none), Format(short)),
+		      Sender(no_sender), Which(note), Format(short)),
 	show_goal2;
 
     Goal =?= (Service#Goal') :
@@ -1083,7 +1113,7 @@ goal_channels1(Goal, Index, Which, Depth, Sender, Format,
 	goal_channels2;
 
     Index > 2, arg(Index, Goal, Argument),
-    vector(Argument), arity(Argument, 2),
+    vector(Argument), arity(Argument) =< 2,
     Index--,
     make_tuple(Index', Tuple),
     arg(1, Goal, Name),
@@ -1156,7 +1186,7 @@ close_tree(Tree) :-
 show_tree(Tree, Options, TreeTrace) :-
 
 	parse_options(Options, Depth(1), Order(prefix),
-		      Sender(no_sender), Which(none), Format(short)),
+		      Sender(no_sender), Which(note), Format(short)),
 	nodes([Tree], [Depth, Sender, Which, Format], 0, 0, Head, []),
 	display_tree(Head, Order, TreeTrace).
 
@@ -1391,7 +1421,7 @@ show_goals(Goals, Options, Output) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(none), Format(short)),
+		      Sender(no_sender), Which(note), Format(short)),
 	show_goals(Goals, Which?, Depth?, Sender?, Format?,
 			Result, Output, Result?).
 
@@ -1431,7 +1461,7 @@ show_resolvent(Resolvent, Options, Stream) :-
     Options =\= fcp :
       make_channel(BadOption, _) |
 	parse_options(Options, Depth(1), BadOption(BadOption),
-		      Sender(no_sender), Which(none), Format(short)),
+		      Sender(no_sender), Which(note), Format(short)),
 	collect_resolvent_list(Resolvent, List),
 	show_goal_list(List?, Depth?, Sender?, Which?, Format?,
 			Result, Stream, Result?).
