@@ -1,7 +1,7 @@
 -monitor(initialize).
 -language([evaluate,compound,colon]).
 -export([get_public_channels/1, public_channels/1, public_channels/2,
-	 new_channel/3, new_channel/4,
+	 new_channel/3, new_channel/4, new_public_channel/4,
 	 options/2, reset/0, scheduler/1]).
 -include(spi_constants).
 
@@ -264,17 +264,14 @@ merge_public_channels(List, Publics, NewPublics, Last,
     we(NewChannel),
     Publics =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Name, NL, []) :
+    Last @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
       Publics' =
 	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate) | Publics],
-      write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
-				BaseRate), Scheduler),
-      GT = NL |
-	list_to_string(GL, Id),
+      write_channel(new_public_channel(Name, SpiChannel,
+				       SPI_DEFAULT_WEIGHT_NAME,	BaseRate),
+		    Scheduler) |
 	self;
 
     List ? Name(NewChannel, CW, BaseRate),
@@ -319,16 +316,13 @@ merge_public_channels(List, Publics, NewPublics, Last,
     we(NewChannel),
     Publics =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Name, NL, []) :
+    Last @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
       Publics' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Publics],
-      write_channel(new_channel(Id?, SpiChannel, ComputeWeight, BaseRate),
-			Scheduler),
-      GT = NL |
-	list_to_string(GL, Id),
+      write_channel(new_public_channel(Name, SpiChannel,
+				       ComputeWeight, BaseRate),
+		    Scheduler) |
 	self;
 
     otherwise :
@@ -430,6 +424,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel^, BaseRate)
 **    new_channel(ChannelName, Channel^, ComputeWeight, BaseRate)
+**    new_public_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    ordinal(Old?^, New)
 **    record(Record?^)
 **    record_item(Item)
@@ -452,7 +447,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 ** State:
 **
 **   DefaultWeighter - assigned to new Channel, unless Weighter provide
-**   Ordinal - Unique index assigned to a non - "public."/".public" file
+**   Ordinal - Unique index assigned to a non - public file
 **     also in Status
 **   SpiOffsets - magic numbers (or "unknown") for C-coded functions
 **
@@ -587,6 +582,22 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	new_channel,
 	continue_waiting;
 
+    Schedule ? new_public_channel(ChannelName, Channel, BaseRate) |
+	new_channel + (ComputeWeight = DefaultWeighter),
+	continue_waiting;
+
+    Schedule ? new_public_channel(ChannelName, Channel,
+				  ComputeWeight, BaseRate),
+    string(ComputeWeight) |
+	new_channel + (ComputeWeight = ComputeWeight(_)),
+	continue_waiting;
+
+    Schedule ? new_public_channel(ChannelName, Channel,
+				  ComputeWeight, BaseRate),
+    tuple(ComputeWeight), arity(ComputeWeight) > 1 |
+	new_channel,
+	continue_waiting;
+
     Schedule ? ordinal(Ordinal', Ordinal^) |
 	self;
 
@@ -712,6 +723,27 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Record ! start(PrefixedId),
       Debug ! start(PostId) |
 	continue_waiting;
+
+    Schedule ? update_references(Updates),
+    Updates ? {Channel, Addend},
+    vector(Channel), arity(Channel, CHANNEL_SIZE), 
+    integer(Addend), Addend > 0,
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Refs += Addend,
+    list(Updates') :
+      store_vector(SPI_CHANNEL_REFS, Refs', Channel),
+      Schedule'' = [update_references(Updates') | Schedule'] |
+	self;
+
+    Schedule ? update_references(Updates),
+    Updates ? {Channel, Addend},
+    vector(Channel), arity(Channel, CHANNEL_SIZE), 
+    integer(Addend), Addend > 0,
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Refs += Addend,
+    Updates' =?= [] :
+      store_vector(SPI_CHANNEL_REFS, Refs', Channel) |
+	self;
 
 /**************************** Debugging aids ********************************/
 
@@ -898,6 +930,14 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
 		    Dummy, _, _, _, SpiOffsets),
         self;
+	     
+    Schedule ? new_public_channel(ChannelName, Channel,
+				 _ComputeWeight, _BaseRate) :
+      make_channel(Dummy, _) |
+	new_channel(ChannelName, Channel, 0,
+		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
+		    Dummy, _, _, _, SpiOffsets),
+        self;
 
     Schedule ? close(_, Reply) :
       Reply = [] |
@@ -909,7 +949,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Schedule ? Other,
     Other =\= close(_, _),
     Other =\= new_channel(_, _, _),
-    Other =\= new_channel(_, _, _, _) |
+    Other =\= new_channel(_, _, _, _),
+    Other =\= new_public_channel(_, _, _, _) |
 	self;
 
     unknown(Schedule),
@@ -1033,6 +1074,7 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
       Name' = Name,
       Ordinal' = Ordinal;
 
+/* Transitional */
     string(Name),
     string_to_dlist(Name, CS1, []),
     /* "public" for spifcp */
@@ -1048,6 +1090,7 @@ index_channel_name(Name, Ordinal, Name', Ordinal') :-
       CS1 = CS2,
       Ordinal' = Ordinal,
       Name' = Name;
+/* drop - also next otherwise */
 
     string(Name),
     otherwise,
