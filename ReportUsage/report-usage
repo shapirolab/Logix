@@ -3,17 +3,21 @@ $| = 1;
 
 my $BLANKS = "                                                               ";
 my $sum_acct = "/home/system/bin/sum_acct";
-my $SUM_PREFIX   = "/var/adm/month_report/acct_summary_local";
+my $SUM_PREFIX = "/var/adm/month_report/acct_summary_local";
 
-my $Column_Width =  8;
-my $Name_Width   = 20;
-my $Total_Width  = 12;
+my $VERSION = "1.0 - 3 May, 1995";
+
+my $Column_Width =  6;
+my $Name_Width   = 10;
+my $Total_Width  =  7;
 my $Total_Index  =  2;
-my $First_Month  = 9709;
-my $Last_Month   = 9808;
-#my $First_Month  = 9902;
-#my $Last_Month   = 9903;
+my $First_Month  = 199709;
+my $Last_Month   = 199808;
+#my $First_Month  = 199902;
+#my $Last_Month   = 199903;
 my $Platform;
+my $UserList;
+my $Title;
 
 my @Users;
 my %Users;
@@ -78,7 +82,7 @@ sub read_data
     my $id = shift @line;
     my $name = join ' ', @line;
     if (length($name) > $Name_Width) {
-      $Name_Width++
+      $Name_Width = length($name);
     }
     $Users{$id} = scalar(@Users);
     push @Users, [$id, $name];
@@ -92,45 +96,16 @@ sub make_months
   my $item;
 
   while ($date <= $Last_Month) {
-    $item = ($date %100) . "-" . int($date/100);
+    $item = ($date % 100) . "-" . int($date/100);
     $Months[$Total_Index++] = $item;
-    if (++$date % 100 > 12) {
-      $date += 88;
-    }
+    $date += 88 if (++$date % 100 > 12);
   }
 }
 
-# sub cumulate_usage
-# {
-#   my $user = shift;
-#   my $total = 0;
-#   my $id = $user->[0];
-# 
-#   if ($id) {
-#     my $ix = 2;
-#     my $date;
-#     for ($date = $First_Month; $date <= $Last_Month; $date++, $ix++) {
-#       my $acct = `$sum_acct -H$Platform -U$id -D$date`;
-#       if ($acct) {
-# 	my $header;
-# 	($header, $acct) = split /\n/, $acct;
-# 	my ($a, $b, $usage) = split /\s+/, $acct;
-# 	$usage =~ s/^(\d+)\D+$/$1/;
-# 	$user->[$ix] = $usage;
-# 	$Totals[$ix] += $usage;
-# 	$total += $usage;
-#       }
-#       $date += 88 if ($date %100 == 12);
-#     }
-#     $user->[$Total_Index] = $total;
-#     $Totals[$Total_Index] += $total;
-#   }
-#   print STDERR ".";
-# }
 
 sub read_month
 {
-  my $date = shift;
+  my $date = (shift) % 10000;
   my @lines = split /\n/, `rsh $Platform \"cat $SUM_PREFIX.$date\"`;
   (shift @lines) or die "Can't read $SUM_PREFIX.$date";
   return @lines;
@@ -144,12 +119,12 @@ sub cumulate_usage
   while ($date <= $Last_Month) {
     print STDERR ".";
     my $line;
-    my @lines = read_month($date++);
-    $date += 88 if ($date %100 == 13);
+    my @lines = read_month($date);
+    $date += 88 if (++$date % 100 > 12);
     foreach $line (@lines) {
       my ($id, $b, $usage) = split /\s+/, $line;
       my $index  = $Users{$id};
-      if ($index) {
+      if (defined($index)) {
 	$usage =~ s/^(\d+)\D+$/$1/;
 	$user = $Users[$index];
 	$user->[$ix] = $usage;
@@ -164,42 +139,108 @@ sub cumulate_usage
 }
 
 
+sub adjust_widths
+{
+  my $ix;
+  for ($ix = 2; $ix < $Total_Index; $ix ++) {
+    if ($Column_Width <= length($Totals[$ix])+1) {
+      $Column_Width = length($Totals[$ix]) + 2;
+    }
+    if ($Column_Width <= length($Months[$ix])+1) {
+      $Column_Width = length($Months[$ix]) + 2;
+    }
+  }
+  if ($Total_Width <= length($Totals[$Total_Index])+2) {
+    $Total_Width = length($Totals[$Total_Index]) + 3;
+  }
+}
+
+
+sub print_options
+{
+  my $quit = shift;
+  print "report-users version $VERSION.\n" .
+        "Options are: -h, -t<title>, -m<first month>-<last month>\n" .
+        "   where <month> has the form yyyymm, and\n" .
+        "   <first month> does not exceed <last month>.\n";
+  if (defined $quit) {
+    exit $quit;
+  }
+}
+
 sub initialize
 {
-  my @line2;
+  my $ix = 0;
+  while ($ix < scalar @ARGV) {
+    my $arg = $ARGV[$ix];
+    if ($arg =~ /^-(.*)$/) {
+      if ($arg =~ /^-h(.*)$/) {
+	print_options(0);
+      }
+      elsif ($arg =~ /^-t(.*)$/) {
+	$Title = $1;
+      }
+      elsif ($arg =~ /^-m(\d*)\W(\d*)$/) {
+	$First_Month = $1;
+	$Last_Month = $2;
+      }
+      else {
+	print_options(1);
+      }
+      splice @ARGV, $ix, 1;
+      next;
+    }
+    $ix++;
+  }
+  if ($First_Month > $Last_Month) {
+    print_options(1);
+  }
+  $Platform = shift @ARGV;
+  $UserList = shift @ARGV;
+  open(USERS, $UserList) or die "Can't open input";
 
   unshift @Months, "", "User Name";
   make_months();
   push @Months, "Total";
+  $Title = "Report of $UserList cpu Usage (hhhh:mm) of $Platform"
+    if (!$Title);
+  $ix = length($Title);
+  $Title .= "\n";
+  while (length($Title) < 2*$ix + 1) {
+    $Title .= "-";
+  }
 
-  unshift @Users, \@Months, \@line2;
   unshift @Totals, "", "Total";
 
   read_data();
 }
 
 
-# main <file-name>
+# main <platform> <file-name>
 
-$Platform = shift;
-open(USERS, shift) or die "Can't open input";
-initialize();
+initialize(@ARGV);
 
 my $user;
 my $ix;
 my @line;
 
 cumulate_usage();
-for ($ix = 2; $ix < scalar @Users; $ix++) {
+for ($ix = 0; $ix < scalar @Users; $ix++) {
   format_hours_and_minutes($Users[$ix]);
 }
 format_hours_and_minutes(\@Totals);
-push @Users, \@line, \@Totals;
-
-print STDERR "\n\n";
+adjust_widths();
+my @line2;
+unshift @Users, \@Months, \@line2;
+push @Users, \@line2, \@Totals;
 
 my $ax = 0;
+my $outfile = 1;
 while (1) {
+  my $filename = "$Platform-$First_Month.$outfile";
+  open(STDOUT, "> $filename") or
+    die "Can't open : file '$filename'";
+  print "$Title\n\n" if ($outfile++ == 1);
   foreach $user (@Users) {
     $ix = format_output($user, $ax);
   }
