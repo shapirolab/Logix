@@ -20,10 +20,10 @@ The user may specify custom computations using the notation for
 be explicitly coded in the module Logix/<emulator name>/spiweight.c .
 
 
-The default <weighter_declaration> for a Spi session may be changed
-dynamically by a Spi macro call:
+The default <weighter_declaration> for a Stochastic Pi Calculus session
+may be changed dynamically by a user macro call:
 
     weighter(<weighter_declaration>)
 
-See macros.txt for details.
+See user_macros.txt for details.
 
