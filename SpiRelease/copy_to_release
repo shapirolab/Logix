@@ -1,4 +1,4 @@
-rm SPI/README
+rm -f SPI/README
 cp -p README SPI
 rm -f release/INSTALL
 cp -p INSTALL release
@@ -9,7 +9,7 @@ rm -f release/Logix/install
 cp -p Logix/install release/Logix
 
 rm -f Logix/*/spiweight.o
-rm release/Logix/LINUX/*
+rm -f release/Logix/LINUX/*
 cp -p Logix/LINUX/*.o release/Logix/LINUX
 cp -p Logix/LINUX/spiweight.c release/Logix/LINUX
 rm -f release/Logix/SGI/*
