@@ -1,11 +1,11 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.4 2003/12/22 09:11:58 bill Exp $ */
 /*
  **	extern.c  -  errors handling, and reporting procedures.
  **
  **	Last update by 	     $Author: bill $
- **		       	     $Date: 2001/11/29 11:19:58 $
+ **		       	     $Date: 2003/12/22 09:11:58 $
  **	Currently locked by  $Locker:  $
- **			     $Revision: 1.3 $
+ **			     $Revision: 1.4 $
  **			     $Source: /home/qiana/Repository/FcpEmulator/externs.c,v $
  */
 
@@ -468,6 +468,10 @@ heapP	PR;
   }
 }
 
+#define MaxDeep	3
+
+static	int	Deep = 0;
+
 print_args(Ptr, ArgsNo)
      heapP Ptr;
      int   ArgsNo;
@@ -475,18 +479,18 @@ print_args(Ptr, ArgsNo)
   if (ArgsNo > 0) {
     register heapP P = Ptr;
     register int Count = ArgsNo;
-    
-    for (; Count > 1; Count--, P++) {
+
+    if (Deep != MaxDeep ) {
+      for (; Count > 1; Count--, P++) {
+	print_term(Ref_Word(P), Null);
+	fprintf(DbgFile, ", ");
+      }
       print_term(Ref_Word(P), Null);
-      fprintf(DbgFile, ", ");
     }
-    print_term(Ref_Word(P), Null);
+    else
+      fprintf(DbgFile, "*%i*", Count);
   }
 }
-
-#define MaxDeep	9
-
-static	int	Deep = 0;
 
 print_term(Val, Ptr)
      heapT Val;
