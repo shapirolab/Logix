@@ -1,6 +1,26 @@
 BNF for PiFcp
 
-<program>              ::= <process_definitions> .
+<program>              ::= <psi_attributes> . <process_definitions> .
+
+<psi_attributes>       ::= <psi_attribute>
+                           <psi_attribute> . <psi_attributes>
+
+<psi_attribute>        ::= <export_declaration>
+                           <global_declaration>
+                           <stochastic_declaration>
+
+<export_declaration>   ::= export(<process_name_list>)
+
+<global_declaration>   ::= global(<stochastic_channel_list>)
+
+<stochastic_declaration>
+                       ::= stochastic
+                       ::= stochastic(<number>)
+                       ::= stochastic(<number>, <number>)
+
+<process_name_list>    ::= <process_name>
+                           <process_name> , <process_name_list>
+
 
 <process_definitions>  ::= <process>
                            <process> . <process_definitions>
@@ -11,8 +31,8 @@ BNF for PiFcp
                            <atom>+<stochastic_channel>
                            <atom>+(<stochastic_channel_list>)
 
-<atom>                 ::= <name>
-                           <name>(<channel_list>)
+<atom>                 ::= <process_name>
+                           <process_name>(<channel_list>)
 
 <stochastic_channel_list>
                        ::= <stochastic_channel>
@@ -85,7 +105,7 @@ BNF for PiFcp
                            <local_sum> + <local_call>
 
 <local_call>           ::= <atom>
-                           <name>( <substitution_list> )
+                           <process_name>( <substitution_list> )
 
 <substitution_list>    ::= <substitution>
                            <substitution> , <substitution_list>
@@ -114,8 +134,8 @@ character.  By convention the <channel> "_" is anonymous; it may not be used
 as a parameter or as an added <channel> of a <left_hand_side>.
 
 
-A <name> is an alpha-numeric string, beginning with an upper case letter, which
-may contain underscore (_) characters.
+A <process_name> is an alpha-numeric string, beginning with an upper case
+letter, which may contain underscore (_) characters.
 
 
 A <logix_ask_guard> is any predicate permitted in the ask of a guard in logix
