@@ -1,0 +1,54 @@
+Program macros may be called in the <body> of a Stochastic Pi Calculus
+program.  They have the general form:
+
+    <program_macro_name>(<program_macro_arguments>)
+
+    <program_macro_arguments> ::= <logix_variable>
+                                  <program_input_arguments>
+                                  <program_input_arguments> , <logix_variable>
+
+    <program_input_arguments> ::= <simple_logix_arguments>
+                                  <channels>
+                                  <simple_logix_arguments> , <channels>
+
+    <simple_logix_arguments>  ::= <integer>
+                                  <real>
+                                  <string>
+                                  []
+                                  <logix_variable>?
+
+    <channels>                ::= <channel>
+                                  <channel> , <channels>
+
+Where a <real> is designated, an <integer> or a <string> representing a
+real value may appear - it is converted to the correspondig real vale before
+the macro is performed.
+
+A read-only variable (<logix_variable>?) may appear in place of any of the
+<simple_logix_arguments>.  The <logix_variable> must be instantiated before
+the macoro can be performed.
+
+The <logix_variable> is optional.  Unless otherwise indicated, it is set
+to  true  when the macro is successfully completed.
+
+
+The following program macros are defined.
+
+  set_base_rate(<real> , <channels> , <logix_variable>)
+
+The baserate of each of the designated channels is set to the the real value.
+If the first argument is not (convertible to) real, the <logix_variable> is
+set to  false(<non_real>, [<channels>]) .
+
+  randomize_messages(<channels> , <logix_variable>)
+
+Each of the designated channels is set to randomly select send and receive
+(or two dimer) offers to be completed, when the channel is chosen for 
+transmission.
+
+  serialize_messages(<channels> , <logix_variable>)
+
+Each of the designated channels is set to select a send and a receive (or two
+dimer) offers to be completed on a first-come-first-served basis when the 
+channel is chosen for transmission.
+
