@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/09/16 16:28:53 $
+		       	$Date: 2002/11/16 12:32:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/SpiFcp/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,7 +43,7 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 
 	/* Get Exported list. */
 	filter_attributes(Attributes1, Attributes1', Exported, BlockPrefix),
-	Attributes2 = [export(Exports?), entries(Ambients?) | Attributes1'?],
+	Attributes2 = [export(Exports?), entries(Entries?) | Attributes1'?],
 	tospifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
@@ -77,7 +77,7 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 	unify_without_failure(BlockPrefix, "").
 
 
-program(Source, Exported, Exports, Ambients, BlockPrefix, Terms, Errors) :-
+program(Source, Exported, Exports, Entries, BlockPrefix, Terms, Errors) :-
 	filter_spifcp_attributes(Source, Exported, Controls, Source',
 					Errors, Errors'?),
 	servers#serve_empty_scope(Scope?, Controls?, Exports, Ambients,
@@ -85,8 +85,45 @@ program(Source, Exported, Exports, Ambients, BlockPrefix, Terms, Errors) :-
 	process_definitions+(Processes = [], NextScope = []),
 	optimize#initialize(Optimize?, Exports?, Accessible),
 	optimize#procedures(Terms''?, Accessible, [], Terms'),
-	spc#stochasticize(BlockPrefix?, Terms'?, Terms).
+	spc#stochasticize(BlockPrefix?, Terms'?, Terms),
+	ambient_entries(Terms, Ambients, Entries).
 
+  ambient_entries(Terms, Ambients, Entries) :-
+
+    Ambients =\= [],
+    Terms ? Procedure, Procedure =?= (Atom :- _RHSS) |
+	ambient_entry(Atom, Ambients, Ambients', Entries, Entries'),
+	self;
+
+    Ambients =?= [] :
+      Terms = _,
+      Entries = [];
+
+    Terms =?= [] :
+      Entries = Ambients;
+
+    Terms ? _Atom,
+    otherwise |	
+	self.
+
+  ambient_entry(Atom, Ambients, NewAmbients, Entries, NewEntries) :-
+
+    Ambients ? Name,
+    arg(1, Atom, Name),
+    Arity := arity(Atom) - 1 :
+      Entries = [Name/Arity | NewEntries],
+      NewAmbients = Ambients';
+
+    Ambients ? Name,
+    otherwise :
+      NewAmbients ! Name |
+	self;
+
+    Ambients =?= [] :
+      Atom = _,
+      NewAmbients = [],
+      NewEntries = Entries.
+      
 
 /* Extract Exports and Public channel declarations, base rate and weighter. */
 filter_spifcp_attributes(Source, Exported, Controls, NextSource,
