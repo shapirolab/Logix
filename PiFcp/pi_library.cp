@@ -52,7 +52,7 @@ pi_send(Sender, Message, Channel) :-
 	computation#display(('pi_library: Can''t send to' : Channel)).
 
 pi_receive(Channel, Message) :-
-    Channel = Creator(VC, _Args),
+    Channel = _Creator(VC, _Args),
     read_vector(2, VC, Stream) |
 	pi_receive(Channel, Message, Stream).
 pi_receive(Channel, Message, Stream) :-
@@ -74,22 +74,19 @@ pi_wait_to_send(FcpVector, PiMessage) :-
     vector(FcpVector),
     PiMessage = _Sender(_Message, _ChoiceTag, Choice),
     unknown(Choice) :
-      write_vector(1, PiMessage, FcpVector),
-      Offered = Ready;
+      write_vector(1, PiMessage, FcpVector);
     PiMessage = _Sender(_Message, _ChoiceTag, Choice),
     known(Choice) :
-      FcpVector = _,
-      Offered = _.
+      FcpVector = _.
 
 pi_wait_to_receive(FcpVector, Chosen, Stream) :-
     vector(FcpVector),
+    unknown(Chosen),
     read_vector(2, FcpVector, SubStream) :
       Stream = SubStream;
     known(Chosen) :
-      Ready = _,
-      PiChannel = _,
+      FcpVector = _,
       Stream = _.
-
 "
 
 	| true.
