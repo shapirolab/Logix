@@ -1,0 +1,9 @@
+This directory should serve as a base for testing biospi programs.
+If you need to use another directory for development, soft link
+the sub-directory Bin to it or to one of its enclosing directories
+which is within your home directory.
+
+The file ambient_server.bin is the "executable" of the ambient
+management process.  The file user_macros.bin provides useful
+user macros for using biospi - try command "ph" for a list of user
+macros.
