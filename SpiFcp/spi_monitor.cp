@@ -30,7 +30,7 @@ STOPPED => Reply = _.
 */
 
 %SPIOFFSETS => {SpiOffset, SpiOffset, SpiOffset, SpiOffset}.
-SPIOFFSETS => {unbound, SpiOffset, unbound, SpiOffset}.
+SPIOFFSETS => {unbound, unbound, unbound, SpiOffset}.
 %SPIOFFSETS => {unbound, unbound, unbound, unbound}.
 
 serve(In) + (Options = []) :-
