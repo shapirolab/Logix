@@ -1,6 +1,6 @@
 -language(spifcp).
 
-public([yes, no]).
+public(yes, no).
 
 True ::= Send(yes) | Answer.
 
