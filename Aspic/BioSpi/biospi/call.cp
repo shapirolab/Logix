@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/01/12 08:40:39 $
+		       	$Date: 2003/02/19 07:42:43 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -37,6 +37,15 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	extract_id(ProcessDefinition, Name, _Arity),
 	self;
 
+    string(Body1), Body1 =\= true, Body1 =\= self,
+    nth_char(1, Body1, C), CHAR_a =< C, C =< CHAR_z :
+      Name = Body1,
+      CallDefinition = [],
+      NextIn = In |
+	extract_id(ProcessDefinition, ProcessName, _Arity),
+	macro_call + (Arguments = [], ChannelNames = _),
+	macroed_call;
+
     arity(Body1) > 1, arg(1, Body1, self) |
 	extract_id(ProcessDefinition, Name, _Arity),
 	copy_goal_args(Body1, `Name?, Body1'),
@@ -44,7 +53,7 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
     arity(Body1) > 1, arg(1, Body1, `Functor), string(Functor) |
 	extract_id(ProcessDefinition, Name, _Arity),
-	extract_lhs_parts(ProcessDefinition, ChannelNames, _OuterLHS, _InnerLHS),
+	extract_lhs_parts(ProcessDefinition, ChannelNames, _Outer, _Inner),
 	extract_arguments_or_substitutes(Name, Body1, Arguments, Substitutes,
 						Errors, Errors'?),
 	verify_call_channels(Name, Body1, ChannelNames, Locals,
@@ -53,6 +62,18 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	substituted_local_channels(Primes, Substitutes?, Substitutes'),
 	lookup_call_functor,
 	complete_local_call;
+
+    arity(Body1) > 1,
+    arg(1, Body1, Name), string(Name), Name =\= self,
+    nth_char(1, Name, C), CHAR_a =< C, C =< CHAR_z :
+      CallDefinition = [],
+      In = [logix_variables(Primed?) | NextIn] |
+	extract_id(ProcessDefinition, ProcessName, _Arity),
+	extract_lhs_parts(ProcessDefinition, ChannelNames, _Outer, _Inner),
+	utils#tuple_to_dlist(Body1, [_ | Arguments], []),
+	macro_call,
+	macroed_call,
+	prime_local_channels(Primes, MacroedArguments, Primed);
 
     Body1 = `Functor :
       Locals = _,
@@ -115,17 +136,168 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       ChannelP = _,
       SubsOut = [].
 
+  macro_call(ChannelNames, Locals, Name, Arguments, MacroedArguments) :-
+
+    Name =?= set_base_rate :
+      ALL_CHANNELS = [channel | ALL_CHANNELS] |
+	verify_macro + (ArgTypes = [real | ALL_CHANNELS]);
+
+    Name =?= randomize_messages :
+      ALL_CHANNELS = [channel | ALL_CHANNELS] |
+	verify_macro + (ArgTypes = ALL_CHANNELS);
+
+    Name =?= serialize_messages :
+      ALL_CHANNELS = [channel | ALL_CHANNELS] |
+	verify_macro + (ArgTypes = ALL_CHANNELS);
+
+    otherwise :
+      Arguments = _,
+      ChannelNames = _,
+      Locals = _,
+      Name = _,
+      MacroedArguments = unrecognized_macro_call.
+
+  verify_macro(ChannelNames, Locals, ArgTypes, Arguments,
+		 MacroedArguments) :-
+	verify_macro_arguments + (OkArgs, OkArguments = OkArgs).
+
+  verify_macro_arguments(ChannelNames, Locals, ArgTypes, Arguments,
+			  OkArguments, OkArgs, MacroedArguments) :-
+
+    ArgTypes ? string,
+    Arguments ? Arg, string(Arg) :
+      OkArgs ! Arg |
+	self;
+
+    ArgTypes ? real,
+    Arguments ? Arg, number(Arg),
+    /* herewith a kluge due to problem in assembler$real_kind_code */
+    convert_to_string(Arg, Arg') :
+      OkArgs ! Arg' |
+	self;
+
+    ArgTypes ? integer,
+    Arguments ? Arg, integer(Arg) :
+      OkArgs ! Arg |
+	self;
+
+    ArgTypes ? nil,
+    Arguments ? [] :
+      OkArgs ! [] |
+	self;
+
+    ArgTypes ? ReadOnly, ReadOnly =?= ?_,
+    Arguments ? Type, Type =\= channel :
+      OkArgs ! ReadOnly |
+	self;
+
+    ArgTypes ? channel,
+    Arguments ? Arg, string(Arg) :
+      OkArgs ! [`Arg | OkChannelNames],
+      OkArgs'' = [OkChannelNames | OkArgs'] | 
+	utilities#verify_channel("", Arg, ChannelNames, Locals, _,  Err, []),
+	verified_macro_channel;
+
+    ArgTypes ? channel,
+    Arguments = [`Variable], string(Variable) :
+      ArgTypes' = _,
+      ChannelNames = _,
+      Locals = _,
+      OkArgs = [[] | Arguments] |
+	verified_macro_arguments(OkArguments, MacroedArguments);
+
+    ArgTypes ? channel,
+    Arguments = [] :
+      ArgTypes' = _,
+      ChannelNames = _,
+      Locals = _,
+      OkArgs = [[], `"_"] |
+	verified_macro_arguments(OkArguments, MacroedArguments);
+
+    ArgTypes =?= [],
+    Arguments = [`Variable], string(Variable) :
+      ChannelNames = _,
+      Locals = _,
+      OkArgs = Arguments |
+	verified_macro_arguments(OkArguments, MacroedArguments);
+
+    ArgTypes =?= [],
+    Arguments = [] :
+      ChannelNames = _,
+      Locals = _,
+      OkArgs = [`"_"] |
+	verified_macro_arguments(OkArguments, MacroedArguments);
+
+    otherwise :
+      MacroedArguments = argument_error([Message | Mss]),
+      MacroedArguments' = argument_error(Mss) |
+	invalid_macro_argument.
+
+  invalid_macro_argument(ChannelNames, Locals, ArgTypes, Arguments,
+			 OkArguments, OkArgs, MacroedArguments, Message) :-
+
+    Arguments ? Arg,
+    ArgTypes ? Type,
+    string_to_dlist(Type, TL, []),
+    string_to_dlist("not_a_", NL, TL) :
+      Message = NotA?(Arg) |
+	list_to_string(NL, NotA),
+	verify_macro_arguments;
+
+    Arguments ? Arg,
+    ArgTypes = [] :
+      Message = excess_argument(Arg) |
+	verify_macro_arguments;
+
+    Arguments =?= [],
+    ArgTypes ? Type,
+    string_to_dlist(Type, TL, []),
+    string_to_dlist("missing_", NL, TL) |
+	list_to_string(NL, Message),
+	verify_macro_arguments.
+
+  macroed_call(ProcessName, Name, Primes, Body1, Body2, Errors, NextErrors,
+		MacroedArguments) :-
+
+    list(MacroedArguments) :
+      Body1 = _,
+      ProcessName = _,
+      NextErrors = Errors |
+	prime_local_channels(Primes, MacroedArguments, Primed),
+	utils#list_to_tuple([Name | Primed?], Body2);
+
+    otherwise :
+      Name = _,
+      Primes = _,
+      Body2 = true,
+      Errors = [ProcessName-Body1-MacroedArguments | NextErrors].
+
+  verified_macro_channel(ChannelNames, Locals, ArgTypes, Arguments,
+			  OkArguments, OkArgs, MacroedArguments, Arg, Err) :-
+
+    Err =?= [] :
+      Arg = _ |
+	verify_macro_arguments;	
+
+    Err =\= [] :
+      MacroedArguments = argument_error([invalid_macro_channel(Arg) | Mss]),
+      MacroedArguments' = argument_error(Mss) |
+	verify_macro_arguments.
+	
+  verified_macro_arguments(OkArguments, OkArguments?^).
+  verified_macro_arguments(_OkArguments, argument_error([]^)).
+
 
 verify_call_channels(Name, Goal, ChannelNames, Locals, Errors, NextErrors)
 			+ (Index = 2) :-
 
-    arg(Index, Goal, (_ = String)), string =\= NULL,
+    arg(Index, Goal, (_ = String)), String =\= NULL,
     Index++ |
 	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkChannel,
 				Errors, Errors'?),
 	self;
 
-    arg(Index, Goal, String), string =\= NULL,
+    arg(Index, Goal, String), String =\= NULL,
     Index++ |
 	utilities#verify_channel(Name, String, ChannelNames, Locals, _OkChannel,
 				Errors, Errors'?),
