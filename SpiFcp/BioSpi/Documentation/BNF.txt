@@ -29,8 +29,8 @@ BNF for BioFcp
                            <weighter>(<weighter_parameter_list>)
 
 <weighter_parameter_list>
-                       ::= <real number>
-                           <real number> , <weighter_parameter_list>
+                       ::= <waiter_parameter>
+                           <waiter_parameter> , <weighter_parameter_list>
 
 <channel_declaration_list>
                        ::= <channel_declaration>
@@ -214,10 +214,9 @@ A <weighter> may be specified by a logix variable for a new channel,
 but not for the default nor for a public channel.  The logix variable
 should be instantiated to a string.
 
-Any <weighter_parameter_list> element may be specified by a logix
-variable for a new channel, but not for the default nor for a public
-channel.  The logix variable should be instantiated to a string as
-above (for the <weighter> name) or to a number (for any other parameter).
+Any <weighter_parameter> may be specified by a logix variable for a new
+channel, but not for the default nor for a public channel.  The logix
+variable should be instantiated to a real number.
 
 
 A <process_name> is an alpha-numeric string, beginning with an upper case
