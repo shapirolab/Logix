@@ -1,0 +1,253 @@
+Ambient tree displays (the "xtr" commands)
+------------------------------------------
+
+Within a given run, ambients are organised as a tree.  The root of the
+tree is identified by the name  "system" and is always present.  The
+initial tree includes an automatically generated ambient node which is
+identified by the tuple global(1).
+
+Every node (other than sytem) is identified by a tuple consisting of a
+user specified name and a unique positive integer, and may include
+active processes.  Any node may include channels.
+
+An internal channel may be used for intra-ambient communication, while
+an external channel may be used either for inter-ambient communication
+or to assert a capability.
+
+An internal channel may be either private or global.  A private channels
+is identified by a tuple whose functor is the name of the process which
+created it, concatenated with the name specified by that process, and
+a unique positive integer argument, which discriminates channels
+created by different instantiations of the same process.  Examples:
+
+    Symporter_In.0.symI(1)
+    Receptor.0.recbb1(9)
+
+Imbedded numbers indicate the sub-process which declared the channel.
+
+A global channel  is identified by the word "global" concatenated
+with the declared name of the channel.  Example:
+
+    global.in
+    global.cell3
+
+An external channel is derived from an internal channel by declaring
+an inter-ambient communication or asserting a capability.  The channel
+is identified by a functor specifying the operation, with an argument
+which is the name of the internal channel.
+
+    enter(Ligand.0.lig2(5))
+    p2c(Symporter_Out.0.symO(2)),
+    merge(global.complexAB)
+
+There are four macros which display the ambient tree of a computation.
+These are atr, btr, ctr, dtr (see also rtr below).  Each macro may
+specify an argument, which may be:
+
+  a. The unique positive integer identifier of an ambient, specifying
+     a subtree to be displayed, rooted at the designated ambient.
+
+  b. The tuple identifier of an ambient (e.g. cell(6) or minus the
+     unique positive integer identifier of an ambient (e.g. -6),
+     designates a single node to be displayed.
+
+  c. A name designates a class of nodes, all of which share the user
+     specified name (as functor of the identifying tuple); the name
+     "system", specifies the root node as well as any sub-nodes
+     which the user may have chosen to identify with that name.
+
+ 
+1. atr - Display the tree, subtree or node(s) only.
+
+2. btr - Display each node with its busy channels - ones which have
+         both send and receive requests, or both of a capability pair.
+	 The representation of a based (i.e. a non-instantaneous)
+         channel includes a real number argument which is the weight
+	 of the channel, corresponding to its likelihood of selection.
+	 A channel may be "blocked", in which case the number of Send
+	 requests and the number of Receive requests appear as arguments.
+
+3. ctr - Display each node with its busy channels and its
+	 communicating channels - ones which have only Send or Receive
+	 requests.
+
+4. dtr - Display all channels (as above where busy or communicating),
+	 followed by an indication of the number of references to the
+	 channel.  However, instead of diplaying weights, it displays
+         request counts.  This form is mainly of interest for system
+         debugging.
+
+Where request counts appear, for "blocked" channels, or in the dtr
+display of a based channel: a Receive request count is preceded by
+a question mark (?); a Send request count is followed by an
+exclamation mark (!); a combined request count includes both of the
+operators, for a homodimerized channel - e.g. global.h(?10!).
+
+The ctr and dtr displays represent instantaneous channels in infix
+notation: the channel is the left-hand operand;  the operator is "!"
+or "?"; the right-hand operand is a request count.
+
+Where weight is indicated, if the channel is represented by a tuple,
+the channel identifier and its arguments appear at the same level,
+inside curly braces.
+
+Examples of ambient tree displays following:
+
+    run(symporter_comm#"System",15)
+
+@atr
+<1> system
+<1>  global(1)
+<1>   molecule(2)
+<1>   cell(6)
+<1>    molecule(5)
+<1>    molecule(4)
+<1>    molecule(3)
+@ctr(1)
+<1> global(1)
+<1>   {s2s(Symporter_In.0.symI(1)), ?1}
+<1>   {enter(Symporter_In.0.symI(1)), 1!}
+<1>  molecule(2)
+<1>  cell(6)
+<1>    {enter(global.cell3), 1!}
+<1>    {exit(global.cell4), 1!}
+<1>    {p2c(global.cell2), 1.0}
+<1>    {s2s(global.cell1), ?1}
+<1>   molecule(5)
+<1>   molecule(4)
+<1>   molecule(3)
+@btr(-6)
+<1> cell(6)
+<1>   {p2c(global.cell2), 1.0}
+@ctr(cell(6))
+<1> cell(6)
+<1>   {enter(global.cell3), 1!}
+<1>   {exit(global.cell4), 1!}
+<1>   {p2c(global.cell2), 1.0}
+<1>   {s2s(global.cell1), ?1}
+@dtr(molecule)
+<1> molecule(2)
+<1>   global.cell1 ? 2
+<1>   global.cell2 ? 2
+<1>   Symporter_In.0.symI(1) ? 1
+<1> molecule(5)
+<1>   global.cell3 ? 2
+<1>   global.cell4 ? 2
+<1> molecule(4)
+<1>   global.cell1 ? 2
+<1>   global.cell2 ? 2
+<1> molecule(3)
+<1>   global.cell3 ? 2
+<1>   global.cell4 ? 2
+
+(The operator "?" indicates that the channel is based, but has never
+ been used for local communication.)
+
+
+Notes:
+
+1. xtr's are useful during execution when the system is hung up, and
+   might also be useful after a cut-off time has elapsed, and the
+   computation is "done"..
+
+2. If a computation is stopped by a cut-off time (in run, record,
+   trace) the dtr display may include some ambigous information.
+
+3. A specific computation can be selected its ambient tree examined;
+   use the macro cno(<computation number>) to select a computation
+   other than the current one - e.g.
+
+     @cno(3);cta
+
+   shows the ambient tree for computation 3; computation 3 becomes
+   the current computation.
+
+4. The node global(1) may not be in the ambient tree under some
+   conditions - e.g.
+
+     Global + a ::= new_base(<<exit a, ...>>) | <<expel a, 0>> .
+
+5. A channel may be blocked because all of its requests have been
+   posted by the same process, or, for an external channel, because
+   all of its requests have been posted from the same ambient.
+
+6.
+
+
+
+Resolvent
+---------
+
+An ambient tree resolvent can be displayed while:
+
+ * Running, when the computation is hung up;
+
+ * After suspending a computation;
+
+ * After a time-limited computation is "done".
+
+The macro rtr may be used to suspend a computation and display its
+resolvent.  Its arguments are the same as those for "xtr" macros
+above.
+
+Example:
+
+@run(eg1#"Cytoplasm",4)
+<1> started
+Signal
+done @ 4.77092 : seconds = 0
+Signal
+@rtr
+<1> system
+<1>  global(1)
+<1>   membrane(2)
+<1>     eg1 # Receptor.0'(global.c, p2c(global.c))
+<1>    molecule(4)
+<1>      eg1 # Domain3'(global.a, global.b, s2s(global.a))
+<1>      eg1 # Domain4'(global.b)
+<1>    molecule(3)
+<1>      eg1 # Domain1.1'(global.b, global.c)
+<1>      eg1 # Domain2'(global.a, global.b)
+@
+
+Notes:
+
+1. Suspension withdraws all communication requests.  Since the rtr
+   macro includes a suspend, when an xtr is preceded by a suspend or
+   rtr, no communications are displayed in the ambient tree; only
+   dtr will show channels, and those will only be internal channels.
+
+
+Record and spi2t
+----------------
+
+A full or partial record file can be generated during a run, using the
+record macro (see record.txt).
+
+In addition to the usual record features, the ambient record includes:
+
+ * The unique numeric identifier of the ambient, prefixed to the
+   process name.
+
+ * A specific notation for ambient merger: 
+
+    !<ambient unique numeric identifier>
+
+   e.g. !5, indicating that the specified ambient (5) was merged into
+   another one (and no longer exists).
+
+The psi2t script handles these modifications:
+
+ * Processes are counted per ambient, since the numeric identifier
+   is part of the process name.
+
+ * Ambient merger is accounted for, so process accounting is correct.
+
+Notes:
+
+1. An additional processing step after spi2t is required to count
+   processes across ambients (e.g. to sum the counts for a given
+   process in all ambients).
+
+2. The s and re (suspend and resume) macros invalidate the output of
+   a record macro.
