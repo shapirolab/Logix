@@ -4,9 +4,9 @@ Precompiler for compound procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 1999/12/07 09:27:37 $
+		       	$Date: 1999/12/09 08:13:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PiFcp/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -119,10 +119,10 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 				{Name?, duplicate_channel},
 					Errors'', Errors'''?),
 	concatenate(ParamList1?, ChannelList1?, LocalList),
-	check_for_duplicates(LocalList?, LocalList',
+	check_for_duplicates(LocalList?, LocalList1,
 				{Name?, channel_duplicates_parameter},
 					Errors''', Errors''''?),
-	construct_lhs_atoms(Name?, ParamList1?, LocalList'?, GlobalList,
+	construct_lhs_atoms(Name?, ParamList1?, LocalList1?, GlobalList,
 				Channels, OuterAtom, InnerAtom),
 	serve_process_scope(ProcessScope?, ProcessDefinition?,
 				Out, NextOut, Errors'''', NextErrors).
@@ -130,11 +130,11 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 
 compute_status(OuterAtom, InnerAtom, Status) :-
 
-    OuterAtom =?= "_" :
+    OuterAtom =?= [] :
       InnerAtom = _,
       Status = nil;    
 
-    OuterAtom =?= InnerAtom :
+    OuterAtom =\= [], OuterAtom =?= InnerAtom :
       Status = single;
 
     otherwise :
@@ -246,12 +246,24 @@ construct_lhs_atoms(Name, ParamList, LocalList, GlobalList,
 	construct_atom(Name, "", Channels?, OuterAtom);
 
     Name =\= "_",
-    ParamList =\= LocalList |
+    ParamList =\= LocalList,
+    GlobalList =?= [] :
+      Channels = LocalList |
+	construct_atom(Name, "", ParamList, OuterAtom),
+	construct_atom(Name, ".", LocalList, InnerAtom);
+
+    Name =\= "_",
+    ParamList =\= LocalList,
+    GlobalList =\= [] |
 	concatenate(ParamList, GlobalList, OuterList),
-	check_for_duplicates(OuterList?, OuterList', "", _, _),
-	construct_atom(Name, "", OuterList'?, OuterAtom),
+	check_for_duplicates(OuterList?, OuterList1, "", _, _),
+	construct_atom(Name, "", OuterList1?, OuterAtom),
 	concatenate(LocalList, GlobalList, InnerList),
-	check_for_duplicates(InnerList?, Channels, "", _, _),
+	check_for_duplicates(InnerList?, InnerList1, "", _, _),
+	partial_ordered_difference(LocalList, ParamList, NewList),
+	partial_ordered_difference(InnerList1, LocalList, GlobalList1),
+	concatenate(ParamList, GlobalList1?, OuterList2),
+	concatenate(OuterList2?, NewList?, Channels),
 	construct_atom(Name, ".", Channels?, InnerAtom).
 
 
@@ -278,7 +290,7 @@ channels_to_variables(ChannelNames, Variables, Count) +
 make_atom(N, Name, Channels, Atom) :-
 
     N =< 0 :
-      Atom = Name,
+      Atom = {Name},
       Channels = _;
     
     N > 0,
@@ -301,7 +313,8 @@ channels_to_atom(Cs, T, I, Atom) :-
 
 
 serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
-		(Substitutes = [], Progeny = [], Refs = AddRef?, AddRef) :-
+		(IdIndex = 1, Primes = [], Locals = [], Progeny = [],
+		 Refs = AddRef?, AddRef) :-
 
     In ? atoms(Outer, Inner),
     ProcessDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom} :
@@ -327,12 +340,22 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
     In ? call(Body1, Body2),
     Body1 =\= (_#_) |
 	make_local_call(ProcessDefinition, Body1, Body2,
-			Out, Out'?, Errors, Errors'?),
+			In'', In'?, Errors, Errors'?),
 	self;
 
     In ? channels(Cs),
     ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
       Cs = Channels |
+	self;
+
+    In ? guarded_clause :
+      Locals = _, Primes = _,
+      Locals' = [], Primes' = [] |
+	self;
+
+    In ? error(Description),
+    arg(1, ProcessDefinition, Name) :
+      Errors ! (Name - Description) |
 	self;
 
     In ? lookup_functor(Functor, CallType, CallDefinition),
@@ -346,11 +369,24 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
+    In ? new_scope_id(Id),
+    arg(1, ProcessDefinition, Name),
+    string_to_dlist(Name, DL, Tail),
+    string_to_dlist(".", Dot, Suffix),
+    convert_to_string(IdIndex, SI),
+    IdIndex++,
+    string_to_dlist(SI, SCs, []) :
+      Tail = Dot,
+      Suffix = SCs |
+	list_to_string(DL, Id),
+	self;
+
     In ? process(LHS, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
-	make_process_scope(LHS, ProcessScope, Channels,
-			In'', In'?, ProcessDefinition, Errors, Errors'?),
-	add_process_definition(ProcessDefinition?, Progeny, Progeny'),
+	concatenate(Locals, Channels, GlobalList),
+	make_process_scope(LHS, ProcessScope, GlobalList,
+			In'', In'?, CallDefinition, Errors, Errors'?),
+	add_process_definition(CallDefinition?, Progeny, Progeny'),
 	self;
 	
     In ? status(Status),
@@ -360,7 +396,9 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 
     In = [] :
       ProcessDefinition = _,
-      Substitutes = _,
+      IdIndex = _,
+      Locals = _,
+      Primes = _,
       AddRef = [],
       Errors = NextErrors |
 	find_process_refs(Refs, Progeny, Out, EndOut).
@@ -368,8 +406,7 @@ serve_process_scope(In, ProcessDefinition, Out, EndOut, Errors, NextErrors) +
 make_send(ProcessDefinition, Message, Channel, Output, Errors, NextErrors) :-
 
     string(Channel), Channel =\= "_",
-    arg(1, ProcessDefinition, Name),
-    Output = body(Body) :
+    Output =?= body(Body) :
       Body = pi_utils#send(PiMessage?, `Channel) |
       message_to_pi_message;
 
@@ -444,11 +481,11 @@ make_receive(ProcessDefinition, Message, Channel, Output,
       Errors = [Name - illegal_send(Channel!Message) | NextErrors].
 
 make_local_call(ProcessDefinition, Body1, Body2,
-		Out, NextOut, Errors, NextErrors) :-
+		In, NextIn, Errors, NextErrors) :-
 
     Body1 = true :
       ProcessDefinition = _,
-      Out = NextOut,
+      In = NextIn,
       Errors = NextErrors,
       Body2 = true;
 
@@ -470,12 +507,13 @@ make_local_call(ProcessDefinition, Body1, Body2,
     arg(1, ProcessDefinition, Name) :
       Body2 = true,
       Errors = [(Name - invalid_local_call(Body1)) | NextErrors],
-      Out = NextOut.
+      In = NextIn.
 
 complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 				Body1, Body2, Errors, NextErrors) :-
 
     CallType =?= none :
+      CallDefinition = _,
       Arguments = _,
       Substitutes = _,
       Name = _,
@@ -501,7 +539,7 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =?= inner,
     Arguments =?= [],
-    CallDefinition = {_Name, _Arity, _Channels, _OuterAtomAtom, Atom} :
+    CallDefinition = {_Name, _Arity, _Channels, _OuterAtom, Atom} :
       Name = _,
       Body1 = _,
       Errors = NextErrors |
@@ -561,17 +599,17 @@ add_substitutes(Substitutes, Added) :-
 
 
 lookup_call_functor(ProcessDefinition, Functor,
-		CallType, CallDefinition, Out, NextOut) :-
+		CallType, CallDefinition, In, NextIn) :-
 
     arg(1, ProcessDefinition, Name),
     Functor =?= Name :
       CallType = inner,
       CallDefinition = ProcessDefinition,
-      Out = NextOut;
+      In = NextIn;
 
     otherwise :
       ProcessDefinition = _,
-      Out = [lookup_functor(Functor, CallType, CallDefinition) | NextOut].
+      In = [lookup_functor(Functor, CallType, CallDefinition) | NextIn].
 
 extract_arguments_or_substitutes(Name, Tuple, Arguments, Substitutes,
 				Errors, NextErrors) + (Index = 2, Type = _) :-
@@ -628,15 +666,18 @@ make_remote_call(ProcessDefinition, Body1, Body2) :-
 program(Source, Exports, Terms, Errors) :-
 
 	serve_empty_scope(Scope?, Exports, Errors),
-	process_definitions+(NextTerms=[]).
+% screen#display_stream(Scope, [type(ground),depth(100),length(100)]),
+	process_definitions+(Processes = [], EndScope = [], NextTerms=[]).
 
-process_definitions(Source, Scope, Terms, NextTerms) :-
+process_definitions(Source, Processes, Scope, EndScope, Terms, NextTerms) :-
 
     Source ? (LHS :- RHSS) :
       Scope ! process(LHS, ProcessScope),
-      ProcessScope ! status(Status) | 
-	process(Status?, RHSS, ProcessScope', Process, Nested),
-	nested_processes(Process, Nested, Terms, Terms'?),
+      ProcessScope ! status(Status) |
+	process_definitions(Processes, [], ProcessScope', ProcessScope''?,
+				Nested, Nested'?),
+	process(Status?, RHSS, ProcessScope'', Process, Nested'),
+	nested_procedures(Process, Nested?, Terms, Terms'?),
 	self;
 
     Source ? P,
@@ -645,8 +686,9 @@ process_definitions(Source, Scope, Terms, NextTerms) :-
 	self;
 
     Source = [] :
+      Processes = _,
       Terms = NextTerms,
-      Scope = [].
+      Scope = EndScope.
 
 
 RHSS ::= RHS ; {`";", RHS, RHSS}.
@@ -667,8 +709,8 @@ process(Status, RHSS, ProcessScope, Process, Nested) :-
       ProcessScope ! atoms(OuterAtom, InnerAtom),    
       Nested ! (OuterAtom? :- Initializer?),
       Status' = initialized |
+	Index := arity(OuterAtom) + 1,
 	arg(1, InnerAtom, Name),
-	index_new_channels,
 	initialize_channels(Index, InnerAtom, Name, Initializer),
 	self;
 
@@ -684,14 +726,6 @@ process(Status, RHSS, ProcessScope, Process, Nested) :-
       Process = (InnerAtom? :- RHSS'?) |
 	transform_body(RHSS, RHSS', Nested, [], ProcessScope', []).
 
-
-index_new_channels(OuterAtom, Index) :-
-
-    string(OuterAtom) :
-      Index = 2;
-
-    I := arity(OuterAtom) + 1 :
-      Index = I.
 
 initialize_channels(Index, Atom, Name, Initializer) +
 			(MakeAll = More?, More) :-
@@ -725,7 +759,7 @@ make_and_name_channel(Name, Channel, MakeChannel, NameChannel) :-
 	list_to_string(MsH, MsA).
 
 
-nested_processes(Process, Nested, Terms, NextTerms) :-
+nested_procedures(Process, Nested, Terms, NextTerms) :-
 
     Process =\= [] :
       Terms ! Process,
@@ -774,10 +808,43 @@ transform_body(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
 
 new_scope(Body1, Body2, Nested, EndNested, Scope, EndScope) :-
 
-    Scope ! error(no_new_scope_yet(Body1)),
+    Body1 =?= [(_ :- _) | _] :
       Body2 = true,
       Nested = EndNested,
-      Scope' = EndScope.
+      Scope = [error(incomplete_new_scope(Body1)) | EndScope];
+
+    Body1 =?= [Body],
+    Body =\= (_ :- _) :
+      Processes = [],
+      Channels = [] |
+	expand_new_scope;
+
+    Body1 =?= [Body | Processes],
+    Body =\= (_ :- _), Processes =?= [(_ :- _)| _] :
+      Channels = [] |
+	expand_new_scope;
+
+    Body1 =?= [Channels, Body | Processes],
+    Channels =\= (_ :- _), Body =\= (_ :- _) |
+	expand_new_scope.
+
+expand_new_scope(Channels, Body, Processes, Body2,
+		Nested, EndNested, Scope, EndScope) :-
+    true :
+      Scope ! new_scope_id(Id),
+      Body2 = Id? |
+	make_new_lhs,
+	process_definitions([(LHS :- Body)], Processes,
+			Scope', EndScope, Nested, EndNested).
+
+
+make_new_lhs(Id, Channels, LHS) :-
+
+    Channels =?= [] :
+      LHS = `Id;
+
+    Channels =\= [] :
+      LHS = `Id + Channels.
 
 /**** Utilities ****/
 
@@ -787,12 +854,23 @@ concatenate(List1, List2, List3) :-
       List3 ! Item |
 	self;
 
-    List1 =?= [], List2 ? Item :
-      List3 ! Item |
+    List1 =?= [] :
+      List3 = List2.
+
+partial_ordered_difference(List1, List2, List3) :-
+
+    List1 ? Item,
+    List2 ? Item |
 	self;
 
-    List1 =?= [], List2 =?= [] :
-      List3 = [].
+    List2 =?= [] |
+      List3 = List1;
+
+    List1 ? Item,
+    otherwise :
+      List3 ! Item |
+	self.
+
 
 check_for_duplicates(List1, List2, ErrorCode, Errors, NextErrors) :-
 
