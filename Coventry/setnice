@@ -1,0 +1,25 @@
+#!/usr/local/bin/perl
+#see sys/resource.h
+$PRIO_MIN = -20;
+$PRIO_MAX =  20;
+$PRIO_PROCESS = 0;
+$PRIO_PGRP    = 1;
+$PRIO_USER    = 2;
+
+$NICE_OFF =  -$PRIO_MIN;
+$NICE_MAX =  $PRIO_MAX + $NICE_OFF;
+
+#see sys/param.h
+$MAXPID   =  30000;
+
+  $#ARGV >= 1 or die "Usage:\n\t$0 priority processid [procsessid ...]";
+
+$pri = $ARGV[0];
+$pri >= 0 and $pri <= $NICE_MAX or die "priority out of range 0..$NICE_MAX";
+
+for ($i = 1; $i <= $#ARGV; $i++) {
+    $pid = $ARGV[$i];
+    $pid > 0 and $pid <= $MAXPID or die "processid out of range 1..$MAXPID";
+    setpriority($PRIO_PROCESS, $pid, $pri-$NICE_OFF);
+}
+
