@@ -14,6 +14,7 @@
 #define SPI_CLOSE           2
 #define SPI_STEP            3
 #define SPI_INDEX           4
+#define SPI_RATE            5
 
 /* Sub-Channel Indices */
 
@@ -37,12 +38,14 @@
 
 /* Channel Types */
 
-#define SPI_CHANNEL_ANCHOR  0
-#define SPI_UNKNOWN         1
-#define SPI_BIMOLECULAR     2
-#define SPI_HOMODIMERIZED   3
-#define SPI_INSTANTANEOUS   4
-#define SPI_SINK            5
+#define SPI_CHANNEL_ANCHOR	0
+#define SPI_UNKNOWN		1
+#define SPI_BIMOLECULAR		2
+#define SPI_HOMODIMERIZED	3
+#define SPI_INSTANTANEOUS	4
+#define SPI_SINK		5
+#define SPI_BIMOLECULAR_PRIME	6
+#define SPI_HOMODIMERIZED_PRIME	7
 
 /* Weight Index Computation Values */
 
@@ -78,13 +81,12 @@
 #define SPI_NEXT_MS         1
 #define SPI_PREVIOUS_MS     2
 
-/* Operation request tuple (1-5), Transmission common tuple (1-4) */
+/* Transmission common tuple (1-4) */
 
 #define SPI_OP_PID          1
 #define SPI_OP_MSLIST       2
 #define SPI_OP_VALUE        3
 #define SPI_OP_CHOSEN       4
-#define SPI_OP_REPLY        5
 
 #define SPI_COMMON_SIZE     4
 
@@ -103,60 +105,21 @@
 #define LIST                3
 heapP cdr_down_list();
 
-static heapP ChannelPtr = 0;
-extern FILE *DbgFile;
-
-print_channel_item(char *Prefix, int Index) {
-  heapP ChP = ChannelPtr;
-  fprintf(DbgFile, "%s/%i/", Prefix, Index);
-  deref_ptr(ChP);
-  if (!do_read_vector(Word(Index,IntTag),Ref_Word(ChP)))
-    fprintf(DbgFile, "?\n");
+dump_channel(ChP) {
+  
+  fprintf(stderr, "dumping channel: ");
+  if (!do_read_vector(Word(SPI_CHANNEL_NAME,IntTag),Ref_Word(ChP)))
+    fprintf(stderr, "?\n");
   else {
-    heapP Item;
-    deref(KOutA, Item);
-    print_term(Item);
-  }
-}
-
-print_message_count(char *Prefix, int AnchorIndex) {
-  heapP MssAnchor, CurrMss, Links, ChP = ChannelPtr;
-  int MssCounter = 0;
-  fprintf(DbgFile, "%s", Prefix);
-  if (!do_read_vector(Word(AnchorIndex,IntTag),Ref_Word(ChP)))
-    fprintf(DbgFile, "*");
-  else {
-    deref(KOutA, MssAnchor);
-    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(MssAnchor)))
-      goto pmc_error;
-    deref(KOutA, CurrMss);
-    while (CurrMss != MssAnchor) {
-      MssCounter++;
-      Links = CurrMss + SPI_MESSAGE_LINKS;
-      deref_ptr(Links);
-      if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(Links)))
-	goto pmc_error;
-      deref(KOutA, CurrMss);
+    heapP name;
+    deref(KOutA, name);
+    if (IsStr(*name))
+      fprintf(stderr, "%s\n", (char *) (name+2));
+    else {
+      if (IsTpl(*name))
+	fprintf(stderr, " a tuple\n");
     }
-    fprintf(DbgFile, "%i", MssCounter);
-    return;
-  pmc_error:
-    fprintf(DbgFile, "**");
   }
-}     
-   
-dump_channel(char *Reason, heapP ChP) {
-  ChannelPtr = ChP;
-  fprintf(DbgFile, "*%s %x", Reason, ChP);
-  print_channel_item(" ", SPI_CHANNEL_NAME);
-  print_channel_item("(", SPI_CHANNEL_TYPE);
-  print_channel_item(",", SPI_CHANNEL_RATE);
-  print_channel_item(",", SPI_SEND_WEIGHT);
-  print_channel_item("*!,", SPI_RECEIVE_WEIGHT);
-  print_message_count("*?,", SPI_SEND_ANCHOR);
-  print_message_count("!,?", SPI_RECEIVE_ANCHOR);
-  print_channel_item(") - ", SPI_CHANNEL_REFS);
-  fprintf(DbgFile, "\n");
 }
 
 // ****************** Argument Verification Functions *************************
@@ -165,6 +128,7 @@ int spi_post(heapP PId,heapP OpList,heapP Value,heapP Chosen,heapP Reply);
 int spi_close(heapP Channels,heapP Reply);
 int spi_step(heapP Now,heapP Anchor,heapP NowP,heapP Reply);
 int spi_index(heapP Name,heapP Index,heapP Reply);
+int spi_rate(heapP Channels,heapP Weight,heapP Reply);
 
 //*************************** Post Functions **********************************
 
@@ -245,6 +209,10 @@ heapP Tpl;
 			return(False);
 		    }
                     return(True);
+    case SPI_RATE  :if (!spi_rate(Arg,Arg+1,Arg+2)){
+			return(False);
+		    }
+                    return(True);
     default : return(False);
     }
 }
@@ -308,12 +276,14 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
      }
      switch (ChannelType) {
           case   SPI_BIMOLECULAR:
+          case   SPI_BIMOLECULAR_PRIME:
           case SPI_INSTANTANEOUS:
 		  if (!(MsType==SPI_SEND||MsType==SPI_RECEIVE))
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
 		  break;
           case SPI_HOMODIMERIZED:
+          case SPI_HOMODIMERIZED_PRIME:
                   if (!(MsType==SPI_DIMER))
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
@@ -653,7 +623,7 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply;
      deref_ptr(MaAmbient);
      if ((Chosen != CmChos) &&
 	 (!InAmbient ||
-	  !unify(Ref_Word(InAmbient), Word(0,NilTag)) ||
+	  unify(Ref_Word(InAmbient), Word(0,NilTag)) ||
 	  (InAmbient != MaAmbient)))
        {
 	 if (!unify(Ref_Word(CmChos),Ref_Word(Ma+Index))){
@@ -718,7 +688,7 @@ heapP MsList;
 	return(False);
       } 
      deref(KOutA,Pa); 
-     if (!IsReal(*Pa)||real_val(Pa+1)<0) {
+     if (!IsReal(*Pa)||real_val((Pa+1))<0) {
      //set_reply_to("Error-Base Rate not a Positive Real Number",Reply);
        return(False);
      }
@@ -892,7 +862,7 @@ heapP OpEntry,ChP,ComShTpl;
       return(False);
     }
   } else {
-    if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_AMBIENT_CHANNEL))) {
+    if (!unify(Ref_Word(++Mess),Ref_Word(OpEntry+SPI_MS_AMBIENT))) {
       return(False);
     }
   }
@@ -973,17 +943,33 @@ int MsType;
     return(False);
   }
   deref(KOutA,Pa); 
-  if (!IsReal(*Pa)||real_val(Pa+1)<0) {
+  if (!IsReal(*Pa)||real_val((Pa+1))<0) {
     set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
     return(True);
+  }
+  if(!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP))){
+    return(False);
+  }
+  deref(KOutA,Pa);
+  if (IsTpl(KOutA)) {
+    heapP Pb;
+    int ix = 0;
+    int Arity = Arity_of(KOutA);
+    if (Arity == 1)
+      return(False);
+    Pb = Pa += 2;
+    deref_ptr(Pb);
+    KOutA = *Pb;
   }
   switch (MsType) {
     case SPI_SEND:
     case SPI_RECEIVE:
-      FinalType = SPI_BIMOLECULAR;
+      FinalType = (Int_Val(KOutA) == SPI_DEFAULT_WEIGHT_INDEX) ?
+	SPI_BIMOLECULAR : SPI_BIMOLECULAR_PRIME;
       break;
     case SPI_DIMER:
-      FinalType = SPI_HOMODIMERIZED;
+      FinalType = (Int_Val(KOutA) == SPI_DEFAULT_WEIGHT_INDEX) ?
+	SPI_HOMODIMERIZED : SPI_HOMODIMERIZED_PRIME;
       break;
     default:
       FinalType = SPI_SINK;
@@ -1080,7 +1066,6 @@ int spi_close(ChT ,Reply)
     if (!vctr_var_s(ChP,CHANNEL_SIZE)){
        return(False);
      }
-/*    dump_channel("close", ChP); */
    
     if (!do_read_vector(Word(SPI_CHANNEL_REFS,IntTag),Ref_Word(ChP))){
        return(False);
@@ -1250,15 +1235,17 @@ heapP Now ,Anchor ,NowP ,Reply ;
        switch(ChannelType)
 	 {     
 	 case SPI_BIMOLECULAR :
-	   if (!get_sum_weight(ChP, SPI_BIMOLECULAR, &Result, Reply))
+	 case SPI_BIMOLECULAR_PRIME :
+	   if (!get_sum_weight(ChP, ChannelType, &Result, Reply))
 	     return(False);
 	   if (!IsVar(*Reply))
 	     return(True);
 	   SumWeights += Result;
 	   break;
 	 case SPI_HOMODIMERIZED:
+	 case SPI_HOMODIMERIZED_PRIME:
 	   if (more_than_one_ms(ChP)) {  
-	     if (!get_sum_weight(ChP, SPI_HOMODIMERIZED, &Result, Reply))
+	     if (!get_sum_weight(ChP, ChannelType, &Result, Reply))
 	       return(False);
 	     if (!IsVar(*Reply))
 	       return(True);
@@ -1296,11 +1283,14 @@ heapP Now ,Anchor ,NowP ,Reply ;
 
 	 double Result = 0.0;
 
-	 ChannelType=which_channel_type(ChP);
+	 if (!channel_type(ChP, &ChannelType)) {
+	   return(False);
+	 }
 	 switch(ChannelType)
 	   {     
 	   case SPI_BIMOLECULAR :	 
-	     if (!get_selector(ChP, SPI_BIMOLECULAR, &Result))
+	   case SPI_BIMOLECULAR_PRIME :
+	     if (!get_selector(ChP, ChannelType, &Result))
 	       return(False);
 	     Selector -= Result;
 	     if (Selector <= 0) {
@@ -1309,8 +1299,9 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	     }
 	     break;
 	   case SPI_HOMODIMERIZED:
+	   case SPI_HOMODIMERIZED_PRIME:
 	     if (more_than_one_ms(ChP)) {
-	       if (!get_selector(ChP, SPI_HOMODIMERIZED, &Result))
+	       if (!get_selector(ChP, ChannelType, &Result))
 		 return(False);
 	       Selector -= Result;
 	       if (Selector <= 0) {
@@ -1387,7 +1378,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
     return(False);
   }
   deref(KOutA,Pa);
-  if(!IsReal(*Pa)||(BaseRate=real_val(Pa+1))<=0) {
+  if(!IsReal(*Pa)||(BaseRate=real_val((Pa+1)))<=0) {
     set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
     return(False);
   }
@@ -1416,7 +1407,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
 	Pb = ++Pa;
 	deref_ptr(Pb);
 	if (IsReal(*Pb))
-	  argv[argn] = real_val(Pb+1);
+	  argv[argn] = real_val((Pb+1));
 	else if (IsInt(*Pb))
 	  argv[argn] = Int_Val(*Pb);
 	else
@@ -1432,6 +1423,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
     switch (Type)
       {
       case SPI_BIMOLECULAR:
+      case SPI_BIMOLECULAR_PRIME:
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
 	  return(False);
 	deref_val(KOutA);
@@ -1450,6 +1442,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
 	  *Result = BaseRate*SendWeight*ReceiveWeight;
 	return True;
       case SPI_HOMODIMERIZED:
+      case SPI_HOMODIMERIZED_PRIME:
 	DimerWeight=SendWeight;         
 	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	  *Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
@@ -1476,7 +1469,7 @@ int get_selector(heapP ChP, int Type, double *Result)
   if (!do_read_vector(Word(SPI_CHANNEL_RATE,IntTag),Ref_Word(ChP)))
     return(False);
   deref(KOutA,Pa);
-  BaseRate=real_val(Pa+1);
+  BaseRate=real_val((Pa+1));
   if (!do_read_vector(Word(SPI_SEND_WEIGHT,IntTag),Ref_Word(ChP)))
     return(False);
   deref_val(KOutA);
@@ -1499,7 +1492,7 @@ int get_selector(heapP ChP, int Type, double *Result)
 	  Pb = ++Pa;
 	  deref_ptr(Pb);
 	  if (IsReal(*Pb))
-	    argv[argn] = real_val(Pb+1);
+	    argv[argn] = real_val((Pb+1));
 	  else if (IsInt(*Pb))
 	    argv[argn] = Int_Val(*Pb);
 	  else
@@ -1514,6 +1507,7 @@ int get_selector(heapP ChP, int Type, double *Result)
     switch (Type)
       {
       case SPI_BIMOLECULAR: 
+      case SPI_BIMOLECULAR_PRIME: 
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
 	  return(False);
 	deref_val(KOutA);
@@ -1528,6 +1522,7 @@ int get_selector(heapP ChP, int Type, double *Result)
 	}
 	break;
       case SPI_HOMODIMERIZED:
+      case SPI_HOMODIMERIZED_PRIME:
 	DimerWeight = SendWeight;
 	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
 	  *Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
@@ -1548,7 +1543,7 @@ int set_nowp(heapP Now, heapP NowP, double SumWeights)
   double NowVal, j;
   heapT V0;
 
-  NowVal=real_val(Now+1); 
+  NowVal=real_val((Now+1)); 
   j=((random())/2147483647.0);
   NowVal-=log(j)/SumWeights;
   V0 = Ref_Word(HP);
@@ -1582,7 +1577,7 @@ heapP ChP,Reply;
  heapP ReceiveMessage,RMess,RCommon,RComValue,RComChos,RMesAnchor,SMesAnchor,
        SendMessage,SMess,SCommon,SComValue,SComChos,SMsList,RMsList,Pa;
 
-  heapP RComAmbient = 0, SComAmbient = 0;
+  heapP ReceiveAmbient, SendAmbient;
  
  if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
   return(False);
@@ -1636,10 +1631,8 @@ heapP ChP,Reply;
      }
      deref(KOutA,SendMessage);
 
-     if (Arity_of(*RCommon) == SPI_AMBIENT_MS_SIZE) {
-       RComAmbient = RCommon+SPI_AMBIENT_CHANNEL;
-       deref_ptr(RComAmbient);
-     }
+     ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
+     deref_ptr(ReceiveAmbient);
 
      while (SendMessage!=SMesAnchor) 
        {	       
@@ -1660,15 +1653,10 @@ heapP ChP,Reply;
 	   return(False);
 	 }
 
-	 if (Arity_of(*SCommon) == SPI_AMBIENT_MS_SIZE) {
-	   SComAmbient = SCommon+SPI_AMBIENT_CHANNEL;
-	   deref_ptr(SComAmbient);
-	 }
-	 else
-	   SComAmbient = 0;
+	 SendAmbient = SendMessage+SPI_AMBIENT_CHANNEL;
+	 deref_ptr(SendAmbient);
 	 if (RComChos != SComChos &&
-	     (!SComAmbient ||
-	      (IsNil(*SComAmbient) || RComAmbient != SComAmbient)))
+	     (IsNil(*SendAmbient) || ReceiveAmbient != SendAmbient))
 	   {
 	     RMsList=RCommon+SPI_OP_MSLIST;
 	     deref_ptr(RMsList);
@@ -1727,7 +1715,7 @@ heapP ChP,Reply;
   heapP SendAnchor,ReceiveMessage,RMess,RCommon,RComValue,RComChos,
        DimerMessage,DMess,DCommon,DComValue,DComChos,RMsList,DMsList,Dm;
 
-  heapP RComAmbient = 0, DComAmbient = 0;
+  heapP ReceiveAmbient, DimerAmbient;
  
   if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
     return(False);
@@ -1739,6 +1727,8 @@ heapP ChP,Reply;
   } 
   deref(KOutA,ReceiveMessage);
   RMess=ReceiveMessage;
+  ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
+  deref_ptr(ReceiveAmbient);
   RCommon=ReceiveMessage+SPI_MS_COMMON;
   deref_ptr(RCommon);
   if (!IsTpl(*RCommon)){
@@ -1758,10 +1748,6 @@ heapP ChP,Reply;
 		      Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
     return(False);
   }  
-  if (Arity_of(*RCommon) == SPI_AMBIENT_MS_SIZE) {
-    RComAmbient = RCommon+SPI_AMBIENT_CHANNEL;
-    deref_ptr(RComAmbient);
-  }
   deref(KOutA,DimerMessage);
   Dm=DimerMessage+SPI_MS_TYPE;
   deref_ptr(Dm);
@@ -1783,16 +1769,11 @@ heapP ChP,Reply;
       if (!IsWrt(*DComChos)){
 	return(False);
       }
-      if (Arity_of(*DCommon) == SPI_AMBIENT_MS_SIZE) {
-	DComAmbient = DCommon+SPI_AMBIENT_CHANNEL;
-	deref_ptr(DComAmbient);
-      }
-      else
-	DComAmbient = 0;
+      DimerAmbient = DCommon+SPI_AMBIENT_CHANNEL;
+      deref_ptr(DimerAmbient);
 
       if (DComChos!=RComChos &&
-	  (!DComAmbient ||
-	   (IsNil(*DComAmbient) || RComAmbient != DComAmbient)))
+	  (IsNil(*DimerAmbient) || ReceiveAmbient != DimerAmbient))
 	{
 	  RMsList=RCommon+SPI_OP_MSLIST;
 	  deref_ptr(RMsList);
@@ -1862,3 +1843,108 @@ heapP Name, Index, Reply;
   return set_reply_to("true", Reply);
 }
 
+//**************************** Rate Function *********************************
+
+int spi_rate(Channel, Weight, Reply ) 
+               //the tuple contain  arguments -{Channel, Weight' ,Reply'}
+heapP Channel, Weight, Reply ;
+{
+  heapP Pa;
+  heapT V0;
+  int  i, ChannelType, DimerWeight, ReceiveWeight, SendWeight, WeightIndex;
+  double BaseRate, Result = 0.0;
+  int argn;
+  double argv[100];
+
+  deref_ptr(Channel);		/* Assumed Vector */
+  deref_ptr(Weight);		/* Assumed Var */
+  deref_ptr(Reply);		/* Assumed Var */
+
+  if (!do_read_vector(Word(SPI_CHANNEL_RATE, IntTag),Ref_Word(Channel))){
+    return(False);
+  }
+  deref(KOutA,Pa);
+  if(!IsReal(*Pa) || (BaseRate = real_val((Pa+1))) <= 0.0) {
+    set_reply_to("Error - BaseRate not a Positive Real Number", Reply);
+    return(False);
+  }
+  if (!do_read_vector(Word(SPI_SEND_WEIGHT, IntTag), Ref_Word(Channel)))
+    return(False);
+  deref_val(KOutA);
+  if (!IsInt(KOutA) || (SendWeight = Int_Val(KOutA)) < 0) {
+    set_reply_to("Error - Send Weight not a Non-negative Integer", Reply);
+    return(False);
+  }
+  if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(Channel)))
+    return(False);
+  deref_val(KOutA);
+  if (!IsInt(KOutA) || (ReceiveWeight = Int_Val(KOutA)) < 0) {
+    set_reply_to("Error - Receive Weight not a Non-negative Integer", Reply);
+    return(False);
+  }
+
+  if (!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(Channel)))
+    return(False);
+  if (IsRef(KOutA)) {
+    deref_ref(KOutA, Pa);
+    if (IsTpl(KOutA)) {
+      heapP Pb;
+      int ix = 0;
+      int Arity = Arity_of(KOutA);
+      if (Arity == 1)
+	return(False);
+      Pb = Pa += 2;
+      deref_ptr(Pb);
+      KOutA = *Pb;
+      for (argn = 0; argn < Arity-2; argn++) {
+	Pb = ++Pa;
+	deref_ptr(Pb);
+	if (IsReal(*Pb))
+	  argv[argn] = real_val((Pb+1));
+	else if (IsInt(*Pb))
+	  argv[argn] = Int_Val(*Pb);
+	else
+	  return False;
+      }
+    }
+    else
+      argn = 0;
+  }
+  WeightIndex = Int_Val(KOutA);
+
+  if (!channel_type(Channel, &ChannelType)) {
+    return(False);
+  }
+  switch (ChannelType)
+    {
+    case SPI_BIMOLECULAR: 
+    case SPI_BIMOLECULAR_PRIME: 
+      {
+	if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
+	  Result = spi_compute_bimolecular_weight(WeightIndex, BaseRate,
+						  SendWeight, ReceiveWeight,
+						  argn, argv);
+	else
+	  Result = BaseRate*SendWeight*ReceiveWeight; 
+      }
+      break;
+    case SPI_HOMODIMERIZED:
+    case SPI_HOMODIMERIZED_PRIME:
+      DimerWeight = SendWeight;
+      if (WeightIndex != SPI_DEFAULT_WEIGHT_INDEX)
+	Result = spi_compute_homodimerized_weight(WeightIndex, BaseRate,
+						   DimerWeight,
+						   argn, argv);
+      else
+	Result = (BaseRate*DimerWeight*(DimerWeight-1))/2.0;
+    }
+  V0 = Ref_Word(HP);
+  *HP++ = Word(0, RealTag);
+  real_copy_val(((realT) Result), HP);
+  HP += realTbits/heapTbits;
+  if (!unify(Ref_Word(Weight), V0)){
+    return(False);
+  }
+  return set_reply_to("true", Reply);
+}
+ 
