@@ -111,6 +111,62 @@ spi_update_channel_refs(List, S1, S2) :-
 
     List =?= [] :
       S2 = S1.
+
+set_base_rate(Rate, Channels, Reply) :-
+
+    convert_to_real(Rate, RealRate), RealRate > 0,
+    Channels ? Channel,
+    vector(Channel),
+    arity(Channel, CHANNEL_SIZE),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =\= SPI_CHANNEL_ANCHOR,
+    MaskedType =\= SPI_INSTANTANEOUS,
+    MaskedType =\= SPI_SINK :
+      store_vector(SPI_CHANNEL_RATE, RealRate, Channel) |
+	self;
+
+    Channels =?= [] :
+      Rate = _,
+      Reply = true;
+
+    otherwise :
+      Rate = _,
+      Reply = false(Rate, Channels).
+
+randomize_messages(Channels, Reply) :-
+ 
+    Channels ? Channel,
+    vector(Channel),
+    arity(Channel, CHANNEL_SIZE),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_or(Type, SPI_RANDOM_FLAG, Type') |
+      store_vector(SPI_CHANNEL_TTPE, Type, Channel) |
+	self;
+
+    Channels = [] :
+      Reply = true;
+
+    otherwise :
+      Reply = false(Channels).
+
+serialize_messages(Channels, Reply) :-
+ 
+   Channels ? Channel,
+    vector(Channel),
+    arity(Channel, CHANNEL_SIZE),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_not(SPI_RANDOM_FLAG, Mask),
+    bitwise_and(Type, Mask, Type') |
+      store_vector(SPI_CHANNEL_TTPE, Type, Channel) |
+	self;
+
+    Channels = [] :
+      Reply = true;
+
+    otherwise :
+      Reply = false(Channels).
+
 "
 
 	| true.

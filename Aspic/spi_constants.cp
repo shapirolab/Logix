@@ -30,6 +30,10 @@ CHAR_c => 99.
 CHAR_d => 100.
 CHAR_r => 114.
 CHAR_t => 116.
+CHAR_z => 122.
+
+CHAR_A => 65.
+CHAR_Z => 90.
 
 /* Bounds */
 

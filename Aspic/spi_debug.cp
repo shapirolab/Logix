@@ -117,7 +117,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_BIMOLECULAR,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_BIMOLECULAR,
     read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
     Weight := SendWeight + ReceiveWeight,
@@ -128,7 +129,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_BIMOLECULAR_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_BIMOLECULAR_PRIME,
     read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
     Weight := SendWeight + ReceiveWeight,
@@ -139,7 +141,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_BIMOLECULAR,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_BIMOLECULAR,
     read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
     Weight := SendWeight + ReceiveWeight,
@@ -149,7 +152,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_BIMOLECULAR_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_BIMOLECULAR_PRIME,
     read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
     Weight := SendWeight + ReceiveWeight,
@@ -159,7 +163,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_HOMODIMERIZED,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_HOMODIMERIZED,
     read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
     DimerWeight =:= 0,
     Kind =?= CHAR_d :
@@ -168,7 +173,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_HOMODIMERIZED_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_HOMODIMERIZED_PRIME,
     read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
     DimerWeight =:= 0,
     Kind =?= CHAR_d :
@@ -177,7 +183,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_HOMODIMERIZED,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_HOMODIMERIZED,
     read_vector(SPI_BLOCKED, Channel, Blocked),
     read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
     DimerWeight > 0,
@@ -188,7 +195,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
-    Type =?= SPI_HOMODIMERIZED_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_HOMODIMERIZED_PRIME,
     read_vector(SPI_BLOCKED, Channel, Blocked),
     read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
     DimerWeight > 0,
@@ -214,7 +222,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
       FormattedChannel = (Name ? Refs);
 
     otherwise,
-    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_TYPE, Channel, FullType),
+    bitwise_and(FullType, SPI_TYPE_MASK, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     Kind =?= CHAR_d,
     read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
@@ -222,7 +231,8 @@ format_channel(Kind, Channel, FormattedChannel) :-
 	format_channel_type;
 
     otherwise,
-    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    read_vector(SPI_CHANNEL_TYPE, Channel, FullType),
+    bitwise_and(FullType, SPI_TYPE_MASK, Type),
     read_vector(SPI_CHANNEL_NAME, Channel, Name),
     Kind =\= CHAR_d :
       FormattedChannel = Name(Formatted) |
@@ -230,28 +240,28 @@ format_channel(Kind, Channel, FormattedChannel) :-
 
   format_channel_type(Type, Formatted) :-
 
-    Type =?= SPI_CHANNEL_ANCHOR :
+    Type =:= SPI_CHANNEL_ANCHOR :
       Formatted = anchor;
 
-    Type =?= SPI_UNKNOWN :
+    Type =:= SPI_UNKNOWN :
       Formatted = unknown;
 
-    Type = SPI_BIMOLECULAR :
+    Type =:= SPI_BIMOLECULAR :
       Formatted = bimolecular;
 
-    Type = SPI_BIMOLECULAR_PRIME :
+    Type =:= SPI_BIMOLECULAR_PRIME :
       Formatted = bimolecular;
 
-    Type = SPI_HOMODIMERIZED :
+    Type =:= SPI_HOMODIMERIZED :
       Formatted = homodimerized;
 
-    Type = SPI_HOMODIMERIZED_PRIME :
+    Type =:= SPI_HOMODIMERIZED_PRIME :
       Formatted = homodimerized;
 
-    Type = SPI_INSTANTANEOUS :
+    Type =:= SPI_INSTANTANEOUS :
       Formatted = instantaneous;
 
-    Type = SPI_SINK :
+    Type =:= SPI_SINK :
       Formatted = sink;
 
     otherwise :

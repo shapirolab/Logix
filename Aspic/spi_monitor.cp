@@ -360,15 +360,11 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
     info(REALTIME, Start_real_time),
     convert_to_real(0, Zero),
     convert_to_real(MAXTIME, MaxTime) :
-      execute(MathOffset, {RAN, 0, Uniform}),
-      execute(MathOffset, {LN, Uniform, NegativeExponential}),
-      execute(MathOffset, {RAN, 0, Uniform'}),
       make_channel(Scheduler, Schedule) |
 	make_channel_anchor(based, BasedAnchor),
 	make_channel_anchor(instantaneous, InstantaneousAnchor),
 	processor#Waiter?,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-				NegativeExponential, Uniform',
 				BasedAnchor, InstantaneousAnchor,
 				Scheduler, _Recording, _Debug,
 				Zero, false, _Wakeup,
@@ -408,37 +404,44 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **    close(ChannelTuple)
 **    close(ChannelTuple, Reply)
 **    cutoff(Now')
+**    default_weighter(Weighter)
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel^, BaseRate)
 **    new_channel(ChannelName, Channel^, ComputeWeight, BaseRate)
 **    ordinal(Old?^, New)
-**    pause(Continue)
 **    record(Record?^)
 **    record_item(Item)
 **    end_record(Record'?^)
 **    start(Signature, OpList, Value, Chosen)
 **    start(Signature, OpList, Value, Chosen, Prefix)
-**    status(List^)
-**    step(Continue)
 **
 ** and the debugging aids:
 **
 **    debug(Debug?^)
 **    end_debug
 **    diagnostic(ApplicationDiagnostic)
+**    spifunctions(CharacterCodes)
+**    pause(Continue)
+**    state(DefaultWeighter^, SpiOffsets^, Ordinal^)
+**    status(ListOf NamedDetails^)
+**    step
+**    step(Resume)
 **
 ** State:
 **
+**   DefaultWeighter - assigned to new Channel, unless Weighter provide
+**   Ordinal - Unique index assigned to a non - "public."/".global" file
+**     also in Status
+**   SpiOffsets - magic numbers (or "unknown") for C-coded functions
+**
+** Status:
+**
 **   BasedAnchor - anchor for (circular) chain of based-rate Channels
 **   Cutoff - least upper bound of internal timer (:Now) - initially large
-**   DefaultWeighter - assigned to new Channel, unless Weighter provide
 **   InstantaneousAnchor - anchor for (circular) list of infinite rate Channels
-**   NegativeExponential - computed random variable (see compute_total_weight)
 **   Now - 0-based internal clock
-**   Ordinal - Unique index assigned to a non - "public."/".global" file
-**   SpiOffsets - magic number (or "unknown") for C-coded functions
-**   Start_real_time - real time when Cutoff set (Now = 0)
-**   Uniform - computed random variable (see compute_total_weight)
+**   Start_real_time - real time when Cutoff set (Now = 0) - not in statuslist
+**   Waiting - waiting for Wakeup signal = true/false
 **
 ** Signal:
 **
@@ -466,7 +469,6 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 */
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-		NegativeExponential, Uniform,
 		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
@@ -477,14 +479,12 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       BasedAnchor = _,
       DefaultWeighter = _,
       InstantaneousAnchor = _,
-      NegativeExponential = _,
       Now = _,
       MathOffset = _,
       Ordinal = _,
       Scheduler = _,
       SpiOffsets = _,
       Start_real_time = _,
-      Uniform = _,
       Waiting = _,
       Wakeup = _,
       Waiter = [],
@@ -497,7 +497,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound :
       STOPPED |
-	execute(MathOffset, close(Channels, Reply)),
+	execute_close(Channels, Reply),
 	self;
 
     Schedule ? close(Channels),
@@ -513,7 +513,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     arg(SPI_CLOSE, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound :
       STOPPED |
-	execute(MathOffset, close(Channels, Reply)),
+	execute_close(Channels, Reply),
 	self;
 
     Schedule ? close(Channels, Reply?^),
@@ -542,9 +542,6 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Schedule ? input(Schedule'', Schedule'^) |
 	self;
 
-    Schedule ? ordinal(Ordinal', Ordinal^) |
-	self;
-
     /* Create a new channel. */
     Schedule ? new_channel(ChannelName, Channel, BaseRate) |
 	index_channel_name(ChannelName, Ordinal, ChannelName', Ordinal'),
@@ -562,6 +559,9 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	index_channel_name(ChannelName, Ordinal, ChannelName', Ordinal'),
 	new_channel,
 	continue_waiting;
+
+    Schedule ? ordinal(Ordinal', Ordinal^) |
+	self;
 
     /* Return the current head of the recording stream. */
     Schedule ? record(Stream) :
@@ -583,14 +583,14 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     /* Start a transmission process. */
 
-    Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
+    Schedule ? Start, Start =?= start(PostId, OpList, Value, Chosen),
     known(OpList),
     arg(SPI_POST, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
-    tuple(PId), arg(1, PId, PName) :
+    tuple(PostId), arg(1, PostId, PName) :
       Record ! start(PName),
-      Debug ! start(PId) |
-	execute(MathOffset, post(PId, OpList, Value, Chosen, Reply)),
+      Debug ! start(PostId) |
+	execute_post,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PName, OpList, Value, Chosen),
@@ -600,7 +600,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     string(PName) :
       Record ! start(PName),
       Debug ! start(PName) |
-	execute(MathOffset, post({PName}, OpList, Value, Chosen, Reply)),
+	execute_post + (PostId = {PName}),
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen, Prefix),
@@ -616,7 +616,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       PostId = (Prefix' : PId),
       Record ! start(PrefixedId),
       Debug ! start(PostId) |
-	execute(MathOffset, post(PostId, OpList, Value, Chosen, Reply)),
+	execute_post,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start({PName}, OpList, Value, Chosen, Prefix),
@@ -631,7 +631,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       PostId = (Prefix' : {PName}),
       Record ! start(PrefixedId),
       Debug ! start(PostId) |
-	execute(MathOffset, post(PostId, OpList, Value, Chosen, Reply)),
+	execute_post,
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
@@ -686,7 +686,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Debug ! start(PostId) |
 	continue_waiting;
 
-/**************************** Debugging code ********************************/
+/**************************** Debugging aids ********************************/
 
     Schedule ? debug(Stream) :
       Stream = Debug? |
@@ -774,10 +774,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Waiting = _,
       Waiting' = false |
 	sum_weights(BasedAnchor, RateOffset, 0, Total),
-	logix_transmit( MathOffset, BasedAnchor, Now, RateOffset,
-			Total, Wakeup', Now',
-			Uniform, NegativeExponential,
-			Uniform', NegativeExponential'),
+	logix_total(MathOffset, BasedAnchor, Now, Total,
+		    RateOffset, Now', Wakeup'),
 	self;
 
     Wakeup =?= done,
@@ -844,11 +842,9 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Real_time := End_real_time - Start_real_time  :
       BasedAnchor = _,
       InstantaneousAnchor = _,
-      NegativeExponential = _,
       MathOffset = _,
       Schedule = _,
       Scheduler = _,
-      Uniform = _,
       Waiting = _,
       Wakeup = _,
       Waiter = [machine(idle_wait(Done), _Ok)],
@@ -896,7 +892,6 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self#reset(DefaultWeighter, SpiOffsets, Ordinal).
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
-		NegativeExponential, Uniform,
 		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
 		Now, Waiting, Wakeup,
@@ -1175,8 +1170,8 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
 	queue_channel(Channel, InstantaneousAnchor);
 
     Result =?= true,
-    number(BaseRate),
-    BaseRate =< 0 :
+    convert_to_real(BaseRate, RealRate),
+    RealRate =< 0 :
       BasedAnchor = _,
       InstantaneousAnchor = _,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
@@ -1184,11 +1179,10 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Scheduler, Reply,
       DEBUG((ChannelName: sink(unnatural(BaseRate))));
 
     Result =?= true,
-    number(BaseRate),
-    BaseRate > 0,
-    convert_to_real(BaseRate, BaseRate') :
+    convert_to_real(BaseRate, RealRate),
+    RealRate > 0 :
       InstantaneousAnchor = _,
-      store_vector(SPI_CHANNEL_RATE, BaseRate', Channel),
+      store_vector(SPI_CHANNEL_RATE, RealRate, Channel),
       Reply = Result,
       DEBUG((ChannelName: based_channel)) |
 	queue_channel(Channel, BasedAnchor);
@@ -1281,23 +1275,18 @@ reset_default_weighter(SpiOffset, New, Old, Default) :-
 
 /************************* execute - testing *********************************/
 
-execute(MathOffset, Arguments) :-
+execute_post(MathOffset, PostId, OpList, Value, Chosen, Reply) :-
 
-    Arguments = post(PId, OpList, Value, Chosen, Reply) :
-      MathOffset = _,
-      Common = {PId, Messages, Value, Chosen},
+    true :
+      Common = {PostId, Messages, Value, Chosen},
       Messages = AddMessages? |
 	post_pass1,
-	post_pass2 ;
-/*
-    Arguments = step(Now, Anchor, NewNow, Reply) |
-	sum_weights(Anchor, unknown, 0, Total),
-	total_weight;
-*/
-    Arguments = close(Channels, Reply),
+	post_pass2.
+
+execute_close(Channels, Reply) :-
+
     tuple(Channels),
-    N := arity(Channels) :
-      MathOffset = _ |
+    N := arity(Channels) |
 	close_channels(Channels, N, Reply).
 
 
@@ -1353,246 +1342,94 @@ close_channels(Channels, N, Reply)  :-
 
 /************************ post procedures ********************************/
 
-post_pass1(OpList, Common, Ok) :-
+post_pass1(MathOffset, OpList, Common, Ok) :-
 
     OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
+    arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_INSTANTANEOUS,
-    MessageType =?= SPI_SEND,
-    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor),
-    arity(Operation) =:= SPI_MS_SIZE |
-	do_instantaneous_transmit
-		+ (MTX = SPI_RECEIVE_TAG, Message = Anchor, Ambient = []);
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_INSTANTANEOUS) |
+	post_instantaneous;
 
     OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_INSTANTANEOUS,
-    MessageType =?= SPI_SEND,
-    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor),
-    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
-    arg(SPI_MS_AMBIENT, Operation, Ambient) |
-	do_instantaneous_transmit
-		+ (MTX = SPI_RECEIVE_TAG, Message = Anchor);
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
     arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_INSTANTANEOUS,
-    MessageType =?= SPI_RECEIVE,
-    read_vector(SPI_SEND_ANCHOR, Channel, Anchor),
-    arity(Operation) =:= SPI_MS_SIZE |
-	do_instantaneous_transmit
-		+ (MTX = SPI_SEND_TAG, Message = Anchor, Ambient = []);
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_INSTANTANEOUS,
-    MessageType =?= SPI_RECEIVE,
-    read_vector(SPI_SEND_ANCHOR, Channel, Anchor),
-    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
-    arg(SPI_MS_AMBIENT, Operation, Ambient) |
-	do_instantaneous_transmit
-		+ (MTX = SPI_SEND_TAG, Message = Anchor);
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_BIMOLECULAR,
-    MessageType =?= SPI_SEND :
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_BIMOLECULAR) :
       store_vector(SPI_BLOCKED, FALSE, Channel) |
 	self;
 
     OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
+    arg(SPI_MS_CHANNEL, Operation, Channel),
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_BIMOLECULAR_PRIME,
-    MessageType =?= SPI_SEND :
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_HOMODIMERIZED) :
       store_vector(SPI_BLOCKED, FALSE, Channel) |
 	self;
 
     OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
     arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
     integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_BIMOLECULAR,
-    MessageType =?= SPI_RECEIVE :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
     arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
     read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_BIMOLECULAR_PRIME,
-    MessageType =?= SPI_RECEIVE :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
-	self;
-
-    OpList ? Operation,
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_UNKNOWN),
     arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_HOMODIMERIZED,
-    MessageType =?= SPI_DIMER :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_HOMODIMERIZED_PRIME,
-    MessageType =?= SPI_DIMER :
-      store_vector(SPI_BLOCKED, FALSE, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_SEND,
     read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
     arg(2, WeightTuple, Index),
-    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_SEND,
-    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
-    arg(2, WeightTuple, Index),
-    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR_PRIME, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_RECEIVE,
-    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
-    arg(2, WeightTuple, Index),
-    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_RECEIVE,
-    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
-    arg(2, WeightTuple, Index),
-    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_BIMOLECULAR_PRIME, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_DIMER,
-    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
-    arg(2, WeightTuple, Index),
-    Index =?= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_HOMODIMERIZED, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_TYPE, Operation, MessageType),
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    integer(Multiplier), Multiplier > 0,
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_UNKNOWN,
-    MessageType =?= SPI_DIMER,
-    read_vector(SPI_WEIGHT_TUPLE, Channel, WeightTuple),
-    arg(2, WeightTuple, Index),
-    Index =\= SPI_DEFAULT_WEIGHT_INDEX :
-      store_vector(SPI_CHANNEL_TYPE, SPI_HOMODIMERIZED_PRIME, Channel) |
-	self;
-
-    OpList ? Operation,
-    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
-    integer(Multiplier), Multiplier =< 0 |
-        self;
-
-    OpList ? Operation,
-    arg(SPI_MS_CHANNEL, Operation, Channel),
-    vector(Channel), arity(Channel, CHANNEL_SIZE),
-    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
-    ChannelType =?= SPI_SINK |
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, RandomFlag) :
+      store_vector(SPI_CHANNEL_TYPE, FinalType, Channel) |
+	update_channel_type,
 	self;
 
     OpList =?= [] :
       Common = _,
+      MathOffset = _,
       Ok = true;
+
+    otherwise |
+	post_pass1_skip.
+
+  update_channel_type(Index, MessageType, RandomFlag, FinalType) :-
+
+    Index =?= SPI_DEFAULT_WEIGHT_INDEX,
+    MessageType =\= SPI_DIMER,
+    bitwise_or(SPI_BIMOLECULAR, RandomFlag, ChannelType) :
+      FinalType = ChannelType;
+
+    Index =?= SPI_DEFAULT_WEIGHT_INDEX,
+    MessageType =?= SPI_DIMER,
+    bitwise_or(SPI_HOMODIMERIZED, RandomFlag, ChannelType) :
+      FinalType = ChannelType;
+
+    Index =\= SPI_DEFAULT_WEIGHT_INDEX,
+    MessageType =\= SPI_DIMER,
+    bitwise_or(SPI_BIMOLECULAR_PRIME, RandomFlag, ChannelType) :
+      FinalType = ChannelType;
+
+    Index =\= SPI_DEFAULT_WEIGHT_INDEX,
+    MessageType =?= SPI_DIMER,
+    bitwise_or(SPI_HOMODIMERIZED_PRIME, RandomFlag, ChannelType) :
+      FinalType = ChannelType.
+
+  post_pass1_skip(MathOffset, OpList, Common, Ok) :-
+
+    OpList ? Operation,
+    arg(SPI_MS_MULTIPLIER, Operation, Multiplier),
+    integer(Multiplier), Multiplier =< 0 |
+        post_pass1;
+
+    OpList ? Operation,
+    arg(SPI_MS_CHANNEL, Operation, Channel),
+    read_vector(SPI_CHANNEL_TYPE, Channel, ChannelType),
+    bitwise_and(ChannelType, SPI_TYPE_MASK, SPI_SINK) |
+	post_pass1;
 
     otherwise :
       Common = _,
+      MathOffset = _,
       Ok = invalid_transmission - OpList.
 
 
@@ -1663,38 +1500,109 @@ post_pass2(OpList, Reply, Common, Messages, AddMessages, Ok) :-
  * Suffix Q refers to a channel queue element.
  * Suffix R refers to a message request element.
  */ 
-do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
-					Ambient, Ok) :-
 
-    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
-    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    Message' =\= Anchor,
-    arg(SPI_COMMON, Message', CommonQ),
-    arg(SPI_OP_CHOSEN, CommonQ, Chosen), not_we(Chosen) |
-	self;
+post_instantaneous(MathOffset, OpList, Common, Ok,
+		   Operation, Channel, ChannelType) :-
 
-    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
-    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    Message' =\= Anchor,
-    Ambient =\= [],
-    arg(SPI_AMBIENT_CHANNEL, Message', AmbientQ),
-    Ambient =?= AmbientQ |
-	self;
+    arity(Operation) =:= SPI_MS_SIZE,
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, 0),
+    arg(SPI_MS_TYPE, Operation, SPI_SEND),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, EndR),
+    arg(SPI_MESSAGE_LINKS, EndR, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message) |
+	do_instantaneous_transmit + (MTX = SPI_RECEIVE_TAG, Ambient = []);
 
-    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
-    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    Message' =\= Anchor,
-    arg(SPI_MS_CID, Message', RCIdQ),
-    arg(SPI_MS_CHANNEL, Message', ChannelQ),
-    arg(SPI_COMMON, Message', CommonQ),
-    arg(MTX, Message', MessageTag),
+    arity(Operation) =:= SPI_MS_SIZE,
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, 0),
+    arg(SPI_MS_TYPE, Operation, SPI_RECEIVE),
+    read_vector(SPI_SEND_ANCHOR, Channel, EndR),
+    arg(SPI_MESSAGE_LINKS, EndR, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message) |
+	do_instantaneous_transmit + (MTX = SPI_SEND_TAG, Ambient = []);
+
+    arity(Operation) =:= SPI_MS_SIZE,
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    arg(SPI_MS_TYPE, Operation, SPI_SEND),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, Weight) :
+      execute(MathOffset, {RAN, 0, Uniform}) |
+	post_instantaneous_random + (MTX = SPI_RECEIVE_TAG, Ambient = []);
+
+    arity(Operation) =:= SPI_MS_SIZE,
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    arg(SPI_MS_TYPE, Operation, SPI_RECEIVE),
+    read_vector(SPI_SEND_ANCHOR, Channel, Anchor),
+    read_vector(SPI_SEND_WEIGHT, Channel, Weight) :
+      execute(MathOffset, {RAN, 0, Uniform}) |
+	post_instantaneous_random + (MTX = SPI_SEND_TAG, Ambient = []);
+
+    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
+    arg(SPI_MS_AMBIENT, Operation, Ambient),
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, 0),
+    arg(SPI_MS_TYPE, Operation, SPI_SEND),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, EndR),
+    arg(SPI_MESSAGE_LINKS, EndR, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message) |
+	do_instantaneous_transmit + (MTX = SPI_RECEIVE_TAG);
+
+    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
+    arg(SPI_MS_AMBIENT, Operation, Ambient),
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, 0),
+    arg(SPI_MS_TYPE, Operation, SPI_RECEIVE),
+    read_vector(SPI_SEND_ANCHOR, Channel, EndR),
+    arg(SPI_MESSAGE_LINKS, EndR, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message) |
+	do_instantaneous_transmit + (MTX = SPI_SEND_TAG);
+
+    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
+    arg(SPI_MS_AMBIENT, Operation, Ambient),
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    arg(SPI_MS_TYPE, Operation, SPI_SEND),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, Anchor),
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, Weight) :
+      execute(MathOffset, {RAN, 0, Uniform}) |
+	post_instantaneous_random + (MTX = SPI_RECEIVE_TAG);
+
+    arity(Operation) =:= SPI_AMBIENT_MS_SIZE,
+    arg(SPI_MS_AMBIENT, Operation, Ambient),
+    bitwise_and(ChannelType, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    arg(SPI_MS_TYPE, Operation, SPI_RECEIVE),
+    read_vector(SPI_SEND_ANCHOR, Channel, Anchor),
+    read_vector(SPI_SEND_WEIGHT, Channel, Weight) :
+      execute(MathOffset, {RAN, 0, Uniform}) |
+	post_instantaneous_random + (MTX = SPI_SEND_TAG);
+
+    otherwise :
+      Channel = _,
+      ChannelType = _,
+      Common = _,
+      MathOffset = _,
+      OpList = _,
+      Ok = invalid_transmission - Operation.
+
+  post_instantaneous_random(MathOffset, OpList, Common, Ok,
+			   Operation, MTX, Ambient, Anchor, Uniform, Weight) :-
+
+    Select := Uniform*Weight |
+	choose_random_start(Anchor, Select, Message),
+	do_instantaneous_transmit + (EndR = Message).
+
+
+do_instantaneous_transmit(MathOffset, OpList, Common, Ok,
+			  Operation, MTX, Ambient, EndR, Message) :-
+
+    arg(SPI_MS_CID, Message, RCIdQ),
+    arg(SPI_MS_CHANNEL, Message, ChannelQ),
+    arg(SPI_COMMON, Message, CommonQ),
+    arg(MTX, Message, MessageTag),
     CommonQ = {PIdQ, MsList, ValueQ, ChosenQ},
     Common = {PIdR, _MsList, ValueR, ChosenR},
     arg(SPI_MS_CID, Operation, RCIdR),
     arg(SPI_MS_CHANNEL, Operation, ChannelR),
     arg(SPI_MS_TAGS, Operation, OperationTag),
     Ambient =?= [] :
-      Anchor = _,
+      EndR = _,
+      MathOffset = _,
       OpList = _,
       ValueQ = ValueR,
       ChosenQ = MessageTag,
@@ -1702,22 +1610,20 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
       Ok = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
 	discount(MsList);
 
-    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
-    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    Message' =\= Anchor,
-    arg(SPI_MS_CID, Message', RCIdQ),
-    arg(SPI_MS_CHANNEL, Message', ChannelQ),
-    arg(SPI_COMMON, Message', CommonQ),
-    arg(MTX, Message', MessageTag),
+    arg(SPI_MS_CID, Message, RCIdQ),
+    arg(SPI_MS_CHANNEL, Message, ChannelQ),
+    arg(SPI_COMMON, Message, CommonQ),
+    arg(MTX, Message, MessageTag),
     CommonQ = {PIdQ, MsList, ValueQ, ChosenQ},
     Common = {PIdR, _MsList, ValueR, ChosenR},
     arg(SPI_MS_CID, Operation, RCIdR),
     arg(SPI_MS_CHANNEL, Operation, ChannelR),
     arg(SPI_MS_TAGS, Operation, OperationTag),
     Ambient =\= [],
-    arg(SPI_AMBIENT_CHANNEL, Message', AmbientQ),
+    arg(SPI_AMBIENT_CHANNEL, Message, AmbientQ),
     Ambient =\= AmbientQ :
-      Anchor = _,
+      EndR = _,
+      MathOffset = _,
       OpList = _,
       ValueQ = ValueR,
       ChosenQ = MessageTag,
@@ -1725,32 +1631,75 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
       Ok = true(PIdQ, RCIdQ, ChannelQ, PIdR, RCIdR, ChannelR) |
 	discount(MsList);
 
+    Ambient =\= [],
+    arg(SPI_AMBIENT_CHANNEL, Message, AmbientQ),
+    Ambient =?= AmbientQ,
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =\= EndR |
+	self;
+
+    Ambient =\= [],
+    arg(SPI_AMBIENT_CHANNEL, Message, AmbientQ),
+    Ambient =?= AmbientQ,
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =?= EndR :
+      Operation = _,
+      MTX = _ |
+	post_pass1;
+
+    arg(SPI_COMMON, Message, CommonQ),
+    arg(SPI_OP_CHOSEN, CommonQ, Chosen), not_we(Chosen),
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =\= EndR |
+	self;
+
+    arg(SPI_MS_TYPE, Message, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =\= EndR |
+	self;
+
+    arg(SPI_MS_TYPE, Message, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =?= EndR :
+      Ambient = _,
+      Operation = _,
+      MTX = _ |
+	post_pass1;
+
     % This can happen (to the monitor). 
     Common = {_, _, _, Chosen}, not_we(Chosen) :
       Ambient = _,
-      Anchor = _,
+      EndR = _,
       Operation = _,
       Message = _,
       MTX = _ |
 	post_pass1;
 
-  % Test for end of list
+    % This Message has the same Chosen as the Operation -
+    % mixed communications which ARE NOT homodimerized.
+    arg(SPI_COMMON, Message, CommonQ),
+    CommonQ = {_, _, _, Chosen},
+    Common = {_, _, _, Chosen},
     arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
     read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    Message' =?= Anchor :
+    Message' =\= EndR |
+	self;
+
+    arg(SPI_COMMON, Message, CommonQ),
+    CommonQ = {_, _, _, Chosen},
+    Common = {_, _, _, Chosen},
+    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
+    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
+    Message' =?= EndR :
       Ambient = _,
       Operation = _,
       MTX = _ |
-	post_pass1;
-
-    % This Message has the same Chosen as the Operation -
-    % mixed communications which ARE NOT homodimerized.
-    arg(SPI_MESSAGE_LINKS, Message, MessageLinks),
-    read_vector(SPI_NEXT_MS, MessageLinks, Message'),
-    arg(SPI_COMMON, Message', CommonQ),
-    CommonQ = {_, _, _, Chosen},
-    Common = {_, _, _, Chosen} |
-	self.
+	post_pass1.
 
 
 /*************************** step procedures *********************************/
@@ -1769,7 +1718,7 @@ sum_weights(Channel, RateOffset, Sum, Total) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_BIMOLECULAR,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_BIMOLECULAR),
     read_vector(SPI_CHANNEL_RATE, Channel', Rate),
     read_vector(SPI_SEND_WEIGHT, Channel', SendWeight),
     read_vector(SPI_RECEIVE_WEIGHT, Channel', ReceiveWeight),
@@ -1781,7 +1730,7 @@ sum_weights(Channel, RateOffset, Sum, Total) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_HOMODIMERIZED,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_HOMODIMERIZED),
     read_vector(SPI_DIMER_ANCHOR, Channel', Anchor),
     arg(SPI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(SPI_NEXT_MS, FirstLink, Message),
@@ -1799,19 +1748,9 @@ sum_weights(Channel, RateOffset, Sum, Total) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_BIMOLECULAR_PRIME :
+    bitwise_and(Type, SPI_PRIME_FLAG, SPI_PRIME_FLAG) :
       execute(RateOffset, {SPI_RATE, Channel', Addend, Reply}) |
-	sum_weight_cumulate(Reply, Addend, Sum, Sum'),
-	self;    
-
-    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
-    vector(Channel'),
-    read_vector(SPI_BLOCKED, Channel', Blocked),
-    Blocked =?= FALSE,
-    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_HOMODIMERIZED_PRIME :
-      execute(RateOffset, {SPI_RATE, Channel', Addend, Reply}) |
-	sum_weight_cumulate(Reply, Addend, Sum, Sum'),
+	prime_weight_cumulate(Reply, Addend, Sum, Sum'),
 	self;    
 
     otherwise,
@@ -1820,60 +1759,42 @@ sum_weights(Channel, RateOffset, Sum, Total) :-
     vector(Channel') |
 	self.
 
-  sum_weight_cumulate(Reply, Addend, Sum, Cumulated) :-
+  prime_weight_cumulate(Reply, Addend, Sum, Cumulated) :-
 
     Reply =?= true,
     Sum  += Addend :
       Cumulated = Sum'.
 
-/*
-total_weight(MathOffset, Anchor, Now, Total, Reply, NewNow) :-
+logix_total(MathOffset, Anchor, Now, Total, RateOffset, NewNow, Wakeup) :-
 
     Total =< 0 :
       Anchor = _,
       MathOffset = _,
+      RateOffset = _,
       NewNow = Now,
-      Reply = true;
+      Wakeup = true;
 
     Total > 0 :
-      execute(MathOffset, {RAN, 0, Uniform}),
-      execute(MathOffset, {LN, Uniform, NegativeExponential}),
-      execute(MathOffset, {RAN, 0, Uniform'}) |
-	Residue := Uniform'*Total,
-	select_channel + (Channel = Anchor),
-	NewNow := Now - NegativeExponential/Total.
-*/
+      execute(MathOffset, {RAN, 0, Uniform1}),
+      execute(MathOffset, {RAN, 0, Uniform2}),
+      execute(MathOffset, {LN, Uniform2, NegativeExponential}) |
+	logix_transmit.
 
-logix_transmit(MathOffset, Anchor, Now, RateOffset, Total,
-	       Reply, NewNow, U, NE, NU, NNE) :-
-
-    Total =< 0 :
-      Anchor = _,
-      MathOffset = _,
-      RateOffset = _,
-      NewNow = Now,
-      NU = U,
-      NNE = NE,
-      Reply = true;
-
-    Total > 0,
-    Residue := U*Total,
-    Now' := Now - NE/Total :
-      RateOffset = _,
-      NewNow = Now',
-      execute(MathOffset, {RAN, 0, Uniform}),
-      execute(MathOffset, {LN, Uniform, NNE}),
-      execute(MathOffset, {RAN, 0, NU}) |
+  logix_transmit(RateOffset, Anchor, Now, Total,
+		 Uniform1, Uniform2, NegativeExponential,
+		 NewNow, Wakeup) :-
+    Residue := Uniform1*Total,
+    NewNow^ := Now - NegativeExponential/Total |
 	select_channel + (Channel = Anchor).
 
 
-select_channel(RateOffset, Residue, Channel, Reply) :-
+select_channel(RateOffset, Residue, Channel, Uniform1, Uniform2, Wakeup) :-
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_BIMOLECULAR,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_BIMOLECULAR),
     read_vector(SPI_CHANNEL_RATE, Channel', Rate),
     read_vector(SPI_SEND_WEIGHT, Channel', SendWeight),
     SendWeight > 0,
@@ -1888,7 +1809,7 @@ select_channel(RateOffset, Residue, Channel, Reply) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_BIMOLECULAR,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_BIMOLECULAR),
     read_vector(SPI_CHANNEL_RATE, Channel', Rate),
     read_vector(SPI_SEND_WEIGHT, Channel', SendWeight),
     SendWeight > 0,
@@ -1902,7 +1823,7 @@ select_channel(RateOffset, Residue, Channel, Reply) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_HOMODIMERIZED,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_HOMODIMERIZED),
     read_vector(SPI_DIMER_ANCHOR, Channel', Anchor),
     arg(SPI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(SPI_NEXT_MS, FirstLink, Message),
@@ -1914,14 +1835,14 @@ select_channel(RateOffset, Residue, Channel, Reply) :-
     read_vector(SPI_DIMER_WEIGHT, Channel', DimerWeight),
     Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
     Residue' =< 0 :
-      RateOffset = _ |
+      RateOffset = _  |
 	do_homodimerized_transmit;
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_HOMODIMERIZED,
+    bitwise_and(Type, SPI_PRIME_MASK, SPI_HOMODIMERIZED),
     read_vector(SPI_DIMER_ANCHOR, Channel', Anchor),
     arg(SPI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(SPI_NEXT_MS, FirstLink, Message),
@@ -1940,67 +1861,75 @@ select_channel(RateOffset, Residue, Channel, Reply) :-
     read_vector(SPI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
     read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_BIMOLECULAR_PRIME :
-      execute(RateOffset, {SPI_RATE, Channel', Subtrahend, Reply1}) |
-	sum_weight_decrement;    
-
-    read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
-    vector(Channel'),
-    read_vector(SPI_BLOCKED, Channel', Blocked),
-    Blocked =?= FALSE,
-    read_vector(SPI_CHANNEL_TYPE, Channel', Type),
-    Type =?= SPI_HOMODIMERIZED_PRIME :
-      execute(RateOffset, {SPI_RATE, Channel', Subtrahend, Reply1}) |
-	sum_weight_decrement;    
+    bitwise_and(Type, SPI_PRIME_FLAG, SPI_PRIME_FLAG),
+    bitwise_and(Type, SPI_PRIME_MASK, Type') :
+      execute(RateOffset, {SPI_RATE, Channel', Subtrahend, Reply}) |
+	prime_weight_decrement;    
 
     read_vector(SPI_NEXT_CHANNEL, Channel, Channel'),
     otherwise |
 	self.
 
-  sum_weight_decrement(RateOffset, Residue, Channel, Reply, Type,
-			Subtrahend, Reply1) :-
+  prime_weight_decrement(RateOffset, Residue, Channel, Uniform1, Uniform2,
+			Wakeup, Type, Subtrahend, Reply) :-
 
-    Reply1 = true,
+    Reply = true,
     Subtrahend =< 0 :
       Type = _ |
 	select_channel;
 
-    Reply1 = true,
+    Reply = true,
     Subtrahend > 0,
     Residue -= Subtrahend,
     Residue' > 0 :
       Type = _ |
 	select_channel;
 
-    Reply1 = true,
+    Reply = true,
     Subtrahend > 0,
     Residue -= Subtrahend,
     Residue' =< 0,
     Type =?= SPI_BIMOLECULAR_PRIME :
-      RateOffset = _  |
+      RateOffset = _ |
 	do_bimolecular_transmit;
 
-    Reply1 = true,
+    Reply = true,
     Subtrahend > 0,
     Residue -= Subtrahend,
     Residue' =< 0,
     Type =?= SPI_HOMODIMERIZED_PRIME :
-      RateOffset = _  |
+      RateOffset = _ |
 	do_homodimerized_transmit.
 
 /****** based transmit - complete a transmission for a pair of messages ******/
 
-do_bimolecular_transmit(Channel, Reply) :-
+do_bimolecular_transmit(Channel, Uniform1, Uniform2, Wakeup) :-
 
     read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_and(Type, SPI_RANDOM_FLAG, 0),
     arg(SPI_MESSAGE_LINKS, SendAnchor, SendLinks),
     read_vector(SPI_NEXT_MS, SendLinks, Send),
-    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
     arg(SPI_MESSAGE_LINKS, ReceiveAnchor, ReceiveLinks),
-    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive) |
-	do_bimolecular_send(Channel, Reply, Send, Receive).
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive) :
+      Uniform1 = _,
+      Uniform2 = _ |
+	do_bimolecular_send(Channel, Wakeup, Send, Send, Receive, Receive);
 
-do_bimolecular_send(Channel, Reply, Send, Receive) :-
+    read_vector(SPI_SEND_ANCHOR, Channel, SendAnchor),
+    read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_and(Type, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    read_vector(SPI_SEND_WEIGHT, Channel, SendWeight),
+    SendSelect := Uniform1*SendWeight,
+    read_vector(SPI_RECEIVE_WEIGHT, Channel, ReceiveWeight),
+    ReceiveSelect := Uniform2*ReceiveWeight |
+	choose_random_start(SendAnchor, SendSelect, StartS),
+	choose_random_start(ReceiveAnchor, ReceiveSelect, StartR),
+	do_bimolecular_send(Channel, Wakeup, StartS, StartS, StartR, StartR).
+
+  do_bimolecular_send(Channel, Wakeup, Send, EndSend, Receive, EndReceive) :-
 
     arg(SPI_MS_TYPE, Send, SPI_SEND),
     arg(SPI_MS_CID, Send, SendRCId),
@@ -2016,11 +1945,13 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
     SendCommon =?= {SendPId, SendList, SendValue, SendChosen},
     ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen} :
       Channel = _,
+      EndReceive = _,
+      EndSend = _,
       SendChosen = SendTag,
       ReceiveChosen = ReceiveTag,
       ReceiveValue = SendValue?,
-      Reply = true(SendPId, SendRCId, SendChannel,
-		   ReceivePId, ReceiveRCId, ReceiveChannel) |
+      Wakeup = true(SendPId, SendRCId, SendChannel,
+		    ReceivePId, ReceiveRCId, ReceiveChannel) |
 	discount(SendList),
 	discount(ReceiveList);
 
@@ -2041,11 +1972,13 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
     arg(SPI_AMBIENT_CHANNEL, Receive, ReceiveAmbient),
     SendAmbient =\= ReceiveAmbient :
       Channel = _,
+      EndReceive = _,
+      EndSend = _,
       SendChosen = SendTag,
       ReceiveChosen = ReceiveTag,
       ReceiveValue = SendValue?,
-      Reply = true(SendPId, SendRCId, SendChannel,
-		   ReceivePId, ReceiveRCId, ReceiveChannel) |
+      Wakeup = true(SendPId, SendRCId, SendChannel,
+		    ReceivePId, ReceiveRCId, ReceiveChannel) |
 	discount(SendList),
 	discount(ReceiveList);
 
@@ -2056,8 +1989,8 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
     SendAmbient =?= ReceiveAmbient,
     arg(SPI_MESSAGE_LINKS, Send, SendLinks),
     read_vector(SPI_NEXT_MS, SendLinks, Send') |
-	self;
-
+	bimolecular_send_blocked;
+	
     arg(SPI_MS_TYPE, Send, SPI_SEND),
     arg(SPI_COMMON, Send, SendCommon),
     arg(SPI_MESSAGE_LINKS, Send, SendLinks),
@@ -2067,37 +2000,149 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
     SendCommon =?= {_, _, _, Chosen},
     ReceiveCommon =?= {_, _, _, Chosen},
     read_vector(SPI_NEXT_MS, SendLinks, Send') |
-	self;
+	bimolecular_send_blocked;
 
     arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
-    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
-    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
-    arg(SPI_MS_TYPE, Receive', Type),
-    Type =\= SPI_MESSAGE_ANCHOR,
     arg(SPI_MESSAGE_LINKS, Send, SendLinks),
-    read_vector(SPI_NEXT_MS, SendLinks, Send') |
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =\= EndSend |
 	self;
 
     arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend, 
     arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
     read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
-    arg(SPI_MS_TYPE, Receive', Type),
-    Type =?= SPI_MESSAGE_ANCHOR :
-      Send = _,
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_RECEIVE) |
+	self;
+
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Receive', ReceiveLinks'),
+    read_vector(SPI_NEXT_MS, ReceiveLinks', Receive''),
+    Receive'' =\= EndReceive |
+	self;
+
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =?= EndReceive |
       store_vector(SPI_BLOCKED, TRUE, Channel),
-      Reply = done.
+      Wakeup = done;
 
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_RECEIVE) |
+	self;
 
-do_homodimerized_transmit(Channel, Reply) :-
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Receive', ReceiveLinks'),
+    read_vector(SPI_NEXT_MS, ReceiveLinks', Receive''),
+    Receive'' =\= EndReceive |
+	self;
+
+    arg(SPI_MS_TYPE, Send, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Send, SendLinks),
+    read_vector(SPI_NEXT_MS, SendLinks, Send'),
+    Send' =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Receive', ReceiveLinks'),
+    read_vector(SPI_NEXT_MS, ReceiveLinks', Receive''),
+    Receive'' =?= EndReceive |
+      store_vector(SPI_BLOCKED, TRUE, Channel),
+      Wakeup = done
+
+/*
+otherwise |
+  spi_utils#show_value(channel = Channel,[],C),
+  spi_utils#show_value(send = Send, [3], S),
+  spi_utils#show_value(receive = Receive, [3], R),
+  spi_utils#show_value(endsend = EndSend, [3], ES),
+  spi_utils#show_value(endreceive = EndReceive, [3], ER),
+  screen#display((C,S,R,ES,ER),length(0))
+*/
+.
+
+  bimolecular_send_blocked(Channel, Wakeup, Send, EndSend, Receive, EndReceive) :-
+    Send =\= EndSend |
+	do_bimolecular_send;
+
+    Send =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_RECEIVE) |
+	do_bimolecular_send;
+
+    Send =?= EndSend,
+    arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Receive'),
+    Receive' =\= EndReceive,
+    arg(SPI_MS_TYPE, Receive', SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Receive', ReceiveLinks'),
+    read_vector(SPI_NEXT_MS, ReceiveLinks', Receive''),
+    Receive'' =\= EndReceive |
+	do_bimolecular_send;
+
+    otherwise :
+      Receive = _,
+      Send = _,
+      EndReceive = _,
+      EndSend = _,
+      store_vector(SPI_BLOCKED, TRUE, Channel),
+      Wakeup = done.
+      
+    
+do_homodimerized_transmit(Channel, Uniform1, Uniform2, Wakeup) :-
 
     read_vector(SPI_DIMER_ANCHOR, Channel, DimerAnchor),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_and(Type, SPI_RANDOM_FLAG, 0),
     arg(SPI_MESSAGE_LINKS, DimerAnchor, DimerLinks),
     read_vector(SPI_NEXT_MS, DimerLinks, Receive),
     arg(SPI_MESSAGE_LINKS, Receive, ReceiveLinks),
-    read_vector(SPI_NEXT_MS, ReceiveLinks, Dimer) |
-	do_homodimerized_send(Channel, Reply, Receive, Dimer).
+    read_vector(SPI_NEXT_MS, ReceiveLinks, Dimer) :
+      Uniform1 = _,
+      Uniform2 = _ |
+	do_homodimerized_send(Channel, Wakeup, Receive, Dimer, Dimer);
 
-do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
+    read_vector(SPI_DIMER_ANCHOR, Channel, DimerAnchor),
+    read_vector(SPI_CHANNEL_TYPE, Channel, Type),
+    bitwise_and(Type, SPI_RANDOM_FLAG, SPI_RANDOM_FLAG),
+    read_vector(SPI_DIMER_WEIGHT, Channel, DimerWeight),
+    ReceiveSelect := Uniform1*DimerWeight,
+    DimerSelect := Uniform2*DimerWeight |
+	choose_random_start(DimerAnchor, ReceiveSelect, Receive),
+	choose_random_start(DimerAnchor, DimerSelect, StartD),
+	do_homodimerized_send(Channel, Wakeup, Receive, StartD, StartD).
+
+  do_homodimerized_send(Channel, Wakeup, Receive, Dimer, EndDimer) :-
 
     arg(SPI_MS_TYPE, Receive, SPI_DIMER),
     arg(SPI_MS_TYPE, Dimer, SPI_DIMER),
@@ -2115,11 +2160,12 @@ do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
     we(DimerChosen),
     arg(SPI_AMBIENT_CHANNEL, Receive, []) :
       Channel = _,
+      EndDimer = _,
       ReceiveChosen = ReceiveTag,
       DimerChosen = DimerTag,
       ReceiveValue = DimerValue?,
-      Reply = true(ReceivePId, ReceiveRCId, ReceiveChannel,
-		   DimerPId, DimerRCId, DimerChannel) |
+      Wakeup = true(ReceivePId, ReceiveRCId, ReceiveChannel,
+		    DimerPId, DimerRCId, DimerChannel) |
 	discount(ReceiveList),
 	discount(DimerList);
 
@@ -2142,11 +2188,12 @@ do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
     arg(SPI_AMBIENT_CHANNEL, Dimer, DimerAmbient),
     ReceiveAmbient =\= DimerAmbient :
       Channel = _,
+      EndDimer = _,
       ReceiveChosen = ReceiveTag,
       DimerChosen = DimerTag,
       ReceiveValue = DimerValue?,
-      Reply = true(ReceivePId, ReceiveRCId, ReceiveChannel,
-		   DimerPId, DimerRCId, DimerChannel) |
+      Wakeup = true(ReceivePId, ReceiveRCId, ReceiveChannel,
+		    DimerPId, DimerRCId, DimerChannel) |
 	discount(ReceiveList),
 	discount(DimerList);
 
@@ -2157,28 +2204,92 @@ do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
     arg(SPI_AMBIENT_CHANNEL, Dimer, DimerAmbient),
     ReceiveAmbient =?= DimerAmbient,
     arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
-    read_vector(SPI_NEXT_MS, DimerLinks, Dimer') |
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =\= EndDimer |
+	self;
+
+    arg(SPI_MS_TYPE, Receive, SPI_DIMER),
+    arg(SPI_MS_TYPE, Dimer, SPI_DIMER),
+    arg(SPI_AMBIENT_CHANNEL, Receive, ReceiveAmbient),
+    ReceiveAmbient =\= [],
+    arg(SPI_AMBIENT_CHANNEL, Dimer, DimerAmbient),
+    ReceiveAmbient =?= DimerAmbient,
+    arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =?= EndDimer :
+      store_vector(SPI_BLOCKED, TRUE, Channel),
+      Wakeup = done;
+
+    % Test Receive has the same Chosen as Dimer -
+    % communications which ARE homodimerized AND mixed.
+    arg(SPI_MS_TYPE, Receive, SPI_DIMER),
+    arg(SPI_MS_TYPE, Dimer, SPI_DIMER),
+    arg(SPI_COMMON, Receive, ReceiveCommon),
+    arg(SPI_COMMON, Dimer, DimerCommon),
+    ReceiveCommon =?= {_, _, _, Chosen},
+    DimerCommon =?= {_, _, _, Chosen},
+    arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =\= EndDimer |
 	self;
 
     arg(SPI_MS_TYPE, Receive, SPI_DIMER),
     arg(SPI_MS_TYPE, Dimer, SPI_DIMER),
     arg(SPI_COMMON, Receive, ReceiveCommon),
     arg(SPI_COMMON, Dimer, DimerCommon),
-    % This Receive has the same Chosen as the Send -
-    % communications which ARE homodimerized AND mixed.
     ReceiveCommon =?= {_, _, _, Chosen},
     DimerCommon =?= {_, _, _, Chosen},
     arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
-    read_vector(SPI_NEXT_MS, DimerLinks, Dimer') |
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =?= EndDimer :
+      store_vector(SPI_BLOCKED, TRUE, Channel),
+      Wakeup = done;
+
+    % Skip the Anchor.
+    arg(SPI_MS_TYPE, Receive, SPI_DIMER),
+    arg(SPI_MS_TYPE, Dimer, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =\= EndDimer |
 	self;
 
-    arg(SPI_MS_TYPE, Dimer, SPI_MESSAGE_ANCHOR) :
-      Receive = _,
+    arg(SPI_MS_TYPE, Receive, SPI_DIMER),
+    arg(SPI_MS_TYPE, Dimer, SPI_MESSAGE_ANCHOR),
+    arg(SPI_MESSAGE_LINKS, Dimer, DimerLinks),
+    read_vector(SPI_NEXT_MS, DimerLinks, Dimer'),
+    Dimer' =?= EndDimer :
       store_vector(SPI_BLOCKED, TRUE, Channel),
-      Reply = done.
+      Wakeup = done
+/*
+;
+otherwise |
+  spi_utils#show_value(channel = Channel,[],C),
+  spi_utils#show_value(receive = Receive, [3], R),
+  spi_utils#show_value(dimer = Dimer, [3], D),
+  spi_utils#show_value(enddimer = EndDimer, [3], ED),
+  screen#display((C,R,D,ED),length(0))
+*/
+.
 
 
 /***************************** Utilities ************************************/
+
+choose_random_start(Message, Select, Start) :-
+
+    arg(SPI_MESSAGE_LINKS, Message, Links),
+    read_vector(SPI_NEXT_MS, Links, Message'),
+    arg(SPI_MS_MULTIPLIER, Message', Multiplier),
+    Select -= Multiplier,
+    Select' > 0 |
+	self;
+
+    arg(SPI_MESSAGE_LINKS, Message, Links),
+    read_vector(SPI_NEXT_MS, Links, Message'),
+    arg(SPI_MS_MULTIPLIER, Message', Multiplier),
+    Select -= Multiplier,
+    Select' =< 0 :
+      Start = Message'.
+
 
 discount(MsList) :-
 
@@ -2286,3 +2397,15 @@ queue_to_anchor(Message, Anchor, Links) :-
       store_vector(SPI_NEXT_MS, Anchor, Links),
       store_vector(SPI_NEXT_MS, Message, PreviousLinks),
       store_vector(SPI_PREVIOUS_MS, Message, AnchorLinks).
+
+
+/*
+
+do_execute(Id, Offset, Command) :-
+    true : execute(Offset, Command) |
+	spi_utils#show_value(do_execute(Id, Offset, Command),[5],O),
+	screen#display(ok(O),wait(O));
+    otherwise |
+	spi_utils#show_value(do_execute(Id, Offset, Command),[5],O),
+	screen#display(failed(O),wait(O)).
+*/

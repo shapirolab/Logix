@@ -1877,7 +1877,8 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
 
     Channels ? Channel,
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
-    Type =\= SPI_HOMODIMERIZED, Type =\= SPI_HOMODIMERIZED_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =\= SPI_HOMODIMERIZED,
     read_vector(SPI_SEND_ANCHOR, Channel, SendQueue),
     read_vector(SPI_RECEIVE_ANCHOR, Channel, ReceiveQueue) |
 	remove_from_queue(Ambient, Channel, Scheduler, SPI_SEND_WEIGHT,
@@ -1888,7 +1889,8 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
 
     Channels ? Channel,
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
-    Type =?= SPI_HOMODIMERIZED, Type =\= SPI_HOMODIMERIZED_PRIME,
+    bitwise_and(Type, SPI_TYPE_MASK, MaskedType),
+    MaskedType =?= SPI_HOMODIMERIZED,
     read_vector(SPI_DIMER_ANCHOR, Channel, DimerQueue) |
 	remove_from_queue(Ambient, Channel, Scheduler, SPI_DIMER_WEIGHT,
 				DimerQueue, Removed, Removed'),
@@ -1919,9 +1921,7 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
     arg(SPI_MESSAGE_LINKS, NextMs, NextLinks),
     read_vector(Index, Channel, Weight),
     arg(SPI_MS_MULTIPLIER, CurrentMs, Multiplier),
-/************************** revise for C-support *****************************/
     Weight -= Multiplier :
-/***************************** using Scheduler *******************************/
       Removed = _,
       Removed' = true,
       store_vector(Index, Weight', Channel),
@@ -2045,30 +2045,42 @@ format_channel(Channel, CH) :-
 
 format_typerate(Type, Rate, TypeRate) :-
 
-    Type =?= SPI_CHANNEL_ANCHOR :
+    Type =:= SPI_CHANNEL_ANCHOR :
       Rate = _,
       TypeRate = anchor;
 
-    Type =?= SPI_UNKNOWN :
+    Type =:= SPI_UNKNOWN :
       TypeRate = unknown(Rate);
 
-    Type =?= SPI_BIMOLECULAR :
+    Type =:= SPI_BIMOLECULAR :
       TypeRate = bimolecular(Rate);
 
-    Type =?= SPI_BIMOLECULAR_PRIME :
+    Type =:= SPI_BIMOLECULAR + SPI_RANDOM_MESSAGE :
+      TypeRate = 'bimolecular"'(Rate);
+
+    Type =:= SPI_BIMOLECULAR_PRIME :
       TypeRate = "bimolecular'"(Rate);
 
-    Type =?= SPI_HOMODIMERIZED :
+    Type =:= SPI_BIMOLECULAR_PRIME + SPI_RANDOM_MESSAGE :
+      TypeRate = "bimolecular'"""(Rate);
+
+    Type =:= SPI_HOMODIMERIZED :
       TypeRate = homodimerized(Rate);
 
-    Type =?= SPI_HOMODIMERIZED_PRIME :
+    Type =:= SPI_HOMODIMERIZED + SPI_RANDOM_MESSAGE :
+      TypeRate = 'homodimerized"'(Rate);
+
+    Type =:= SPI_HOMODIMERIZED_PRIME :
       TypeRate = "homodimerized'"(Rate);
 
-    Type =?= SPI_INSTANTANEOUS :
+    Type =:= SPI_HOMODIMERIZED_PRIME + SPI_RANDOM_MESSAGE :
+      TypeRate = "homodimerized'"""(Rate);
+
+    Type =:= SPI_INSTANTANEOUS :
       Rate = _,
       TypeRate = instantaneous;
 
-    Type =?= SPI_SINK :
+    Type =:= SPI_SINK :
       Rate = _,
       TypeRate = sink;
 
