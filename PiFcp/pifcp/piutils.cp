@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/28 10:08:21 $
+		       	$Date: 2000/03/01 08:00:14 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/piutils.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -41,8 +41,16 @@ update_process_mode(Mode, GuardMode, NewMode) :-
     GuardMode =?= receive :
       NewMode = mixed;
 
+    Mode =?= send,
+    GuardMode =?= mixed :
+      NewMode = mixed;
+
     Mode =?= receive,
     GuardMode =?= send :
+      NewMode = mixed;
+
+    Mode =?= receive,
+    GuardMode =?= mixed :
       NewMode = mixed;
 
     Mode =?= mixed,

@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/02/27 07:56:33 $
+		       	$Date: 2000/03/01 08:00:13 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -16,7 +16,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 -language(compound).
 -export([make_local_call/10, make_remote_call/8,
 	 prime_local_channels/3, sum_procedures/3]).
--mode(interrupt).
+-mode(interpret).
       
 make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 		In, NextIn, Errors, NextErrors, CallDefinition) :-
@@ -568,7 +568,7 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
     Calls ? _,
     SendRHS =?= (Idents : Writes | _Relay) |
 	add_sends_and_receives(Idents, Writes, ProcessRHS, Sender?,
-			Index, Index', Sends, Sends'?, Code, Code'?),
+				Index, Index', Sends, Sends'?, Code, Code'?),
 	piutils#update_process_mode(Mode, ProcessMode, Mode'),
 	self;
 
@@ -609,19 +609,41 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       Sender = [].
 
   add_sends_and_receives(Idents, Writes, ProcessRHS, Sender,
-	Index, NewIndex, Sends, NextSends, Code, NextCode) :-
+		Index, NewIndex, Sends, NextSends, Code, NextCode) :-
 
     Idents =?= (Identify, Idents'),
     Identify = (`ChannelName = _Tuple),
     Writes =?= (Write, Writes'),
     Write =?= write_channel(_,_),
-    ProcessRHS =?= (Sent, ProcessRHS'),
+    ProcessRHS =?= (Sent ; ProcessRHS'),
     Sent =?= (`pifcp(chosen) = _Index : Tell | Body),
     Index++ :
       Sends ! ChannelName(Identify, Write'?),
       Code ! Index((`pifcp(chosen) = Index : Tell | Body)) |
 	reindex_write(Write, Sender, Index, Write'),
 	self;
+
+    Idents =?= (Identify, Idents'),
+    Identify = (`ChannelName = _Tuple),
+    Writes =?= (Write, Writes'),
+    Write =?= write_channel(_,_),
+    ProcessRHS =?= (Sent ; ProcessRHS'),
+    Sent =?= (`pifcp(chosen) = _Index | Body),
+    Index++ :
+      Sends ! ChannelName(Identify, Write'?),
+      Code ! Index((`pifcp(chosen) = Index | Body)) |
+	reindex_write(Write, Sender, Index, Write'),
+	self;
+
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    ProcessRHS =?= ((`pifcp(chosen) = _Index : Tell | Body) ; Receives),
+    Index++ :
+      Sends ! ChannelName(Idents, Write?),
+      NewIndex = Index',
+      NextSends = Sends',
+      Code  ! Index((`pifcp(chosen) = Index : Tell | Body)) |
+	reindex_write(Writes, Sender, Index, Write),
+	add_receives;
 
     Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
     ProcessRHS =?= (`pifcp(chosen) = _Index : Tell | Body),
@@ -632,6 +654,16 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
 	reindex_write(Writes, Sender, Index, Write);
 
     Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
+    ProcessRHS =?= ((`pifcp(chosen) = _Index | Body) ; Receives),
+    Index++ :
+      Sends ! ChannelName(Idents, Write?),
+      NewIndex = Index',
+      NextSends = Sends',
+      Code ! Index((`pifcp(chosen) = Index | Body)) |
+	reindex_write(Writes, Sender, Index, Write),
+	add_receives;
+
+    Idents = (`ChannelName = _Tuple), Writes =?= write_channel(_,_),
     ProcessRHS =?= (`pifcp(chosen) = _Index | Body),
     Index++ :
       NewIndex = Index',
@@ -639,64 +671,79 @@ make_summed_rhs(Name, Calls, CodeTuples, Index, Sends, Code, FinalMode,
       Code = [Index((`pifcp(chosen) = Index | Body)) | NextCode] |
 	reindex_write(Writes, Sender, Index, Write);
 
-    ProcessRHS =?= (Receive; ProcessRHS'),
-    otherwise |
-	add_receives(Receive, Sender, Code, Code'?),
-	self;
-
-    otherwise :
+    Idents = [] :
+      ProcessRHS = _,
+      Sender = _,
       Writes = _,
       Idents = _,
       NewIndex = Index,
-      NextSends = Sends |
-	add_receives(ProcessRHS, Sender, Code, NextCode).
+      NextSends = Sends,
+      Code = NextCode;
+
+    otherwise,
+    ProcessRHS = (Cdr ; Receive),
+    Cdr =?= ((`ChannelName = _, _) : _ | self) |
+	analyze_receive(Receive, Sender, ChannelName, Cdr, Code, Code',
+				ProcessRHS'),
+	self.
 
   reindex_write(Write, Sender, Index, NewWrite) :-
 
     Write = write_channel({_Sender, ChannelList, _SendIndex, Chosen}, VN) :
       NewWrite = write_channel({Sender, ChannelList, Index, Chosen}, VN).
 
+
 add_receives(Receives, Sender, Code, NextCode) :-
 
-    Receives = (Cdr ; Receives'),
+    Receives = (Cdr ; Receive),
     Cdr =?= ((`ChannelName = _, _) : _ | self) |
-	analyze_receives.
+	analyze_receive(Receive, Sender, ChannelName, Cdr, Code, Code',
+				Receives'),
+	self;
 
-  analyze_receives(Receives, Sender, ChannelName, Cdr, Code, NextCode) :-
+    Receives =?= [] :
+      Sender = _,
+      Code = NextCode.
 
-    Sender =?= [],
-    Receives =\= (_ ; _) :
-      Code = [ChannelName(Cdr, Receives) | NextCode];
 
-    Sender =?= [],
-    Receives =?= (Consume ; Receives') :
-      Code = [ChannelName(Cdr, Consume) | Code'] |
-	add_receives;
+analyze_receive(Receive, Sender, ChannelName, Cdr, Code, NextCode,
+				NextRHS) :-
 
-    /* Otherwise, the Sum is mixed. */
-    Sender =\= [],
-    Receives =\= (_ ; _) :
-      Code = [ChannelName(Cdr, Iterate?, Consume?) | NextCode] |
-	invent_iterate(ChannelName, Receives, Iterate, Consume);
+    Receive =\= (_ ; _),
+    Sender =?= [] :
+      Code = [ChannelName(Cdr, Receive) | NextCode],
+      NextRHS = [];
 
-    Sender =\= [],
-    Receives =?= (Consume; Receives'), Consume =\= (_ | self) :
-      Code = [ChannelName(Cdr, Iterate?, Consume'?) | Code'] |
-	invent_iterate(ChannelName, Consume, Iterate, Consume'),
-	add_receives;
+    Receive =?= (Consume ; Receive'), Consume =\= (_ | self),
+    Sender =?= [] :
+      Code = [ChannelName(Cdr, Consume) | NextCode],
+      NextRHS = Receive';
 
-    /* The Process was already mixed. */
-    Sender =\= [],
-    Receives =?= (Iterate; Consume),
+    /* The summation is mixed. */
+    Receive =\= (_ ; _),
+    Sender =\= [] :
+      Code = [ChannelName(Cdr, Iterate?, Consume?) | NextCode],
+      NextRHS = [] |
+	invent_iterate(ChannelName, Receive, Iterate, Consume);
+
+    Receive =?= (Consume; Receive'), Consume =\= (_ | self),
+    Sender =\= [] :
+      Code = [ChannelName(Cdr, Iterate?, Consume'?) | NextCode],
+      NextRHS = Receive'|
+	invent_iterate(ChannelName, Consume, Iterate, Consume');
+
+    /* This Process was already mixed. */
+    Receive =?= (Iterate; Consume),
     Iterate =?= (_ | self), Consume =\= (_ ; _) :
-      Code = [ChannelName(Cdr, Iterate, Consume) | Code'] |
-	add_receives;
+      Sender = _,
+      Code = [ChannelName(Cdr, Iterate, Consume) | NextCode],
+      NextRHS = [];
 
-    Sender =\= [],
-    Receives =?= (Iterate; Consume ; Receives'),
+    Receive =?= (Iterate; Consume ; Receive'),
     Iterate =?= (_ | self) :
-      Code = [ChannelName(Cdr, Iterate, Consume) | Code'] |
-	add_receives.
+      Sender = _,
+      Code = [ChannelName(Cdr, Iterate, Consume) | NextCode],
+      NextRHS = Receive'.
 
   invent_iterate(ChannelName, Consume, Iterate, NewConsume) :-
 
