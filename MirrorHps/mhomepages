@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl
 
-# Create a distfile for rdist and copy home pages of users.
-# Call: homepages [client]
+# Create a package file for mirror and mirror home pages of users.
+# Call: mhomepages [client]
 
 my $TmpDir = "/tmp";
 my $Target = "bach";
@@ -14,8 +14,8 @@ my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
 
 # Initialization and argument handling
 
-#temporary
 my $defaults = "/home/www/mirror_defaults";
+#my $defaults = "/etc/local/homepage_defaults";
 my $distfile = "$TmpDir/mirror-" . getppid();
 `/usr/bin/rm -f $distfile`;
 open(DISTFILE, ">$distfile") or die "Can't open $distfile";
@@ -36,7 +36,6 @@ if ($client) {
   $system = `uname -s`;
   chomp $system;
 }
-#print "system = '$system', name = '$name'\n";
 
 my @Auto = `ypcat -k auto.home`;
 
@@ -51,11 +50,8 @@ foreach $auto (@Auto) {
   my $homedir = ($only || $client) ? "/home/$uid" : "$sdir/$udir";
   if (($only eq $uid || (!$only && $home eq $name))
        && -r "$homedir/public_html/index.html") {
-#  my $homedir = $client ? "/home/$uid" : "$sdir/$udir";
-#  if ($home eq $name && -r "$homedir/public_html/index.html") {
     my $pubdir = "$homedir/public_html";
     if (-l $pubdir && (!$only || $only eq $uid)) {
-#    if (-l $pubdir) {
       my $redir = readlink($pubdir);
       if ($redir) {
 	if ($redir =~ /^\//) {

@@ -1,5 +1,7 @@
 #!/bin/sh
 ./auto_homes -ecymbal,harp,horn,lachesis,bina,wisdom /home/www/mhomepages
+#./auto_homes -ecymbal,harp,horn,lachesis,bina,wisdom /etc/local/mhomepages
 ./auto_homes -scymbal,harp,horn,lachesis,bina,wisdom /home/www/mhomepages
+#./auto_homes -scymbal,harp,horn,lachesis,bina,wisdom /etc/local/mhomepages
 
 

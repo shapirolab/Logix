@@ -12,7 +12,7 @@ package=defaults
 	# The LOCAL hostname - if not the same as `hostname`
 	# (I advertise the name sunsite.org.uk but the machine is
 	#  really swallow.sunsite.org.uk.)
-	hostname=viola.wisdom.weizmann.ac.il
+	hostname=wisdom.weizmann.ac.il
 #	# Keep all local_dirs relative to here
 	# The local_dir must exist FIRST
 	#local_dir_check=false
@@ -26,7 +26,7 @@ package=defaults
 	group=users
 	# Do not keep a log file
 	update_log=
-	timeout=300
+	timeout=3000
 	# Start Add by me
         #max_days=2
         get_newer=false
@@ -42,10 +42,4 @@ package=defaults
 	compress_patt=
 	#don't update outmail
 	local_ignore=(^|/)(outmail|core|RCS|\.mirror|#.*|\..*BAK|\..*bak|\..*~|.*~)
-	#would also like to ignore core, #*, *.bak, *~
 
-#
-#package=test_public_html
-#	remote_dir=/WWW/www/bill/public_html
-#	local_dir=/users/bill/public_html/
-#
