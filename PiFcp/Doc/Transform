@@ -1,0 +1,105 @@
+Representations and transformations of the PiFcp language to Compound Fcp
+
+<message>        ::~ <pi_message>
+
+  <pi_message>     ::= <sender>(<message_content>, <choice_tag>, <choice>)
+
+  <sender> identifies the process which sent the <message>.  When the
+           <message> is part of a mixed choice, the identifier is dynamically
+           unique; it is used to identify all messages offered by the
+           <process>, in order to exclude such messages from being chosen
+           by a <receive> of the same process instance.  Uniqueness is
+           guaranteed up to a run of the Logix system, by using a monitor
+           to generate the identifier.
+
+  <message_content> is [] or a tuple of <pi_channel>s.
+  <choice_tag> is an integer.
+  <choice> is writable until the <message> is received or withdrawn - then it
+           is assigned an integer.
+
+<channel>        ::~ <pi_channel>
+
+  <pi_channel>     ::= <creator>(<fcp_channel>, <message_stream>)
+
+  <creator> identifies the <process> which created the channel; it is used
+            for debugging and includes the <variable> representing the channel
+            and the <name> of the creating <process>.
+
+   <fcp_channel> is used to <send> a <message> on the <channel>, appending
+                 the corresponding <pi_message> to the <message_stream>.
+
+  <message_stream> ::= _
+                       [<pi_message> | <message_stream>]
+
+Since <channel> names begin with a lower case letter, the transformation
+converts them to Fcp variables of the same name; declared process names
+begin with an upper case letter.
+
+The sender may withdraw the message by unifying <choice> with 0.
+
+To <receive> a <message> the two/three corresponding Fcp clauses cdr down
+the <message_stream> to a <pi_message> whose <choice> is writable, and which
+was NOT offered (sent) by another <clause> of the same active <process>
+(This may occur in a mixed choice <process>.)  The <choice_tag> and the
+<choice> of the selected <pi_message> are unified to consume the <message>. 
+
+Each <process> is represented by an Fcp procedure.  Each <channel> which is an
+argument of the of the <process> is represented by a <pi_channel> - the name
+of the Fcp variable which represents the <pi_channel> in the arguments of the
+Fcp procedure is the <variable> name of the <channel>.
+
+A <program> defines a scope which is global to every <process> which is
+defined within the <program>.
+
+A <process> defines a scope within which each <channel> in the <channel_list>s
+of the <process> is defined.  This is implemented by adding each
+corresponding <pi_channel> to the arguments of the Fcp procedure definitions
+and calls in the Fcp procedure.  The arguments of the <process>, within which
+the scope is defined, are also added, unless overridden by a <channel> of the
+same name in the <channel_list> of the <process>. Fcp proceduress within a
+scope are renamed as necessary to avoid conflict with containing or parallel
+scopes.
+
+A <new_scope> in a <call> is represented by an invented Fcp process.  The
+brackets (<< >>) define a nested scope. The invented Fcp process and each Fcp
+process representing a <process> within the scope has an augmented argument
+list as above.
+
+Each <process> defined in the outermost scope of the program is like an
+independant program - such <process>es do not share any context.
+
+A PiFcp process is transformed into a procedures as follows.
+
+Each <process> in the <program> is transformed into one Fcp procedure with
+the same name, if it does not have an added <channel_list> - i.e. its
+<left_hand_side> is an <atom>.  Otherwise, it is transformed into two
+Fcp procedures.  The first procedure initializes and opens the channels of
+the added <channel_list> and calls the second procedure.
+
+The parameter <channel_list> of the procedure (if any) consists of channels
+which have been initialized elsewhere.
+
+A procedure in the outermost scope has no additional parameters.  The set of
+its channels is the base cumulant for all scopes defined within the <process>.
+
+For every inner scope, the cumulated <channel_list>s, if any, of the containing
+scopes, is added to the parameters of each procedure which is defined in the
+scope, providing a "global" context.  The "global" context is followed by the
+explicit <channel>.  When a declared parameter has the same name as an element
+of the cumulant, that <variable> is omitted - i.e. the declared parameter
+overrides the cumulated parameter.  The cumulated set of channels is augmented
+by the parameters and any channels in the added <channel_list>.
+
+When a <receive> in the <guard> instantiates a <channel> whose name matches
+a <channel> which is in the cumulant, that instance and all subsequent
+instances of the <channel> in the same <clause> are renamed.  A local
+<channel> is one which is instantiated by a <receive> in a <guard>, whose
+name does not match any of the cumulated channels.
+
+A <new_scope> within a <process> behaves just like has the same semantics
+as a declared <process>, except that it can only be activated by commitment
+of its clause, not called; in addition it may contain <process_definitions>
+whose <process>es can only be referred to within the declared scope.
+
+The initial version of the transformation requires that no two <process>es
+within a <program> have the same name.
