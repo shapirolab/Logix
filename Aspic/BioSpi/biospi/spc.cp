@@ -4,9 +4,9 @@ Precompiler for Biological Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/11/16 12:33:08 $
+		       	$Date: 2002/12/15 06:37:01 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -472,10 +472,11 @@ generate_inter_comm(Signature, InterChannels,
     string_to_dlist(String, Tail, []),
     string_to_dlist(Functor, FL, [CHAR_MINUS | Tail]),
     list_to_string(FL, Complete) :
-      Communicate2 = [(Ask : Tell | Complete) | Communicate1],
-      Terms1 = [(Completer? :- known(BIO_READY) | Body) | Terms2] |
+      Communicate2 = [(Ask : Tell | Update?, Complete) | Communicate1],
+      Terms1 = [(Completer? :- known(BIO_READY) | NewBody?) | Terms2] |
 	utilities#untuple_predicate_list(',', Tell, Tell'),
 	closed_channels(Tell'?, Closed),
+	updated_body,
 	continue_with_scheduler,
 	continue_with_args,
 	utils#tuple_to_dlist(Signature, [_Functor | Arguments], Args),
@@ -488,19 +489,31 @@ generate_inter_comm(Signature, InterChannels,
     string_to_dlist(String, Tail, []),
     string_to_dlist(Functor, FL, [CHAR_MINUS | Tail]),
     list_to_string(FL, Complete) :
-      Communicate2 = [(Ask : Tell'''? | Complete) | Communicate1],
-      Terms1 = [(Completer? :- known(BIO_READY) | Body) | Terms2] |
+      Communicate2 = [(Ask : Tell'''? | Update?, Complete) | Communicate1],
+      Terms1 = [(Completer? :- known(BIO_READY) | NewBody?) | Terms2] |
 	utilities#untuple_predicate_list(',', Tell, Tell'),
 	utilities#concatenate_lists([Tell'?,
 		[write_channel(Kind(BIO_AMBIENT, BIO_READY), BIO_SCHEDULER)]],
 				    Tell''),
 	utilities#make_predicate_list(',', Tell''?, Tell'''),
 	closed_channels(Tell'?, Closed),
+	updated_body,
 	continue_with_scheduler,
 	continue_with_args,
 	utils#tuple_to_dlist(Signature, [_Functor | Arguments], Args?),
 	utilities#subtract_list(Arguments?, Closed?, Arguments'),
 	utils#list_to_tuple([Complete | Arguments'?], Completer).
+
+  updated_body(Body, Update, NewBody) :-
+
+    Body =?= (SpiUpdate, OldBody),
+    SpiUpdate =?= spi_update_channel_refs(_, _, _) :
+      Update = SpiUpdate,
+      NewBody = OldBody;
+
+    otherwise :
+      Update = true,
+      NewBody = Body.
 
   continue_with_args(AddTell, Args) :-
 
@@ -963,21 +976,21 @@ update_rhss(BlockPrefix, RHSS, InterChannels, ChannelTables,
 
 
 /* A little kluge for lint */
-continue_with_scheduler(Body, AddTell) :-
+continue_with_scheduler(NewBody, AddTell) :-
 
-    Body =?= (Goal, _),
+    NewBody =?= (Goal, _),
     Goal =\= (_ # _), Goal =\= true :
       AddTell = [];
 
-    Body =?= (_, Body'),
+    NewBody =?= (_, NewBody'),
     otherwise |
 	self;
 
-    Body =\= (_, _),
-    Body =\= (_ # _), Body =\= true :
+    NewBody =\= (_, _),
+    NewBody =\= (_ # _), NewBody =\= true :
       AddTell = [];
 
-    Body =\= (_, _),
+    NewBody =\= (_, _),
     otherwise :
       AddTell = [(BIO_SCHEDULER = `"_")].
 
