@@ -1,5 +1,5 @@
 -language(compound).
-%-mode(failsafe).
+-mode(failsafe).
 -export([make_channel/1, make_channel/2, make_channel/3,
 	 make_channel/4,
 	 "SPC"/1, "SPC"/2,
