@@ -77,7 +77,7 @@ explicitly.
 
 The attribute:
 
-    weighter(<weighter_specification>).
+    weighter(<weighter_declaration>).
 
 specifies a default weight computation which is used for all bimolecular and
 homodimerized channels in the module which do not declare a computation
