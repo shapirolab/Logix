@@ -26,16 +26,18 @@ for Logix help, or:
 
     @ph
 
-for Stochastic Pi Calculus help.
+for Stochastic Pi Calculus help.  See user_macros.txt in sub-
+directory Documentation for details about the user macros.
 
 The Documentation file includes Stochastic Pi Calculus BNF and
 various notes.
 
 The files in bin are used to extract tabular information from a
-Stochastic Pi Calculus application session (see record.txt).
+Stochastic Pi Calculus application session (see record.txt in
+sub-directory Documentation).
 
-Some examples of Stochastic Pi Calculus programs are included
-in sub-directory Examples.
+Some examples of Stochastic Pi Calculus programs are included in
+sub-directory Examples.
 
 The BioSpi sub-directory supports applications written in Ambient
 Stochastic Pi Calculus, including examples in its sub-directory
