@@ -1,0 +1,43 @@
+#!/usr/local/bin/perl
+
+my $source = shift @ARGV;
+open SOURCE, "$source.table" or die "Can't open input $source.table\n";
+
+my $line = <SOURCE>;
+chomp $line;
+my @line = split(/\s+/, $line);
+my $columns = scalar(@line);
+
+print "columns = $columns\n";
+
+my @suffixes;
+
+my $fx;
+for ($fx = 1; $fx < $columns; $fx++) {
+    $suffixes[$fx] = "." . ($fx+1);
+}
+
+for ($fx = 1; $fx < $columns; $fx++) {
+    my $filename = $source . $suffixes[$fx];
+    $ref = $suffixes[$fx];
+    open *$ref, ">$filename" or die;
+}
+
+while ($line) {
+    for ($fx = 1; $fx < $columns; $fx++) {
+	$ref = $suffixes[$fx];
+	select *$ref;
+	print $line[0], " ", $line[$fx], "\n";
+    }
+    $line = <SOURCE>;
+    chomp $line;
+    @line = split(/\s+/, $line);
+}
+
+for ($fx = 1; $fx < $columns; $fx++) {
+    $filename = $source . $suffixes[$fx];
+    $ref = $suffixes[$fx];
+    close *$ref;
+}
+
+

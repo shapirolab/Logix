@@ -1,0 +1,141 @@
+#!/usr/local/bin/perl
+
+my $PERIOD = 1; # This should be a non-negative integer.
+
+my %Processes = ();
+
+my @Items = ();
+my $item;
+my $type = 0;
+my %Subs = ();
+
+sub normalize {
+    ($item) = split /\./, shift(@_);
+    $item =~ s/^\s*(\S)\s*/$1/;
+    my $substitute = $Subs{$item};
+    if ($substitute) {
+	$item = $substitute;
+    }
+}
+    
+# MAIN
+
+my $record = shift @ARGV;
+my $substitute;
+
+while ($substitute = shift(@ARGV)) {
+#print "$substitute\n";
+    if (int $substitute > 0) {
+	$PERIOD = int $substitute;
+    }
+    else {
+	$substitute =~ s/\s+//;
+	my @tmp = split(/\+=/, $substitute);
+	my ($name, $equal) = @tmp;
+	if (@tmp != 2 || !($name && $equal)) {
+	    die "invalid substitution - '$substitute'";
+	}
+	$Subs{$equal} = $name;
+    }
+}
+
+#print keys(%Subs), values(%Subs), "\n";
+
+open RECORD, "$record" or die "Can't open input $record\n";
+
+my $names = $record . ".names";
+open NAMES, ">$names" or die "Can't open output $names\n";
+
+my $table = $record . ".table";
+open TABLE, ">$table" or die "Can't open output $table\n";
+
+my $line;
+my $lastitem = 0.0000000;
+#my $nexttime = 0;
+my $interval = 0.0001;
+
+while ($line = <RECORD>) {
+
+  chomp $line;
+
+  if ($line =~ /^\+(.*)$/) {
+    normalize($1);
+    if (not $Processes{$item}) {
+      $Processes{$item} = 1;
+    }
+    $type = +1;
+  }
+  elsif ($line =~ /^-(.*)$/) {
+    normalize($1);
+    if ($item ne "" and not $Processes{$item}) {
+      die "'$item' terminated before it started\n";
+    }
+    $type = -1;
+  }
+  elsif ($line =~ /^\s*\d+\.\d+\s*$/) {
+    next if $type == 0;
+    next if $line < $nexttime;
+    $item = substr($line+0.0000001, 0, 7);
+    next if $item == $lastitem;
+    $lastitem = $item;
+    $nexttime = int($lastitem) + $PERIOD;
+    $type = 0;
+      
+  }
+  elsif (line =~ /^\s*$/) {
+    next;
+  }
+  else {die "Illegal input $line\n"};
+
+  push @Items, [$type, $item];
+}
+if ($type != 0) {
+  push @Items, [0, substr($nexttime + 0.0000001, 0, 7)];
+}
+
+print NAMES "   time";
+
+my $process;
+my $counter = 1;
+my @Processes = sort(keys(%Processes));
+
+foreach $process (@Processes) {
+    $Processes{$process} = $counter;
+    print NAMES "   $process";
+    $counter++;
+}
+
+
+print NAMES "\n\n\n";
+
+$counter = 1;
+foreach $process (@Processes) {
+    $Processes{$process} = $counter;
+    $counter++;
+    print NAMES "$counter   $process\n";
+}
+close NAMES or die "Can't close $names\n";
+
+my @Columns = (0) x $counter;
+
+my $N;
+my $MaxN = scalar(@Items);
+
+for($N = 0; $N < $MaxN; $N++) {
+    my $k = $Items[$N][0];
+    my $j = $Items[$N][1];
+    if ($k) {
+	$Columns[$Processes{$j}] += $k;
+    }
+    else {
+	$Columns[0] = $j;
+	while ($k < $counter) {
+	    print TABLE $Columns[$k++], "   ";
+	}
+	print TABLE "\n";
+    }
+}
+
+close TABLE or die "Can't close $table\n";
+kill QUIT, $$;
+
