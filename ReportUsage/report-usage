@@ -5,7 +5,7 @@ my $BLANKS = "                                                               ";
 my $sum_acct = "/home/system/bin/sum_acct";
 my $SUM_PREFIX = "/var/adm/month_report/acct_summary_local";
 
-my $VERSION = "1.0 - 3 May, 1995";
+my $VERSION = "1.0.1 - 5 May, 1995";
 
 my $Column_Width =  6;
 my $Name_Width   = 10;
