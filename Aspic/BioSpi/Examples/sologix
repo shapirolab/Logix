@@ -1,2 +1,0 @@
-#! /bin/sh
-exec /home/bill/HOME/Release/Logix/SOLARIS/fcp $* /home/bill/HOME/Release/Logix/saved_solaris_logix
