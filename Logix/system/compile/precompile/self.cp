@@ -6,9 +6,9 @@ Michael Hirsch,  27 January 1985
 William Silverman 08/85
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/29 08:08:51 $
+		       	$Date: 2002/06/07 12:19:58 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Logix/system/compile/precompile/self.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -246,14 +246,16 @@ module_kind(	normal, Terms, {Attributes, Imported, LPIds, Ids},
 			 deadcode(DiagD), multiples(DiagM), undefined(DiagU)], 
 			Edited, Done
 	),
-/* defaults for  exports, deadcode, multiples, undefined  */
+	edit_attributes(Attributes, [language(Languages)], _Edited, Done1),
+/* defaults for  exports, deadcode, multiples, undefined, entries, language */
 	unify_without_failure({Done?, Exports}, done(all)),
 	unify_without_failure({Done?, DiagD}, done(off)),
 	unify_without_failure({Done?, DiagM}, done(on)),
 	unify_without_failure({Done?, DiagU}, done(on)),
 	unify_without_failure({Done?, Entries}, done([])),
-/***************** all ***** off ****** on ******* on *****/
-	verify_name_mode(Done, Name, Mode, Name1, Mode1, 
+	unify_without_failure({Done1?, Languages}, done([])),
+/***************** all ***** off ****** on ******* on ***** [] ***** [] *****/
+	verify_name_mode(Done, Name, Languages, Mode, Name1, Mode1, 
 			Edited1, Edited?, Output, Output1
 	),
 	verify_export(  Name1, Exports, Entries, LPIds, Ids,
@@ -309,30 +311,53 @@ edit_attribute(Attribute, Edit, Edited1, Edited2, Attributes1, Attributes2) :-
       Attributes1 = Attributes2 .
 
 
-verify_name_mode(Done, Name, Mode, Name1, Mode1, Edited1, Edited2,
+verify_name_mode(Done, Name, Languages, Mode, Name1, Mode1, Edited1, Edited2,
 			Output1, Output2
 ) :-
 
     Done = done :
       Name = [],
       Name1 = [], Edited1 = Edited2 |
-	unify_without_failure(Mode, interpret),
+	choose_mode([biospi(interrupt)], interpret, Languages, Mode),
 	verify_module_mode(Mode, Mode1, Output1, Output2);
 
-    Done = done,
-    string(Name) :
-      Name = Name1,
-      Edited1 = [monitor | Edited2] |
-	unify_without_failure(Mode, user),
-	verify_monitor_mode(Mode, Mode1, Output1, Output2);
-
-    otherwise : Done = _,
+    otherwise : Done = _, Languages = _,
       Name1 = [],
       Mode1 = interrupt,
       Edited1 = Edited2,
       Output1 ! invalid_monitor_name(Name) |
 	verify_monitor_mode(Mode, _, Output1', Output2).
 
+  choose_mode(Choices, Default, Languages, Mode) :-
+
+    known(Mode) :
+      Choices = _,
+      Default = _,
+      Languages = _;
+
+    Choices ? Name(NameMode) |
+	languages_name_mode(Languages, Name, NameMode, Mode, Mode'),
+	self;
+
+    Choices = [] :
+      Languages = _,
+      Mode = Default.
+
+  languages_name_mode(Languages, Name, NameMode, Mode, NewMode) :-
+
+    Languages ? Name :
+      Languages' = _,
+      NewMode = _,
+      Mode = NameMode;
+
+    Languages ? Other,
+    Other =\= Name |
+	self;
+
+    Languages = [] :
+      Name = _,
+      NameMode = _,
+      NewMode = Mode.
 
 verify_module_mode(interpret, interpret^, O, O^).
 verify_module_mode(interrupt, interrupt^, O^, O).
