@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/14 13:44:46 $
+		       	$Date: 2000/03/21 08:11:40 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -123,12 +123,12 @@ stochastic(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
       Terms' ! (Atom2? :- Communicate2?) |
 	remake_rhs(RHSS, Sends, RHSS'),
 	reform_rhs(RHSS',
-		   write_channel(schedule(WaitList?), `pifcp(schedule)), RHS),
+		write_channel(schedule(WaitList?), `pifcp(schedule)), RHS),
 	piutils#untuple_predicate_list(';', Communicate1, CL1),
-	make_end_waitlist,
-	rewrite_rhss(CL1?, Sends?,  EndList, WaitList, WaitArguments, CL2),
+	make_reference_name,
+	rewrite_rhss,
 	piutils#make_predicate_list(';', CL2?, Communicate2),
-	utils#tuple_to_dlist(Atom1, AL1, [`pifcp(count) | WaitArguments?]),
+	utils#tuple_to_dlist(Atom1, AL1, [`pifcp(count) | WaitVariables?]),
 	utils#list_to_tuple(AL1?, Atom2),
 	output.
 
@@ -143,15 +143,16 @@ stochastic(In, Delay, Terms, Mode, LHS, RHSS, Procedure) :-
     RHSS  =\= (_ | _) :
       RHS = (true : Schedule | RHSS).
 
-  make_end_waitlist(PNL, EndList) :-
+
+make_reference_name(PNL, RefName) :-
 
     PNL ? Dot :
     ascii('.', Dot) |
 	self;
 
-    otherwise :
-      EndList = ProcName?(`pifcp(count)) |
-	list_to_string(PNL, ProcName).
+    otherwise,
+    list_to_string(PNL, RefName^) |
+	true.
 
 
 create_receive_scheduler(LHS, RHS1, RHS2, Procedure) :-
@@ -194,30 +195,36 @@ remake_rhs(RHS1, Sends, RHS2) :-
       NewBody = OldBody.
 
 
-rewrite_rhss(CL1, Sends, EndList, WaitList, WaitVariables, CL2) :-
+rewrite_rhss(ProcName, RefName, CL1, Sends, WaitList, WaitVariables, CL2) :-
 
     CL1 ? Receive, Receive =?= (Ask : Tell | Body), Body =\= self,
     Ask = (Channel = _Tuple, _We),
     Channel = `ChannelName, string(ChannelName) :
       WaitVariable = `sprfcp(ChannelName),
-      CL2 ! (Ask'? : SetCount?, Tell | Body),
       WaitList ! receive(Channel, WaitVariable),
-      WaitVariables ! WaitVariable |
-	communication_guard_count((known(WaitVariable), Ask), Ask', SetCount),
+      WaitVariables ! WaitVariable,
+      CL2 ! (known(WaitVariable), Ask :
+		write_channel(terminate(RefName, `pifcp(count)),
+					`pifcp(schedule)), Tell |
+			Body) |
 	self;
 
     CL1 ? Send, Send =?= (Ask | Body),
     Ask = (`pifcp(chosen) = Index) :
       WaitVariable = `sptfcp(Index),
-      CL2 ! (Ask'? : SetCount? | Body) |
-	communication_guard_count((known(WaitVariable), Ask), Ask', SetCount),
+      CL2 ! (known(WaitVariable), Ask :
+		write_channel(terminate(RefName, `pifcp(count)),
+					`pifcp(schedule)) |
+			Body) |
 	self;
 
     CL1 ? Send, Send =?= (Ask : Tell | Body),
     Ask = (`pifcp(chosen) = Index) :
       WaitVariable = `sptfcp(Index),
-      CL2 ! (Ask'? : SetCount?, Tell | Body) |
-	communication_guard_count((known(WaitVariable), Ask), Ask', SetCount),
+      CL2 ! (known(WaitVariable), Ask :
+		write_channel(terminate(RefName, `pifcp(count)),
+					`pifcp(schedule)), Tell |
+			Body) |
 	self;
 
     CL1 ? Other,
@@ -227,18 +234,9 @@ rewrite_rhss(CL1, Sends, EndList, WaitList, WaitVariables, CL2) :-
 
     CL1 =?= [],
     Sends = {Channels, Writes} :
+      ProcName = _,
       CL2 = [] |
-	complete_waitlist.
-
-  communication_guard_count(Ask1, Ask2, SetCount) :-
-
-    Ask1 =?= (Predicate, Ask1') :
-      Ask2 = (Predicate, Ask2'?) |
-	self;
-
-    Ask1 =\= (_,_) :
-      Ask2 = (Ask1, info(4, `pifcp(creations))),
-      SetCount = (`pifcp(count) = `pifcp(creations)).
+	complete_waitlist + (EndList = RefName(`pifcp(count))).
 
   complete_waitlist(EndList, Channels, Writes, WaitList, WaitVariables) :-
 	
