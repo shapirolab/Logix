@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/23 09:31:18 $
+		       	$Date: 2000/01/27 12:17:27 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Logix/system/transform/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -39,11 +39,54 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
 	/* Exclude declared export from Attributes. */ 
-	Attributes2 = [export(Exports?) | Attributes1],
+	/* Extract (all) Global channel declarations */
+	filter_attributes(Attributes1, [], GlobalList, Attributes1', Exported,
+				Errors, Errors'?),
+	Attributes2 = [export(Exports?) | Attributes1'?],
 	program.
 
+  filter_attributes(In, GlobalList, NewGlobalList, Out, Exported,
+			Errors, NextErrors) :-
+
+    In ? export(Es) :
+      Exported = Es |
+	self;
+
+    In ? global(Gs) |
+	validate_globals(Gs, GlobalList, GlobalList', Errors, Errors'?),
+	self;
+
+    In ? Other,
+    Other =\= export(_), Other =\= global(_) :
+      Out ! Other |
+	self;
+
+    In = [] :
+      NewGlobalList = GlobalList,
+      Out = [],
+      Errors = NextErrors |
+	unify_without_failure(Exported, all).
+
+
+  validate_globals(GlobalList, Old, New, Errors, NextErrors) +
+			(Head = Tail?, Tail) :-
+
+    GlobalList ? String, String =\= "", String =\= "_" :
+      Tail ! String |
+	self;
+
+    GlobalList ? Other, otherwise :
+      Errors ! invalid_global_channel_name(Other) |
+	self;
+
+    GlobalList =?= [] :
+      Tail = Old,
+      Errors = NextErrors |
+	utils#binary_sort_merge(Head, New).
+
+
 /*
-** serve_empty_scope/3+3
+** serve_empty_scope/6+3
 **
 ** Serve requests from first-level processes.  See serve_process_scope/6+6
 **
@@ -64,9 +107,13 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 **          Analyze LHS (Left-hand-side) of process declaration and return
 **               ProcessScope - a stream to a process context handler.
 **
+**   GlobalList is a list of global channels.
+**
+**   Exported is a list of exported  Name  or  Name/Arity.
+**
 ** Output:
 **
-**   Exports is a list of functor/arity for all first level procedures.
+**   Entries is a list of generated processes for first level procedure entry.
 **
 **   Errors is a list of error diagnostics.
 **
@@ -77,7 +124,7 @@ transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 **   Refs, AddRef is a list of deferred lookup_functor/3 requests.
 */
 
-serve_empty_scope(In, Exports, Errors) +
+serve_empty_scope(In, GlobalList, Exported, Exports, Entries, Errors) +
 		(Progeny = [], Refs = AddRef?, AddRef) :-
 
     In ? error(Error) :
@@ -89,18 +136,81 @@ serve_empty_scope(In, Exports, Errors) +
 	self;
 
     In ? process(LHS, Status, ProcessScope) |
-	make_process_scope(LHS, ProcessScope, [],
-			In'', In'?, NewDefinition, Errors, Errors'?),
+	make_process_scope(LHS, ProcessScope, [], In'', In'?,
+		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	compute_status,
-	export_process(NewDefinition?, Exports, Exports'?),
+	export_process(ProcessDefinition?, Exported, Export,
+				Exports, Exports'?),
+	create_entry(GlobalList, Export?, ProcessDefinition?, NewDefinition,
+			Entries, Entries'?),
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
 
     In = [] :
+      GlobalList = _,
+      Exported = _,
       AddRef = [],
+      Entries = [],
       Errors = [],
       Exports = [] |
 	find_process_refs(Refs, Progeny, [], []).
+
+
+create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
+		Entries, NextEntries) :-
+
+
+    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    Name =\= "_",
+    GlobalList =\= [],
+    Export = true,
+    Index := arity(OuterAtom),
+    Index++,
+    string_to_dlist(Name, NL, []) :
+      ascii(' ', Space),
+      Entries ! (OuterAtom :- Initializer?),
+      NextEntries = Entries',
+      NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?} |
+	list_to_string([Space|NL], Name'),
+	split_channels(1, Index, Channels, ParamList, ChannelList),
+	construct_lhs_atoms,
+	initialize_channels(Index', OuterAtom'?, global, Initializer);
+
+    ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
+    Name =\= "_",
+    GlobalList =\= [],
+    Export = false,
+    Index := arity(OuterAtom) :
+      NextEntries = Entries,
+      NewDefinition = {Name, Arity, Channels'?, OuterAtom'?, InnerAtom'?} |
+	split_channels(1, Index, Channels, ParamList, ChannelList),
+	construct_lhs_atoms;
+	
+    otherwise :
+      GlobalList = _,
+      Export = _,
+      NewDefinition = ProcessDefinition,
+      Entries = NextEntries.
+
+  split_channels(I, Index, Channels, ParamList, ChannelList) :-
+
+    Channels ? Channel,
+    I < Index,
+    I++ :
+      ParamList ! Channel |
+	self;
+
+    Channels ? Channel,
+    I >= Index,
+    I++ :
+      ChannelList ! Channel |
+	self;
+
+    Channels =?= [] :
+      I = _,
+      Index = _,
+      ParamList = [],
+      ChannelList = [].
 
 /*
 ** serve_process_scope/6+3
@@ -142,7 +252,7 @@ serve_empty_scope(In, Exports, Errors) +
 **
 **   Errors is defined in serve_empty_scope.
 **
-** Local: see serve_empty_scope/3+3 above.
+** Local: see serve_empty_scope/6+3 above.
 */
 
 serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
@@ -156,7 +266,7 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	self;
 
     In ? body_receive(Channel, Message, ChannelVar, ChannelList),
-    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
       ChannelVar = `ChannelName' |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
@@ -168,7 +278,7 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
 	self;
 
     In ? body_send(Message, Channel, Sender, ChannelList, ChannelVar),
-    ProcessDefinition = {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
+    ProcessDefinition =?= {Name, _Arity, Channels, _OuterAtom, _InnerAtom} :
       ChannelVar = `ChannelName'? |
 	verify_channel(Name, Channel, Channels, Locals,
 			ChannelName, Errors, Errors'?),
@@ -259,7 +369,7 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
     ProcessDefinition =?= {_Name, _Arity, Channels, _OuterAtom, _InnerAtom} |
 	concatenate(Locals, Channels, GlobalList),
 	make_process_scope(LHS, ProcessScope, GlobalList,
-			In'', In'?, NewDefinition, Errors, Errors'?),
+		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	compute_status,
 	add_process_definition(NewDefinition?, Progeny, Progeny'),
 	self;
@@ -413,7 +523,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
       NextOut = [].
 
 /*
-** make_process_scope/8
+** make_process_scope/9
 **
 ** Analyze LHS, producing a ProcessDefinition and a process scope server,
 ** serve_process_scope.
@@ -423,6 +533,8 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **   LHS is from a process/2 request.
 **
 **   GlobalList is a list of channel names which are global to the process.
+**
+**   NewDefinition is the ProcessDefinition used by the new scope.
 **
 **   NextOut, NextErrors are continuation streams.
 **
@@ -438,10 +550,10 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 */
 
 make_process_scope(LHS, ProcessScope, GlobalList,
-		Out, NextOut, ProcessDefinition, Errors, NextErrors) :-
+	Out, NextOut, NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
-      ProcessDefinition = {Name?, Arity?, Channels?, OuterAtom?, InnerAtom?} |
+      ProcessDefinition =?= {Name?, Arity?, Channels?, OuterAtom?, InnerAtom?}|
 	parse_lhs(LHS, Name, Arity, ParamList, ChannelList, Errors, Errors'?),
 	check_for_duplicates(ParamList?, ParamList1,
 				{Name?, duplicate_parameter},
@@ -457,7 +569,7 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 				ChannelList1?, ChannelList2),
 	construct_lhs_atoms(Name?, ParamList1?, GlobalList, ChannelList2?,
 				Channels, OuterAtom, InnerAtom),
-	serve_process_scope(ProcessScope?, ProcessDefinition?,
+	serve_process_scope(ProcessScope?, NewDefinition,
 				Out, NextOut, Errors'''', NextErrors).
 
   correct_for_duplication(L1, L2, P, C1, C2) :-
@@ -474,11 +586,11 @@ make_process_scope(LHS, ProcessScope, GlobalList,
 
 compute_status(NewDefinition, Status) :-
 
-    NewDefinition = {_Name, _Arity, _Channels, OuterAtom, _InnerAtom},
+    NewDefinition =?= {_Name, _Arity, _Channels, OuterAtom, _InnerAtom},
     OuterAtom =?= [] :
       Status = nil;    
 
-    NewDefinition = {_Name, _Arity, _Channels, OuterAtom, InnerAtom},
+    NewDefinition =?= {_Name, _Arity, _Channels, OuterAtom, InnerAtom},
     OuterAtom =\= [], OuterAtom =?= InnerAtom :
       Status = single;
 
@@ -486,16 +598,49 @@ compute_status(NewDefinition, Status) :-
       NewDefinition = _,
       Status = double.
 
-export_process(ProcessDefinition, Exports, NextExports) :-
+export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
 
     ProcessDefinition =?= {Name, Arity, _Channels, _OuterAtom, _InnerAtom},
-    Name =\= "_" :
+    Name =\= "_",
+    Exported =?= all :
+      Export = true,
       Exports ! (Name/Arity),
       NextExports = Exports';
 
+    ProcessDefinition =?= {Name, Arity, _Channels, _OuterAtom, _InnerAtom},
+    Name =\= "_" |
+	exported_procedure;	
+
     otherwise :
       ProcessDefinition = _,
+      Exported = _,
+      Export = _,
       Exports = NextExports.
+
+  exported_procedure(Name, Arity, Exported, Export, Exports, NextExports) :-
+
+    Exported ? Name :
+      Exported' = _,
+      Export = true,
+      Exports ! (Name/Arity),
+      NextExports = Exports';
+
+    Exported ? (Name/Arity) :
+      Exported' = _,
+      Export = true,
+      Exports ! (Name/Arity),
+      NextExports = Exports';
+
+    Exported ? _Other,
+    otherwise |
+	self;
+
+    Exported = [] :
+      Name = _,
+      Arity = _,
+      Export = false,
+      NextExports = Exports.
+
 
 add_process_definition(ProcessDefinition, Progeny, NewProgeny) :-
 
@@ -1013,7 +1158,7 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =\= none,
     list(Arguments),
-    CallDefinition = {_Name, Arity, _Channels, Atom, _InnerAtom} :
+    CallDefinition =?= {_Name, Arity, _Channels, Atom, _InnerAtom} :
       Substitutes = _,
       Name = _,
       Body1 = _ |
@@ -1022,7 +1167,7 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =?= outer,
     Arguments =?= [],
-    CallDefinition = {_Name, _Arity, _Channels, Atom, _InnerAtom} :
+    CallDefinition =?= {_Name, _Arity, _Channels, Atom, _InnerAtom} :
       Errors = NextErrors,
       Name = _,
       Body1 = _ |
@@ -1030,7 +1175,7 @@ complete_local_call(CallType, CallDefinition, Arguments, Substitutes, Name,
 
     CallType =?= inner,
     Arguments =?= [],
-    CallDefinition = {_Name, _Arity, _Channels, _OuterAtom, Atom} :
+    CallDefinition =?= {_Name, _Arity, _Channels, _OuterAtom, Atom} :
       Name = _,
       Body1 = _,
       Errors = NextErrors |
@@ -1244,10 +1389,11 @@ substituted_local_channels(Primes, Substitutes, Primed) :-
 
 /************************* Program Transformations ***************************/
 
-program(Source, Exports, Terms, Errors) :-
+program(Source, GlobalList, Exported, Exports, Terms, Errors) :-
 
-	serve_empty_scope(Scope?, Exports, Errors),
-	process_definitions+(Processes = [], NextScope = [], NextTerms=[]).
+	serve_empty_scope(Scope?, GlobalList, Exported, Exports,
+				NextTerms, Errors),
+	process_definitions+(Processes = [], NextScope = []).
 
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
@@ -1748,6 +1894,7 @@ parse_remote_call(Call1, Call2, Scope, NextScope) :-
 
 
 /**** Utilities ****/
+
 
 concatenate(List1, List2, List3) :-
 
