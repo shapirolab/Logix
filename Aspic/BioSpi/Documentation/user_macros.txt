@@ -267,4 +267,7 @@ Notes:
    processes across ambients (e.g. to sum the counts for a given
    process in all ambients).
 
-2. The re (resume) user macro invalidates the output of a record user macro.
+2. A record session which is run without interruption will difer from
+   one which is run with suspension (s(N)) and resumption (re(N)); see
+   Spi-release/Documentation/user_macros.txt).  The records will diverge
+   following the first suspend/resume pair.

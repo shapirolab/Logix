@@ -203,9 +203,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
       Reply = Status'? |
 	DEBUG(suspend, suspending),
 	processor # machine(idle_queue(Done, SYSTEM_IDLE_PRIORITY), _Ok),
-	control_children(suspend, Children, Children', Ready, Done?),
-	system_suspending(Ready?, SharedChannels, Status'),
-	self;
+	system_suspend;
 
     In ? suspend(Reply),
     Status =\= running :
@@ -292,6 +290,21 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     otherwise :
       Debug = _.
 
+  system_suspend(In, Events, Children, UniqueId, Status, SharedChannels,
+			Scheduler, Ambient, Debug, Done) :-
+
+    known(Done) :
+      write_channel(record_item(reset("")), Scheduler, Scheduler') |
+	control_children(suspend, Children, Children', Ready),
+	system_suspended(Ready?, SharedChannels, Status),
+	serve_system + (SharedChannels = []).
+
+  system_suspended(Ready, SharedChannels, Status) :-
+
+    known(Ready) |
+	remove_all_communications(SharedChannels, Reply),
+	Reply?(Status) = true(suspended).
+
   system_resume(Scheduler, Children, NewChildren, Status, Reply) :-
 
     true :
@@ -306,12 +319,6 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
       NewChildren = Children,
       Status = suspended,
       Reply = false(done).
-
-  system_suspending(Ready, SharedChannels, Status) :-
-
-    known(Ready) |
-	remove_all_communications(SharedChannels, Reply),
-	Reply?(Status) = true(suspended).
 
 /*
 ** Create a nested computation.
