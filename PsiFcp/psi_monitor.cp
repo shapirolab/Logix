@@ -86,10 +86,11 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
     List ? Name(NewChannel, BaseRate),
     Last @< Name,
     we(NewChannel),
-    Globals ? Global, Global = Name(PsiChannel, BaseRate) :
-      NewChannel = PsiChannel,
-      NewGlobals ! Global,
+    Globals ? Global, Global = Name(PsiChannel, BaseRate),
+    PsiChannel = Id(Channel, {Left, Right}) :
       Last = _,
+      NewChannel = Id(Channel, {Middle, Right}),
+      NewGlobals ! Name(Id(Channel, {Left, Middle}), BaseRate),
       Last' = Name |
 	self;
 
@@ -117,7 +118,7 @@ merge_global_channels(List, Globals, NewGlobals, Last, Scheduler) :-
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
       Globals' = [Name(PsiChannel?, BaseRate) | Globals],
-      write_channel(global_channel(Id?, PsiChannel, BaseRate), Scheduler),
+      write_channel(new_channel(Id?, PsiChannel, BaseRate), Scheduler),
       GT = NL |
 	list_to_string(GL, Id),
 	self;
@@ -174,7 +175,6 @@ start_scheduling(Scheduler, Offset, Ok) :-
 ** It recognises:
 **
 **    cutoff(Time)
-**    global_channel(Creator, Channel, BaseRate)
 **    input(Schedule?, Schedule')
 **    new_channel(Creator, Channel, BaseRate)
 **    pause(Continue)
@@ -236,12 +236,6 @@ scheduling(Schedule, Offset, NegativeExponential, Uniform, Waiter,
 	self;
 
     /* Create a new channel. */
-    Schedule ? New , New = global_channel(Creator, Channel, BaseRate) |
-	new_channel(Creator, Channel, BaseRate, Halt, global,
-			Scheduler, PutCommand'?, PutCommand),
-	continue_waiting;
-
-    /* Create a new channel. */
     Schedule ? New , New = new_channel(Creator, Channel, BaseRate) |
 	new_channel(Creator, Channel, BaseRate, Halt, stop,
 			Scheduler, PutCommand'?, PutCommand),
@@ -298,6 +292,8 @@ scheduling(Schedule, Offset, NegativeExponential, Uniform, Waiter,
       Debug ! ((pi_monitor:Select)) |
 	fail(scheduling-Select),
 	self;
+
+/*************************** End Testing sum/select **************************/
 
     GetCommand ? sum(S),
     number(S), S =< 0 :
@@ -451,31 +447,10 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
       Terminator = _,
       DEBUG(failed_new(Creator, Channel, BaseRate)),
       CommandOut = CommandIn |
-	fail(new(Creator, Channel, BaseRate));
-
-    /* wait for the BaseRate to be instantiated */
-    CommandIn ? Command :
-      CommandOut ! Command |
-	self;
-
-    CommandIn =?= [] :
-      Creator = _,
-      Channel = _,
-      BaseRate = _,
-      Halt = _,
-      NotesChannel = _,
-      Terminator = _,
-      CommandOut = [].
-
+	fail(new(Creator, Channel, BaseRate)).
   
   prototype_or_instantaneous(ChannelName, Input, InputChannel, BaseRate, Halt,
 			NotesChannel, CommandIn, CommandOut, Stop) :-
-
-    BaseRate =< 0 :
-      Stop = _,
-      CommandOut = CommandIn,
-      DEBUG((ChannelName: sink)) |
-	sink_channel + (Count = 0);
 
     BaseRate = test :
       Halt = _,
@@ -486,31 +461,16 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
       CommandOut = CommandIn |
 	instantaneous_channel;
 
-    BaseRate > 0,
-    Input =?= [Dimer | _],
-    arg(1, Dimer, dimer),
-    BaseRate' := real(BaseRate) :
-      Halt = _ |
-	dimerized_channel;
+    BaseRate =< 0 :
+      Stop = _,
+      CommandOut = CommandIn,
+      DEBUG((ChannelName: sink)) |
+	sink_channel + (Count = 0);
 
     BaseRate > 0,
-    Input =?= [Send | _],
-    arg(1, Send, send),
     BaseRate' := real(BaseRate) :
       Halt = _ |
-	bimolecular_channel;
-
-    BaseRate > 0,
-    Input =?= [Receive | _],
-    arg(1, Receive, receive),
-    BaseRate' := real(BaseRate) :
-      Halt = _ |
-	bimolecular_channel;
-
-    Input ? inspect(Head, Tail) :
-      Head ! indeterminate(ChannelName(BaseRate), []),
-      Head' = Tail |
-	self;
+	channel_type;
 
     otherwise :
       Halt = _,
@@ -522,8 +482,10 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
 	fail(("invalid base rate" : ChannelName - BaseRate));
 
     /* wait for first message */
-    CommandIn ? Command :
-      CommandOut ! Command |
+    unknown(BaseRate),
+    Input ? inspect(Head, Tail) :
+      Head ! indeterminate(ChannelName(unknown), []),
+      Head' = Tail |
 	self;
 
     Stop =?= stop :
@@ -536,6 +498,11 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
       CommandOut = CommandIn,
       close_channel(InputChannel);
 
+    unknown(BaseRate),
+    CommandIn ? Command :
+      CommandOut ! Command |
+	self;
+
     CommandIn =?= [] :
       BaseRate = _,
       ChannelName = _,
@@ -544,6 +511,52 @@ new_channel(Creator, Channel, BaseRate, Halt, Terminator,
       NotesChannel = _,
       Stop = _,
       CommandOut = [],
+      close_channel(InputChannel).
+
+  channel_type(ChannelName, Input, InputChannel, BaseRate,
+		NotesChannel, CommandIn, CommandOut, Stop) :-
+
+    /* wait for first message */
+    unknown(Input),
+    CommandIn ? Command :
+      CommandOut ! Command |
+	self;
+
+    CommandIn =?= [] :
+      BaseRate = _,
+      ChannelName = _,
+      Input = _,
+      NotesChannel = _,
+      Stop = _,
+      CommandOut = [],
+      close_channel(InputChannel);
+
+    Input =?= [Dimer | _],
+    arg(1, Dimer, dimer) |
+	dimerized_channel;
+
+    Input =?= [Send | _],
+    arg(1, Send, send),
+    BaseRate' := real(BaseRate) |
+	bimolecular_channel;
+
+    Input =?= [Receive | _],
+    arg(1, Receive, receive),
+    BaseRate' := real(BaseRate) |
+	bimolecular_channel;
+
+    Input ? inspect(Head, Tail) :
+      Head ! indeterminate(ChannelName(BaseRate), []),
+      Head' = Tail |
+	self;
+
+    Stop =?= stop :
+      BaseRate = _,
+      ChannelName = _,
+      Input = _,
+      NotesChannel = _,
+      Stop = _,
+      CommandOut = CommandIn,
       close_channel(InputChannel).
 
 
@@ -640,11 +653,11 @@ test_channel(ChannelName, Input, InputChannel,
 
     CommandIn = [] :
       ChannelName = _,
-      Weight = _,
       Input = _,
       InputChannel = _,
       NotesChannel = _,
       Stop = _,
+      Weight = _,
       CommandOut = [].
 
 
@@ -654,6 +667,49 @@ dimerized_channel(ChannelName, Input, InputChannel, BaseRate,
 dimerized(ChannelName, Input, InputChannel, BaseRate,
 	  NotesChannel, CommandIn, CommandOut, Stop,
 	  Requests, AddRequests, Weight, Blocked) :-
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= false,
+    Cumulant' := Cumulant + BaseRate*(Weight*(Weight-1))/2 :
+      CommandOut ! sum(Cumulant') |
+	self;
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= true :
+      CommandOut ! sum(Cumulant) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
+    Cumulant' >= 0 :
+      CommandOut ! select(Cumulant', Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= true :
+      CommandOut ! select(Cumulant, Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
+    Cumulant' < 0 |
+	get_active_request(Requests, Requests', Request),
+	dimerized_transmit + (Requests1 = AddRequests1?);
+
+    CommandIn = [] :
+      ChannelName = _,
+      BaseRate = _,
+      Stop = _,
+      Input = _,
+      NotesChannel = _,
+      Requests = _,
+      AddRequests = _,
+      Weight = _,
+      Blocked = _,
+      close_channel(InputChannel),
+      CommandOut = CommandIn;
 
     Input ? Request, Request =?= dimer(_, _, _, Multiplier, _),
     Weight += Multiplier :
@@ -704,50 +760,7 @@ dimerized(ChannelName, Input, InputChannel, BaseRate,
       CommandOut = CommandIn,
       close_channel(InputChannel),
       AddRequests = [],
-      DEBUG((ChannelName:stopped(Requests)));
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*(Weight*(Weight-1))/2 :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*(Weight*(Weight-1))/2,
-    Cumulant' < 0 |
-	get_active_request(Requests, Requests', Request),
-	dimerized_transmit + (Requests1 = AddRequests1?);
-
-    CommandIn = [] :
-      ChannelName = _,
-      BaseRate = _,
-      Stop = _,
-      Input = _,
-      NotesChannel = _,
-      Requests = _,
-      AddRequests = _,
-      Weight = _,
-      Blocked = _,
-      close_channel(InputChannel),
-      CommandOut = CommandIn.
+      DEBUG((ChannelName:stopped(Requests))).
 
   dimerized_transmit(ChannelName, Input, InputChannel, BaseRate,
 		NotesChannel, CommandIn, CommandOut, Stop,
@@ -817,6 +830,52 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
 	    Sends, AddSends, SendWeight,
 	    Receives, AddReceives, ReceiveWeight, Blocked) :-
 
+    CommandIn ? sum(Cumulant),
+    Blocked =?= false,
+    Cumulant' := Cumulant + BaseRate*SendWeight*ReceiveWeight :
+      CommandOut ! sum(Cumulant') |
+	self;
+
+    CommandIn ? sum(Cumulant),
+    Blocked =?= true :
+      CommandOut ! sum(Cumulant) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= false,
+    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
+    Cumulant' >= 0 :
+      CommandOut ! select(Cumulant', Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked =?= true :
+      CommandOut ! select(Cumulant, Selected) |
+	self;
+
+    CommandIn ? select(Cumulant, Selected),
+    Blocked = false,
+    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
+    Cumulant' < 0 |
+	get_active_request(Sends, Sends', Send),
+	bimolecular_send + (Receives1 = AddReceives1?);
+
+    CommandIn = [] :
+      AddReceives = _,
+      AddSends = _,
+      BaseRate = _,
+      Blocked = _,
+      ChannelName = _,
+      Input = _,
+      NotesChannel = _,
+      Receives = _,
+      ReceiveWeight = _,
+      Sends = _,
+      SendWeight = _,
+      Stop = _,
+      close_channel(InputChannel),
+      CommandOut = CommandIn;
+
     Input ? Request, Request =?= send(_, _, _, Multiplier, _),
     SendWeight += Multiplier :
       Blocked = _,
@@ -874,53 +933,7 @@ bimolecular(ChannelName, Input, InputChannel, BaseRate,
       close_channel(InputChannel),
       AddSends = Receives,
       AddReceives = [],
-      DEBUG((ChannelName:stopped(Sends)));
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= false,
-    Cumulant' := Cumulant + BaseRate*SendWeight*ReceiveWeight :
-      CommandOut ! sum(Cumulant') |
-	self;
-
-    CommandIn ? sum(Cumulant),
-    Blocked =?= true :
-      CommandOut ! sum(Cumulant) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' >= 0 :
-      CommandOut ! select(Cumulant', Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked =?= true :
-      CommandOut ! select(Cumulant, Selected) |
-	self;
-
-    CommandIn ? select(Cumulant, Selected),
-    Blocked = false,
-    Cumulant' := Cumulant - BaseRate*SendWeight*ReceiveWeight,
-    Cumulant' < 0 |
-	get_active_request(Sends, Sends', Send),
-	bimolecular_send + (Receives1 = AddReceives1?);
-
-    CommandIn = [] :
-      AddReceives = _,
-      AddSends = _,
-      BaseRate = _,
-      Blocked = _,
-      ChannelName = _,
-      Input = _,
-      NotesChannel = _,
-      Receives = _,
-      ReceiveWeight = _,
-      Sends = _,
-      SendWeight = _,
-      Stop = _,
-      close_channel(InputChannel),
-      CommandOut = CommandIn.
+      DEBUG((ChannelName:stopped(Sends))).
 
 
 bimolecular_send(ChannelName, Input, InputChannel, BaseRate,
@@ -929,6 +942,19 @@ bimolecular_send(ChannelName, Input, InputChannel, BaseRate,
 		 Receives, AddReceives, ReceiveWeight, Blocked,
 		 Receives1, AddReceives1, Send, Selected) :-
 
+    Receives ? _(_, _, _, _, Reply), not_we(Reply) |
+	self;
+
+    Receives ? _(Id1, Ms1, Tag1, ReceiveMultiplier, Reply1), we(Reply1),
+    Send =?=  _(Id2, Ms2, Tag2, SendMultiplier, Reply2), we(Reply2),
+    SendWeight -= SendMultiplier,
+    ReceiveWeight -= ReceiveMultiplier :
+      Ms1 = Ms2,
+      Reply1 = Tag1,
+      Reply2 = Tag2,
+      Selected = done(Id1, Id2),
+      AddReceives1 = Receives'? |
+	bimolecular + (Receives = Receives1);
 
     /* This shouldn't happen. */
     Send =?= _(_, _, _, _, Reply), not_we(Reply) :
@@ -954,20 +980,6 @@ bimolecular_send(ChannelName, Input, InputChannel, BaseRate,
 	bimolecular_receive +
 		(Sends1 = [Send | AddSends1?], AddReceives = AddReceives1);
 
-    Receives ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Receives ? _(Id1, Ms1, Tag1, ReceiveMultiplier, Reply1), we(Reply1),
-    Send =?=  _(Id2, Ms2, Tag2, SendMultiplier, Reply2), we(Reply2),
-    SendWeight -= SendMultiplier,
-    ReceiveWeight -= ReceiveMultiplier :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      Selected = done(Id1, Id2),
-      AddReceives1 = Receives'? |
-	bimolecular + (Receives = Receives1);
-
     /* This Receive has the same Reply as the Send.
        Maybe some other receive will do the trick. */
     Receives ? Receive, Receive = _(_, _, _, _, Reply),
@@ -988,6 +1000,20 @@ bimolecular_receive(ChannelName, Input, InputChannel, BaseRate,
 		    Receives, AddReceives, ReceiveWeight, Blocked,
 		    Sends1, AddSends1, Receive, Selected) :-
 
+    Sends ? _(_, _, _, _, Reply), not_we(Reply) |
+	self;
+
+    Sends ? _(Id1, Ms1, Tag1, SendMultiplier, Reply1), we(Reply1),
+    Receive =?=  _(Id2, Ms2, Tag2, ReceiveMultiplier, Reply2), we(Reply2),
+    SendWeight -= SendMultiplier,
+    ReceiveWeight -= ReceiveMultiplier :
+      Ms1 = Ms2,
+      Reply1 = Tag1,
+      Reply2 = Tag2,
+      Selected = done(Id1, Id2),
+      AddSends1 = Sends'? |
+	bimolecular + (Sends = Sends1);
+
     /* This shouldn't happen. */
     Receive =?= _(_, _, _, _, Reply), not_we(Reply) :
       AddSends1 = Sends,
@@ -1002,20 +1028,6 @@ bimolecular_receive(ChannelName, Input, InputChannel, BaseRate,
       Blocked' = true |
 	bimolecular + (Sends = Sends1, AddSends = AddSends1,
 			Receives = [Receive | Receives]);
-
-    Sends ? _(_, _, _, _, Reply), not_we(Reply) |
-	self;
-
-    Sends ? _(Id1, Ms1, Tag1, SendMultiplier, Reply1), we(Reply1),
-    Receive =?=  _(Id2, Ms2, Tag2, ReceiveMultiplier, Reply2), we(Reply2),
-    SendWeight -= SendMultiplier,
-    ReceiveWeight -= ReceiveMultiplier :
-      Ms1 = Ms2,
-      Reply1 = Tag1,
-      Reply2 = Tag2,
-      Selected = done(Id1, Id2),
-      AddSends1 = Sends'? |
-	bimolecular + (Sends = Sends1);
 
     /* This Send has the same Reply as the Receive - mixed communication. */
     Sends ? Send, Send = _(_, _, _, _, Reply),
@@ -1100,19 +1112,6 @@ instantaneous_receive(ChannelName, Input, InputChannel, NotesChannel,
 					Halt, Stop,
 	Receives, AddReceives, Sends, AddSends, Receive, Sends1, AddSends1) :-
 
-    /* This shouldn't happen. */
-    Receive = _(_, _, _, _, Reply), not_we(Reply) :
-      Sends' = Sends1,
-      AddSends1 = Sends |
-	instantaneous;
-
-    /* This shouldn't happen either. */
-    Receive = _(_, _, _, _, Reply), we(Reply),
-    unknown(Sends) :
-      Sends' = Sends1,
-      AddSends1 = Sends |
-	instantaneous + (Receives = [Receive | Receives]);
-
     Sends ? _(_, _, _, _, Reply), not_we(Reply) |
 	self;
 
@@ -1126,6 +1125,19 @@ instantaneous_receive(ChannelName, Input, InputChannel, NotesChannel,
       AddSends1 = Sends'? |
 	instantaneous;
 
+    /* This shouldn't happen. */
+    Receive = _(_, _, _, _, Reply), not_we(Reply) :
+      Sends' = Sends1,
+      AddSends1 = Sends |
+	instantaneous;
+
+    /* This shouldn't happen either. */
+    Receive = _(_, _, _, _, Reply), we(Reply),
+    unknown(Sends) :
+      Sends' = Sends1,
+      AddSends1 = Sends |
+	instantaneous + (Receives = [Receive | Receives]);
+
     /* This Send has the same Reply as the Receive - mixed communication. */
     Sends ? Send, Send = _(_, _, _, _, Reply),
     Receive =?= _(_, _, _, _, Reply) :
@@ -1137,19 +1149,6 @@ instantaneous_receive(ChannelName, Input, InputChannel, NotesChannel,
 instantaneous_send(Send, ChannelName, Input, InputChannel, NotesChannel,
 				Halt, Stop,
 	Receives, AddReceives, Sends, AddSends, Receives1, AddReceives1) :-
-
-    /* This shouldn't happen. */
-    Send =?= _(_, _, _, _, Reply), not_we(Reply) :
-      Receives' = Receives1,
-      AddReceives1 = Receives |
-	instantaneous;
-
-    /* This shouldn't happen either. */
-    Send =?= _(_, _, _, _, Reply), we(Reply),
-    unknown(Receives) :
-      Receives' = Receives1,
-      AddReceives1 = Receives |
-	instantaneous + (Sends = [Send | Sends]);
 
     Receives ? _(_, _, _, _, Reply), not_we(Reply) |
 	self;
@@ -1163,6 +1162,19 @@ instantaneous_send(Send, ChannelName, Input, InputChannel, NotesChannel,
       Receives'' = Receives1,
       AddReceives1 = Receives'? |
 	instantaneous;
+
+    /* This shouldn't happen. */
+    Send =?= _(_, _, _, _, Reply), not_we(Reply) :
+      Receives' = Receives1,
+      AddReceives1 = Receives |
+	instantaneous;
+
+    /* This shouldn't happen either. */
+    Send =?= _(_, _, _, _, Reply), we(Reply),
+    unknown(Receives) :
+      Receives' = Receives1,
+      AddReceives1 = Receives |
+	instantaneous + (Sends = [Send | Sends]);
 
     /* This Receive has the same Reply as the Send - mixed communication. */
     Receives ? Receive, Receive = _(_, _, _, _, Reply),
