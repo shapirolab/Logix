@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/01/27 12:17:27 $
+		       	$Date: 2000/02/01 07:07:30 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Logix/system/transform/Attic/pifcp.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -38,8 +38,7 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 transform(Attributes1, Source, Attributes2, Terms, Errors) :-
 
-	/* Exclude declared export from Attributes. */ 
-	/* Extract (all) Global channel declarations */
+	/* Extract Global channel declarations, and get Exported list. */
 	filter_attributes(Attributes1, [], GlobalList, Attributes1', Exported,
 				Errors, Errors'?),
 	Attributes2 = [export(Exports?) | Attributes1'?],
@@ -174,7 +173,7 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
 	list_to_string([Space|NL], Name'),
 	split_channels(1, Index, Channels, ParamList, ChannelList),
 	construct_lhs_atoms,
-	initialize_channels(Index', OuterAtom'?, global, Initializer);
+	initialize_global_channels(Index', OuterAtom'?, Initializer);
 
     ProcessDefinition =?= {Name, Arity, Channels, OuterAtom, _InnerAtom},
     Name =\= "_",
@@ -211,6 +210,21 @@ create_entry(GlobalList, Export, ProcessDefinition, NewDefinition,
       Index = _,
       ParamList = [],
       ChannelList = [].
+
+
+  initialize_global_channels(Index, Atom, Initializer)
+				+ (List = Tail?, Tail) :-
+
+    Index =< arity(Atom),
+    arg(Index, Atom, `Channel),
+    Index++ :
+      Tail ! Channel(`Channel) |
+	self;
+
+    Index > arity(Atom),
+    arg(1, Atom, PName) :
+      Tail = [],
+      Initializer = (pi_monitor#global_channels(List), PName).
 
 /*
 ** serve_process_scope/6+3
@@ -395,15 +409,10 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
   compare_channels_ok(Operator, List, Comparer,
 			ChannelList, NextChannelList) :-
 
-    List =?= [C1, C2], C1 =\= "_", C2 =\= "_",
-    string_to_dlist(C1, CL1, []),
-    string_to_dlist(C2, CL2, []) :
-      Compare = {Operator, `FcpChannel1?, `FcpChannel2?} |
-	list_to_string([86 | CL1], FcpChannel1),
-	list_to_string([86 | CL2], FcpChannel2),
-	compare_channel(C1, FcpChannel1?, Extract1, ChannelList, ChannelList'),
-	compare_channel(C2, FcpChannel2?, Extract2,
-			ChannelList'?, NextChannelList),
+    List =?= [C1, C2], C1 =\= "_", C2 =\= "_" :
+      Compare = {Operator, `pinch(C1), `pinch(C2)} |
+	compare_channel(C1, Extract1, ChannelList, ChannelList'),
+	compare_channel(C2, Extract2, ChannelList'?, NextChannelList),
 	make_comparer;
 
     otherwise :
@@ -412,20 +421,19 @@ serve_process_scope(In, ProcessDefinition, Out, NextOut, Errors, NextErrors) +
       NextChannelList = ChannelList,
       Comparer = true.
 
-  compare_channel(C, FC, Extract, CL, NCL) :-
+  compare_channel(C, Extract, CL, NCL) :-
 
     CL ? Ch, C =\= Ch :
       NCL ! Ch |
 	self;
 
     CL ? Ch, C =?= Ch :
-      FC = _,
       CL' = _,
       Extract = true,
       NCL = CL;
 
     CL = [] :
-      Extract = (`C = {`"_", `FC, `"_"}),
+      Extract = (`C = {`"_", `pinch(C), `"_"}),
       NCL = [C].
     
   make_comparer(Extract1, Extract2, Compare, Comparer) :-
@@ -608,7 +616,8 @@ export_process(ProcessDefinition, Exported, Export, Exports, NextExports) :-
       NextExports = Exports';
 
     ProcessDefinition =?= {Name, Arity, _Channels, _OuterAtom, _InnerAtom},
-    Name =\= "_" |
+    Name =\= "_",
+    Exported =\= all |
 	exported_procedure;	
 
     otherwise :
@@ -1582,7 +1591,7 @@ guarded_clauses(RHS1, RHS2, Nested, Scope) +
 			ChoiceVars = [`pifcp(chosen), `SendId]);
 
     /* receive, compared, logix, none */
-    Mode =\= conflict, Mode =\= compare :
+    Mode =\= send, Mode =\= mixed, Mode =\= compare, Mode =\= conflict :
       Sends = [],
       SendId = "_",
       RHS2 = FcpClauses?,
