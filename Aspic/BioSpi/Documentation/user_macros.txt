@@ -238,7 +238,7 @@ In addition to the usual record features, the ambient record includes:
    e.g. !5, indicating that the specified ambient (5) was merged into
    another one (and no longer exists).
 
-The psi2t script handles these modifications:
+The spi2t script handles these modifications:
 
  * Processes are counted per ambient, since the user-specified class
    and the numeric identifier are part of the process name.
