@@ -354,7 +354,7 @@ make_channel_anchor(Name, Anchor) :-
 **    ordinal(Old?^, New)
 **    pause(Continue)
 **    record(Record?^)
-**    record_string(String)
+**    record_item(Item)
 **    end_record(Record?^)
 **    start(Signature, OpList, Value, Chosen)
 **    start(Signature, OpList, Value, Chosen, Prefix)
@@ -478,10 +478,9 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Stream = Record? |
 	self;
 
-    Schedule ? record_string(String),
-    string(String) :
-      Record ! String,
-      Debug ! String |
+    Schedule ? record_item(Item) :
+      Record ! Item,
+      Debug ! Item |
 	self;
 
     /* Close the recording stream, and start a new one. */
@@ -1172,7 +1171,7 @@ execute(MathOffset, Arguments) :-
 
 /************************** close procedures *********************************/
 
-close_channels(Channels, N, Reply) :-
+close_channels(Channels, N, Reply)  :-
 
     N > 0,
     arg(N, Channels, Channel),
@@ -1190,8 +1189,7 @@ close_channels(Channels, N, Reply) :-
     vector(Channel),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Refs--,
-    Refs' =< 0,
-%    read_vector(SPI_CHANNEL_NAME, Channel, Name),
+    Refs' =:= 0,
     read_vector(SPI_NEXT_CHANNEL, Channel, Next),
     read_vector(SPI_PREVIOUS_CHANNEL, Channel, Previous) :
       store_vector(SPI_CHANNEL_REFS, 0, Channel),
@@ -1200,6 +1198,15 @@ close_channels(Channels, N, Reply) :-
       store_vector(SPI_NEXT_CHANNEL, Channel, Channel),
       store_vector(SPI_PREVIOUS_CHANNEL, Channel, Channel),
       Reply ! N |
+	self;
+
+    N > 0,
+    arg(N, Channels, Channel),
+    N--,
+    vector(Channel),
+    read_vector(SPI_CHANNEL_REFS, Channel, Refs),
+    Refs--,
+    Refs' < 0 |
 	self;
 
     N =< 0 :
