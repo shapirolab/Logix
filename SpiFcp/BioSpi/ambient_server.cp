@@ -300,6 +300,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	control_children(resume, Children, NewChildren, Ready),
 	Ready?(Reply) = true(running);
 
+    /* This is the case where the Scheduler has closed. */
     otherwise :
       Scheduler = _,
       NewChildren = Children,
@@ -1209,7 +1210,8 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     Type =\= SPI_INSTANTANEOUS :
       BaseRate = Rate.
 
-  update_new_channel(NewChannel, AddRefs, Type, Rate, WeightTuple, SharedChannel) :-
+  update_new_channel(NewChannel, AddRefs, Type, Rate, WeightTuple,
+			SharedChannel) :-
 
     vector(NewChannel) :
       store_vector(SPI_CHANNEL_TYPE, Type, NewChannel),
@@ -1219,7 +1221,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       SharedChannel = NewChannel.
 
   verify_shared_channel(PrivateChannel, Channel, SharedChannel,
-			ChannelList, NewChannelList) :-
+			ChannelList, NewChannelList, Scheduler) :-
 
     read_vector(SPI_CHANNEL_RATE, PrivateChannel, Rate),
     read_vector(SPI_WEIGHT_TUPLE, PrivateChannel, WeightTuple),
@@ -1233,14 +1235,15 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id) :
       NewChannelList = [Channel | ChannelList],
       SharedChannel = Channel |
-	screen#display("shared weight/rate conflict!" - Id).
+	ambient_diagnostic("shared weight/rate conflict!" - Id, Scheduler).
 
   verify_shared_channel_type(PrivateChannel, Channel, SharedChannel,
-			     ChannelList, NewChannelList) :-
+			     ChannelList, NewChannelList, Scheduler) :-
 
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
     Type =?= SharedType :
+      Scheduler = _,
       SharedChannel = Channel,
       NewChannelList = ChannelList;
 
@@ -1248,6 +1251,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
     Type =?= SPI_UNKNOWN,
     SharedType =\= SPI_UNKNOWN :
+      Scheduler = _,
       SharedChannel = Channel,
       NewChannelList = ChannelList;
 
@@ -1255,6 +1259,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
     Type =\= SPI_UNKNOWN,
     SharedType =?= SPI_UNKNOWN :
+      Scheduler = _,
       store_vector(SPI_CHANNEL_TYPE, Type, Channel),
       SharedChannel = Channel,
       NewChannelList = ChannelList;
@@ -1265,7 +1270,8 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id) :
       SharedChannel = Channel,
       NewChannelList = ChannelList |
-	screen#display("shared type conflict!" - Id(Type =\= SharedType)).
+	ambient_diagnostic("shared type conflict!" - Id(Type =\= SharedType),
+				Scheduler).
     
 
 add_local_channel(Channel, PrivateChannels, NewPrivateChannels) :-
@@ -1738,6 +1744,17 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler)
 /***************************** Utilities ************************************/
 
 
+ambient_diagnostic(Diagnostic, Scheduler) :-
+
+    true :
+      write_channel(diagnostic(Diagnostic), Scheduler);
+
+    /* This is the case where the Scheduler has closed. */
+    otherwise :
+      Diagnostic = _,
+      Scheduler = _ .
+
+
 ambient_suspending(ReadyChildren,
 		   PublicChannels, PrivateChannels, SharedChannels,
 		   Ready) :-
@@ -1921,30 +1938,15 @@ remove_shared_communications(Ambient, Channels, Scheduler, Reply) +
       Scheduler = _,
       NewRemoved = Removed;
 
-    otherwise |
-	remove_from_queue_failed.
-
-  remove_from_queue_failed(Ambient, Channel, Scheduler, Index, Anchor,
-				Removed, NewRemoved, PreviousMs) :-
-
-    arg(SPI_MESSAGE_LINKS, PreviousMs, Links),
-    read_vector(SPI_NEXT_MS, Links, Ms) :
-      Ambient = _,
-      Anchor = _,
-      write_channel(state(State), Scheduler),
-      NewRemoved = Removed |
-      /* This should never happen - internal failure!? */
-	screen#display(remove-failed(PreviousMs, Index, Ms, Channel)-state-State);
-    otherwise :
-      /* Scheduler reset - fuggedabotit!! */
-      Ambient = _,
+    otherwise,
+    read_vector(SPI_CHANNEL_NAME, Channel, Name) :
       Anchor = _,
       Channel = _,
-      Index = _,
       PreviousMs = _,
-      Scheduler = _,
       NewRemoved = Removed |
-	true. 
+      /* This should never happen - internal failure!? */
+	ambient_diagnostic((Ambient:remove(Name)-failed(Index)), Scheduler).
+
 
 resume_ambient_when_ready(In, Events, FromSub, Done,
 			  Ambient, Parent, Children,
