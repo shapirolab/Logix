@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/10/12 09:10:46 $
+		       	$Date: 2000/10/25 07:04:58 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.4 $
+			$Revision: 1.5 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -71,7 +71,7 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 
 program(Source, Exported, Exports, Terms, Errors) :-
 	filter_psifcp_attributes(Source, Exported, Controls,
-				_ModuleType, Source', Errors, Errors'?),
+					Source', Errors, Errors'?),
 	servers#serve_empty_scope(Scope?, Controls?, Exports,
 				  NextTerms, Optimize, Errors'),
 	process_definitions+(Processes = [], NextScope = []),
@@ -81,7 +81,7 @@ program(Source, Exported, Exports, Terms, Errors) :-
 
 
 /* Extract Global channel declarations and Stochastic base rate. */
-filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
+filter_psifcp_attributes(Source, Exported, Controls, NextSource,
 			Errors, NextErrors) +
 	(GlobalDescriptors = [], TypeRate = _ModuleType(_Rate),
 	 PsiExports = AddExports?, AddExports) :-
@@ -161,19 +161,17 @@ filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
     otherwise |
 	utilities#concatenate_lists([FcpExports, PsiExports], Exports).
 
-  complete_psifcp_attributes(Exported, TypeRate, ModuleType, GlobalDescriptors,
-					Controls) :-
+  complete_psifcp_attributes(Exported, TypeRate, GlobalDescriptors,
+				Controls) :-
 
     TypeRate =?= stochastic(_Rate) :
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate?},
-      ModuleType = stochastic |
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate} |
 	extract_global_names,
 	unify_without_failure(TypeRate, _(infinite));
 
     true :
       TypeRate = none(infinite),
-      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate},
-      ModuleType = none |
+      Controls = {Exported?, GlobalDescriptors, GlobalNames?, TypeRate} |
 	extract_global_names.
 
   update_base(TypeRate1, TypeRate2, TypeRate3) :-
@@ -239,9 +237,10 @@ filter_psifcp_attributes(Source, Exported, Controls, ModuleType, NextSource,
     GlobalDescriptors =?= [] :
       TypeRate = _,
       Tail = [],
-      Errors = NextErrors |
-	utilities#sort_out_duplicates([Old], Old', Reply),
-	utilities#sort_out_duplicates([Old'?, Head], New, _Reply),
+      Diagnostic = duplicate_global_channel |
+	utilities#sort_out_duplicates([Head], Head', Reply),
+	diagnose_duplicates(Reply, Diagnostic, Errors, Errors'?),
+	utilities#sort_out_duplicates([Old, Head'?], New, Reply'),
 	diagnose_duplicates + (Diagnostic = duplicate_global_channel).
 
   diagnose_duplicates(Reply, Diagnostic, Errors, NextErrors) :-
