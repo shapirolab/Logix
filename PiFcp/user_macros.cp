@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2000/03/07 11:51:37 $
+		       	$Date: 2000/04/09 12:02:01 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/PiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -83,14 +83,16 @@ expand(Command, Cs) :-
 		" spg / spg(No)      - Pi goal of computation No",
 		" spgcs / spgcs(No)  - Pi global channels",
 		" spr / spr(No)      - Pi resolvent of computation No",
-                " ctree(Tree)        - Close a vanilla tree",
-                " ptree(Tree)        - Pi execution tree",
-                " vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
+		" ctree(Tree)        - Close a vanilla tree",
+		" ptree(Tree)        - Pi execution tree",
+		" record(G, F, L)    - record Goal events on File until Limit.",
+		" run(Goal, Limit)   - record Goal until Limit.",
+		" vtree(Co, G, Tree) - Call widgets#vanilla#tree(Co, G, Tree)",
 		" Service - Goal     - call Service#Goal",
 		" - Goal             - call Current#Goal",
 		" {String}           - invoke UNIX shell sh with String",
-                "",
-                "        options for sp*, pdb and ptree:",
+		"",
+		"        options for sp*, pdb and ptree:",
 		" Integer            - depth of channel display",
 		" none/active/all    - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
@@ -180,6 +182,14 @@ expand(Command, Cs) :-
     Command = ptree(Tree, Options) :
       Cs = [to_context([computation # display(stream, Stream, []),
 			pi_utils # show_tree(Tree, Options, Stream)]) 
+	   | Commands]\Commands;
+
+    Command = record(Goal, File, Limit) :
+      Cs = [pi_record#run(Goal, File, Limit)
+	   | Commands]\Commands;
+
+    Command = run(Goal, Limit) :
+      Cs = [pi_record#run(Goal, Limit)
 	   | Commands]\Commands;
 
     Command = vtree(Context, Conjunction, Tree) :
