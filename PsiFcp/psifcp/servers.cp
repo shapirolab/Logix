@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/07/03 04:58:08 $
+		       	$Date: 2000/07/26 07:19:07 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -284,38 +284,7 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
       Outer = OuterLHS,
       Inner = InnerLHS |
 	self;
-/*
-    In ? body_receive(FromChannel, Message, Goal),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
-      ChannelVar = `ChannelName'?,
-      Notes ! variables(ChannelVar),
-      Goal = psi_receive(Name(ChannelName'?), ChannelVar, ChannelList,
-					Multiplier?) |
-	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
-	utilities#verify_channel(Name, FromChannel, ChannelNames, Locals,
-				ChannelName, Errors', Errors''?),
-	call#prime_local_channels(Primes, [ChannelName], [ChannelName']),
-	message_to_channels(Message'?, Name, ChannelNames, Locals, true,
-				MsChannelNames, Errors'', Errors'''?),
-	utilities#names_to_channel_list(MsChannelNames?, ChannelList),
-	self;
 
-    In ? body_send(Message, ToChannel, Goal),
-    ProcessDefinition =?= {Name, _Arity, ChannelNames, _LHSS, _CodeTuple} :
-      ChannelVar = `ChannelName'?,
-      Notes ! variables([ChannelName'? | MsChannelNames'?]),
-      Goal = psi_send(Name(ChannelName'?), ChannelList, ChannelVar,
-					Multiplier?) |
-	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
-	utilities#verify_channel(Name, ToChannel, ChannelNames, Locals,
-				ChannelName, Errors', Errors''?),
-	message_to_channels(Message', Name, ChannelNames, Locals, false,
-				MsChannelNames, Errors'', Errors'''?),
-	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
-					  [ChannelName' | MsChannelNames']),
-	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
-	self;
-*/
     In ? call(Body1, Body2) |
 	call#make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 				In'', In'?, Errors, Errors'?, CallDefinition),
@@ -326,6 +295,11 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
     arg(1, ProcessDefinition, Name) :
       Errors ! (Name - Description) |
 	self;
+
+    In ? end_clause :
+      Locals = _,
+      Primes = _ |
+	self + (Locals = [], Primes = []);
 
     In ? guard_compare(Guard, ChannelList, NextChannelList, Comparer),
     Guard =?= {Operator, C1, C2},
@@ -342,10 +316,12 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
       Guards = {Guard?, `"Message." = ChannelList?},
       Notes ! variables(ChannelName?) |
 	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
+	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
+				Errors', Errors''?),
 	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
-				ChannelName, Errors', Errors''?),
+				ChannelName, Errors'', Errors'''?),
 	parse_message(Name, ChannelNames, Message'?, MsChannelNames,
-			Locals', Primes', Errors'', Errors'''?),
+			Locals', Primes', Errors''', Errors''''?),
 	call#prime_local_channels(Primes'?, MsChannelNames?, MsChannelNames'),
 	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
 	make_guard_receive,
@@ -356,10 +332,12 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
       Guards = {Guard?, `"Message." = ChannelList},
       Notes ! variables([ChannelName'? | MsChannelNames'?]) |
 	parse_message(Message, Message', Multiplier, Name, Errors, Errors'?),
+	verify_multiplier(Name, Multiplier?, Multiplier', ChannelNames,
+				Errors', Errors''?),
 	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
-				ChannelName, Errors', Errors''?),
+				ChannelName, Errors'', Errors'''?),
 	message_to_channels(Message'?, Name, ChannelNames, Locals, false,
-				MsChannelNames, Errors'', Errors'''?),
+				MsChannelNames, Errors''', Errors''''?),
 	call#prime_local_channels(Primes, [ChannelName? | MsChannelNames?],
 					  [ChannelName' | MsChannelNames']),
 	utilities#names_to_channel_list(MsChannelNames'?, ChannelList),
@@ -439,6 +417,25 @@ serve_process_scope(In, ProcessDefinition, TypeRate, Notes,
 	unify_without_failure(CodeTuple, none([], [])),
 	find_process_refs(Refs, Progeny, Out, NextOut).
 
+  verify_multiplier(Name, Multiplier, IntegerMultiplier, ChannelNames,
+			Errors, Errors') :-
+
+    integer(Multiplier), Multiplier > 0 :
+      Name = _,
+      ChannelNames = _,
+      IntegerMultiplier = Multiplier,
+      Errors = Errors';
+
+    Multiplier =?= `_ :
+      IntegerMultiplier = `OkChannelName |
+	utilities#verify_channel(Name, Multiplier, ChannelNames, [],
+				OkChannelName, Errors, Errors');
+
+    otherwise :
+      ChannelNames = _,
+      IntegerMultiplier = 1,
+      Errors ! (Name - invalid_multiplier(Multiplier)).      
+
 parse_message(Message, Message', Multiplier, Name, Errors, NextErrors) :-
 
     Message =?= [] :
@@ -453,19 +450,19 @@ parse_message(Message, Message', Multiplier, Name, Errors, NextErrors) :-
       Multiplier = 1,
       Errors = NextErrors;
 
-    Message =?= M * [], M > 0 :
+    Message =?= M * [] :
       Name = _,
       Message' = [],
       Multiplier = M,
       Errors = NextErrors;
 
-    Message =?= [] * M, M > 0 :
+    Message =?= [] * M :
       Name = _,
       Message' = [],
       Multiplier = M,
       Errors = NextErrors;
 
-    Message =?= M * Tuple, M > 0 :
+    Message =?= M * Tuple :
       Name = _,
       Message' = Tuple,
       Multiplier = M,
