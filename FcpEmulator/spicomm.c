@@ -133,12 +133,12 @@ int spi_rate(heapP Channels,heapP Weight,heapP Reply);
 //*************************** Post Functions **********************************
 
 int set_offset(heapP OpEntry);
-int set_final_type(heapP ChP,int MsType,heapP Reply);
+int set_channel_type(heapP ChP, int MsType, int *ChannelType, heapP Reply);
 
 int vctr_var_s(heapP Ch,int Size);
 int which_mode (heapP P);
-int which_channel_type(heapP ChP);
 int channel_type(heapP ChP, int *ChannelType);
+int positive_integer(heapT V);
 int set_new_weight(heapP ChP,heapP OpEntry,int Offset,int Positive);
 int transmit_instantaneous(heapP OpEntry,heapP Channel,heapP PId,
 				heapP Value,heapP Chosen,heapP Reply);
@@ -234,7 +234,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  deref_ptr(Value);
  deref_ptr(Chosen);
  deref_ptr(Reply);
- 
+
  if (IsNil(*OpList)){
    if (!unify(Ref_Word(Value),Word(0,NilTag))){
         return(False);
@@ -269,10 +269,10 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
        return(False);
      }
      if (ChannelType == SPI_UNKNOWN) {
-       if (!set_final_type(ChP,MsType,Reply)){ //should check reason?
+       if (!set_channel_type(ChP, MsType, &ChannelType, Reply)){
+	 //should check reason?
 	 return(False);
        } 
-       ChannelType=which_channel_type(ChP);
      }
      switch (ChannelType) {
           case   SPI_BIMOLECULAR:
@@ -308,9 +308,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
        if (TrIn==False)
 	 return(False);
      }
-   Mult=(OpEntry+SPI_MS_MULTIPLIER);
-   deref_ptr(Mult);
-   if (!IsInt(*Mult)){
+   if (!positive_integer(*(OpEntry+SPI_MS_MULTIPLIER))) {
      return(False);
    }
    Tag=(OpEntry+SPI_MS_TAGS);
@@ -340,13 +338,12 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  } 
  deref(KOutA,ComShTpl);
  OpList=Pb;
-
  while(!IsNil(*OpList))     /* Pass 2 */
    {
      OpEntry=set_opentry(OpList);
      ChP=OpEntry+SPI_MS_CHANNEL;  // the channel 
      deref_ptr(ChP);
-     ChannelType=which_channel_type(ChP);
+     channel_type(ChP, &ChannelType);
      if (ChannelType!=SPI_SINK)
        {
 	 if (!do_store_vector(Word(SPI_BLOCKED,IntTag),Word(False,IntTag),
@@ -423,7 +420,7 @@ int Size;
 
 //*********************************************************************
 
-channel_type(ChP,ChannelType)
+channel_type(ChP, ChannelType)
 heapP ChP;
 int *ChannelType;
 {
@@ -445,6 +442,24 @@ int *ChannelType;
     V = *P;
   }
   *ChannelType = IsInt(V) ? Int_Val(V) : -1;
+}
+
+positive_integer(V)
+heapT V;
+{
+  heapP P;
+
+  if (IsRef(V)) {
+    deref(V,P);
+    if (!IsInt(*P)) {
+      if(IsVar(*P)) {
+	sus_tbl_add(P);
+      }
+      return(False);
+    }
+    V = *P;
+  }	
+  return (IsInt(V) && Int_Val(V) >= 0);
 }
   
 //*********************************************************************
@@ -543,18 +558,7 @@ int which_mode (P)
  
  deref_ptr(P);
  return(Int_Val(*P));
-}// end which 
-
-//*********************************************************************
-
-which_channel_type(ChP)
-heapP ChP;
-{
-  if (!do_read_vector(Word(SPI_CHANNEL_TYPE,IntTag),Ref_Word(ChP))){
-    return(-1);
-  }
-  return(Int_Val(KOutA));
-}
+}// end which_mode 
 
 //*********************************************************************
 
@@ -932,9 +936,10 @@ heapP Message,MessageTail;
 
 //*********************************************************************
 
-set_final_type(ChP,MsType,Reply) //should check reason`
+set_channel_type(ChP, MsType, ChannelType, Reply) //should check reason`
 heapP ChP,Reply;
-int MsType;             
+int MsType;
+int *ChannelType;            
 {
   heapP Pa;
   int FinalType;
@@ -972,7 +977,7 @@ int MsType;
 	SPI_HOMODIMERIZED : SPI_HOMODIMERIZED_PRIME;
       break;
     default:
-      FinalType = SPI_SINK;
+      *ChannelType = SPI_SINK;
       set_reply_to("Error - Unrecognized message type", Reply);
       return(True);
   }
@@ -980,6 +985,7 @@ int MsType;
 			 Word(FinalType,IntTag),Ref_Word(ChP))){
     return(False);
   }
+  *ChannelType = FinalType;
  return(True); 
 }
 
