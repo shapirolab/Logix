@@ -1,0 +1,2 @@
+./mkmk hppa1d1_hpux_9d05 concatenate ctl dbg dbx doors file freeze_term \
+interface math timer tty
