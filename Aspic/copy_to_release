@@ -29,9 +29,6 @@ cp -p spifcp/Bin/self.bin system/transform/spifcp/Bin
 rm -f system/transform/biospi/Bin/self.bin
 cp -p BioSpi/biospi/Bin/self.bin system/transform/biospi/Bin
 
-rm -f release/Bin/*
-cp -p Bin/status.bin release/Bin
-
 rm -f release/BioSpi/Bin/ambient_server.bin
 cp -p BioSpi/Bin/ambient_server.bin release/BioSpi/Bin
 rm -f release/BioSpi/Bin/user_macros.bin
