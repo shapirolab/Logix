@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2003/04/30 06:36:30 $
+		       	$Date: 2003/06/20 14:08:42 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/SpiFcp/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -107,7 +107,7 @@ expand(Command, Cs) :-
 		" {String}           - invoke UNIX shell sh with String",
 		"",
 		"        options for sp*, pdb and ptree:",
-		" none/active        - type of messages displayed",
+		" none/note/active   - type of messages displayed",
 		" sender/no_sender   - show name of message sender",
 		"        additional options for ptree:",
 		" prefix/execute     - order of tree display",
@@ -200,7 +200,7 @@ expand(Command, Cs) :-
 
     Command = ptree(Tree) :
       Cs = [to_context([spi_monitor # options(O, O),
-			spi_utils # show_tree(Tree, O?, Stream),
+			spi_utils # show_tree(Tree, [none | O?], Stream),
 			computation # display(stream, Stream)])
 	   | Commands]\Commands;
 
