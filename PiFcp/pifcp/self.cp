@@ -1,12 +1,13 @@
+
 /*
 Precompiler for Pi Calculus procedures.
 
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/05/25 07:29:43 $
+		       	$Date: 2000/10/12 09:14:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 2.2 $
+			$Revision: 2.3 $
 			$Source: /home/qiana/Repository/PiFcp/pifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,18 +15,13 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export(transform/5).
--mode(failsafe).
+-mode(trust).
 -language(compound).
 
 /*
 ** Transform/5
 **
 ** Transform pifcp module to compound Fcp.
-**
-** This module should be integrated with the transform application,
-** which should recognize pifcp alone and translate it to:
-**
-**    [evaluate,pifcp,compound,colon]
 **
 ** Input:
 **
@@ -45,12 +41,12 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Compound = Terms? |
 
 	/* Get Exported list. */
-	filter_attributes(Attributes1, Attributes1', Exported, Level),
+	filter_attributes(Attributes1, Attributes1', Exported),
 	Attributes2 = [export(Exports?) | Attributes1'?],
 	pctopifcp#translate(Source, Source', Errors, Errors'?),
 	program.
 
-  filter_attributes(In, Out, Exported, Level) :-
+  filter_attributes(In, Out, Exported) :-
 
     In ? export(Es), string(Es), Es =\= all :
       Exported = [Es] |
@@ -64,16 +60,6 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
       Exported = Es |
 	self;
 
-    In ? optimize :
-      Out ! optimize,
-      Level = 1 |
-	self;
-
-    In ? optimize(I) :
-      Out ! optimize,
-      Level = I |
-	self;
-
     In ? Other,
     otherwise :
       Out ! Other |
@@ -81,11 +67,10 @@ transform(Attributes1, Source, Attributes2, Compound, Errors) :-
 
     In =?= [] :
       Out = [] |
-	unify_without_failure(Level, 2),
-	unify_without_failure(Exported, all).
+	unify_without_failure(Exported, []).
 
 
-program(Source, Exported, Level, Exports, Terms, Errors) :-
+program(Source, Exported, Exports, Terms, Errors) :-
 
 	filter_pifcp_attributes(Source, Exported, Controls, Delay, Source',
 					Errors, Errors'?),
@@ -93,55 +78,67 @@ program(Source, Exported, Level, Exports, Terms, Errors) :-
 				  NextTerms, Optimize, Errors'),
 	process_definitions+(Processes = [], NextScope = []),
 	optimize#initialize(Optimize?, Exports?, Accessible),
-	optimize_terms(Level, Terms''?, Accessible, Terms'),
+	optimize#procedures(Terms''?, Accessible, Terms'),
 	spc#output(Terms'?, Delay, Terms).
-
-  optimize_terms(Level, In, Table, Out) :-
-
-    integer(Level), Level > 0 |
-	optimize#procedures(Level, In, Table, Out);
-
-    otherwise :
-      Level = _,
-      Table = [],
-      Out = In.
 
 
 /* Extract Global channel declarations and Stochastic means. */
 filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
 			Errors, NextErrors) +
-	(GlobalDescriptors = [], Means = _Delay(_Receive, _Send)) :-
+	(GlobalDescriptors = [], Means = _Delay(_Receive, _Send),
+ 	 PsiExports = AddExports?, AddExports) :-
 
     Source ? String, string(String) |
 	pifcp_attribute(String, GlobalDescriptors, GlobalDescriptors',
-				Means, Means', Errors, Errors'),
+		Means, Means', AddExports, AddExports', Errors, Errors'),
 	self;
 
     Source ? Tuple, Tuple =\= (_ :- _) |
 	pifcp_attribute(Tuple, GlobalDescriptors, GlobalDescriptors',
-				Means, Means', Errors, Errors'),
+		Means, Means', AddExports, AddExports', Errors, Errors'),
 	self;
 
     otherwise :
+      AddExports = [],
       NextSource = Source,
       Errors = NextErrors |
+	choose_exports(Exported, PsiExports, Exported'),
 	complete_pifcp_attributes.
 
   pifcp_attribute(Attribute, OldDescriptors, NewDescriptors,
-			Means1, Means, Errors, Errors') :-
+	Means1, Means, Exports, NextExports, Errors, Errors') :-
 
+    /* obsolescent - allow for global(list) */
     Attribute = global(Gs) :
+      Exports = NextExports,
       Means = Means1 |
 	validate_globals(Gs, Means, OldDescriptors, NewDescriptors,
 				Errors, Errors');
 
+    tuple(Attribute), arity(Attribute) > 2,
+    arg(1, Attribute, global) :
+      Exports = NextExports,
+      Means1 = Means |
+	utils#tuple_to_dlist(Attribute, [_ | Gs], []),
+	validate_globals(Gs?, Means, OldDescriptors, NewDescriptors,
+				Errors, Errors');
+
+    tuple(Attribute), arity(Attribute) >= 2,
+    arg(1, Attribute, export) :
+      NewDescriptors = OldDescriptors,
+      Means1 = Means |
+	utils#tuple_to_dlist(Attribute, [_ | Es], []),
+	validate_exports(Es?, Exports, NextExports, Errors, Errors');
+
     Attribute = stochastic :
       Errors' = Errors,
+      Exports = NextExports,
       NewDescriptors = OldDescriptors,
       Means1 = _(Receive, Send),
       Means = stochastic(Receive, Send);
   
     Attribute = stochastic(Both) :
+      Exports = NextExports,
       NewDescriptors = OldDescriptors,
       Means3 = stochastic(_Receive, _Send),
       Means = Means3 |
@@ -149,6 +146,7 @@ filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
 	update_means;
 
     Attribute = stochastic(Receive, Send) :
+      Exports = NextExports,
       NewDescriptors = OldDescriptors,
       Means2 = stochastic(_Receive, _Send),
       Means = Means3? |
@@ -156,9 +154,22 @@ filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
 	update_means;
 
     otherwise :
+      Exports = NextExports,
       NewDescriptors = OldDescriptors,
       Means = Means1,
       Errors ! invalid_pifcp_attribute(Attribute).
+
+  choose_exports(FcpExports, PsiExports, Exports) :-
+
+    FcpExports =?= [], PsiExports =?= [] :
+      Exports = all;
+
+    FcpExports =?= all :
+      PsiExports = _,
+      Exports = all;
+
+    otherwise |
+	piutils#concatenate_lists([FcpExports, PsiExports], Exports).
 
   complete_pifcp_attributes(Exported, Means, Delay, GlobalDescriptors,
 					Controls) :-
@@ -193,6 +204,22 @@ filter_pifcp_attributes(Source, Exported, Controls, Delay, NextSource,
 
     GlobalDescriptors =?= [] :
       GlobalNames = [].
+
+  validate_exports(New, Exports, NextExports, Errors, NextErrors) :-
+
+    New ? `String,
+    nth_char(1, String, C), ascii('A') =< C, C =< ascii('Z') :
+      Exports ! String |
+	self;
+
+    New ? Other,
+    otherwise :
+      Errors ! invalid_export(Other) |
+	self;
+
+    New =?= [] :
+      Exports = NextExports,
+      Errors = NextErrors.
 
   validate_globals(GlobalDescriptors, Means, Old, New, Errors, NextErrors) +
 			(Head = Tail?, Tail) :-
@@ -381,7 +408,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
     Index++ :
       NextRHSS ! Clauses? |
 	guarded_clause(Guarded, GuardMode(SendId?, Index'), Clauses,
-			Nested, Nested'?, Scope, Scope'?),
+			Nested, Nested'?, Scope, [end_clause | Scope'?]),
 	piutils#update_process_mode(Mode, GuardMode, Mode'),
 	self;
 

@@ -1,4 +1,4 @@
--export([initialize/3, procedures/4]).
+-export([initialize/3, procedures/3]).
 -language(compound).
 %-mode(failsafe).
 
@@ -162,7 +162,7 @@ append(L, T, NL) :-
       NL = T.
 
 
-procedures(Level, In, Called, Out) :-
+procedures(In, Called, Out) :-
 
     In ? Procedure, Procedure = Type(LHS, RHS, Communicator),
     arg(1, LHS, Name) :
@@ -170,21 +170,13 @@ procedures(Level, In, Called, Out) :-
 	output_procedure;
 
     In = [] :
-      Level = _,
       Called = [],
       Out = [].
 
-output_procedure(Level, In, Called, Out,
-			Name, Value, Ok, Type, LHS, RHS, Communicator) :-
+output_procedure(In, Called, Out,
+		Name, Value, Ok, Type, LHS, RHS, Communicator) :-
 
-    Ok = true, Level =< 1 :
-      Name = _,
-      Value = _,
-      Out ! Type(LHS'?, RHS, Communicator) |
-	piutils#tuple_to_atom(LHS, LHS'),
-	procedures;
-
-    Ok = true, Level > 1 :
+    Ok = true :
       Closure = _,
       Out ! Type(LHS'?, RHS, Communicator'?),
       Value = {Calls, Variables} |
@@ -200,7 +192,6 @@ output_procedure(Level, In, Called, Out,
 
 
     Ok =\= true :
-      Level = _,
       Name = _,
       Value = _,
       Type = _,
