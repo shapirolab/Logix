@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/defs.cp,v 1.1 1999/07/09 07:03:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/defs.cp,v 1.2 2002/11/16 11:35:22 bill Exp $ */
 /*
  *
  * defs identifies predefined procedures and checks the legality of
@@ -31,7 +31,7 @@
  */
 
 -export([check_call/7]).
--mode(trust).
+%-mode(trust).
 -language(compound).
 
 procedure check_call(Any, Proc, Part, Atom, Tuple, G-dict, Flag).

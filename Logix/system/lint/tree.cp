@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/tree.cp,v 1.1 1999/07/09 07:03:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/tree.cp,v 1.2 2002/11/16 11:35:23 bill Exp $ */
 /*
  * tree is the module that handles the dictionary trees. The tree management
  * is done by binary_tree/2; the other procedures are exported for programming
@@ -7,7 +7,7 @@
  */
 
 -export([binary_tree/2, tree_fetch/3]).
--mode(trust).
+%-mode(trust).
 -language(compound).
 
 /*

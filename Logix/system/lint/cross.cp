@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/cross.cp,v 1.1 1999/07/09 07:03:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/cross.cp,v 1.2 2002/11/16 11:35:22 bill Exp $ */
 /*
  *
  * lint_cross module is the one that do the globals checks on the dictionary
@@ -10,7 +10,7 @@
  */
 
 -export([clause_internal/4, proc_wide/5, modulewide/5]).
--mode(trust).
+%-mode(trust).
 -language(compound).
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */

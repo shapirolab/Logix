@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/lint/dict.cp,v 1.1 1999/07/09 07:03:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/lint/dict.cp,v 1.2 2002/11/16 11:35:22 bill Exp $ */
 /*
  *
  * dict serves the dictionary of the lint program.
@@ -41,7 +41,7 @@
 
 
 -export([dict/2]).
--mode(trust).
+%-mode(trust).
 -language(compound).
 
 procedure dict(Messages, Flags).
