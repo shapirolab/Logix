@@ -677,8 +677,7 @@ serve_ambient(In, Events, FromSub, Done,
     In ? merge(MergingAmbient, Ready),
     vector(MergingAmbient),
     read_vector(AMBIENT_ID, MergingAmbient, FromId) :
-      FromId? = _FromType(Index),
-      write_channel(record_item(reset(Index)), Scheduler),
+      write_channel(record_item(reset(FromId)), Scheduler),
       write_vector(AMBIENT_CONTROL,
 		   extract(Goals, Ambient, Ready),
 		   MergingAmbient, MergingAmbient') |
@@ -701,8 +700,7 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? change_parent(Parent', true, Ready),
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
-      AmbientId? = _FromType(Index),
-      write_channel(record_item(reset(Index)), Scheduler),
+      write_channel(record_item(reset(AmbientId)), Scheduler),
       write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
