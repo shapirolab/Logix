@@ -67,7 +67,7 @@ The basic Logix command to execute a program has the form:
 The system creates a computation, uniquely identified by a positive
 integer, its "computation number", throughout the session.  The command
 starts a Logix computation, redefining the "current computation" and
-the "current computation number"
+the "current computation number".
 
 
 To execute a Stochastic Pi Calculus program, e.g. RunTT in module booland
@@ -123,7 +123,8 @@ The user macros:
 
     re
     resume
-    resume
+    re(all)
+    resume(all)
     re(N)
     resume(N)
 
@@ -156,18 +157,21 @@ The user macros:
 set new display control options and (optionally) return old ones.
 New  may be a single option or a Logix list of options.
 
-  * none	Don't display any messages.
-  * active	Display all active message actions (send, receive, dimer);
-		this is the usual default..
-  * sender      Display each message's sender in the form:
+  * none	Don't annotate any channels.
+  * active	only annotate channels with both sends and receives.
+  * messages    Display each transmitting channel with a list of messages.
+                The messages option may be useful for debugging.
+  * note        annotate channels which are transmitting;
+		this is the usual default.
 
-			Process(ChannelName, Multiplier, Action)
-
-  * no_sender	Only display a message's action; this is the usual default.
+  * base        show channel name * base.
+  * creator     show the creator of the channel and its unique index (if any).
+  * full        combines base and creator
+  * short       just show channel name; this is the usual default.
 
 An example list is:
 
-    [active,sender]
+    [active,full]
 
 In the user macros below, options may be specified explicitly in one variant
 of most groups.  When the options are specified, they override the
@@ -228,7 +232,7 @@ To view Tree, use either of the user macros:
     ptree(Tree)
     ptree(Tree,Options)
 
-The default option for messages to be displayed is "none" instead of "active".
+The default option for annotations to be displayed is "none" instead of "note".
 Additional options which may be specified are:
 
   * prefix	Display Tree in prefix order; this is the default.
