@@ -140,8 +140,8 @@ randomize_messages(Channels, Reply) :-
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     read_vector(SPI_CHANNEL_TYPE, Channel, Type),
-    bitwise_or(Type, SPI_RANDOM_FLAG, Type') |
-      store_vector(SPI_CHANNEL_TTPE, Type, Channel) |
+    bitwise_or(Type, SPI_RANDOM_FLAG, RandomizedType) :
+      store_vector(SPI_CHANNEL_TYPE, RandomizedType, Channel) |
 	self;
 
     Channels = [] :
