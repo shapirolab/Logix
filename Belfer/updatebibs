@@ -1,0 +1,58 @@
+#!/usr/local/bin/perl
+
+my $Bib_Path = shift;
+my $Doc_Path = shift;
+
+my @BibDirs = split /\n/, `ls -1 $Bib_Path`;
+my @DocDirs = split /\n/, `ls -1 $Doc_Path`;
+
+my $changes = 0;
+
+while (scalar(@BibDirs)) {
+  my $new = shift @BibDirs;
+  my $newpath = "$Bib_Path/$new";
+  while ($new) {
+    my $doc = shift @DocDirs;
+    if ($doc eq $new) {
+      if (replace_bib($new)) {
+	!`cp $Bib_Path/$new/$new.bib $Doc_Path/$new/$new.bib` and $? == 0 or
+	  die "Can't replace $Doc_Path/$new/$new.bib";
+	print "Updated $Doc_Path/$new/$new.bib .\n";
+	$changes += 1;
+      }
+      last;
+    }
+    elsif ($doc gt $new || scalar(@DocDirs) == 0) {
+      unshift @DocDirs, $doc;
+      !`cp -r $Bib_Path/$new $Doc_Path` and $? == 0 or
+	die "Can't create $Doc_Path/$new";
+      print "Created $Doc_Path/$new - please add $new.ps.Z .\n";
+      $changes += 1;
+      last;
+    }
+  }
+}
+if ($changes) {
+  print "Please run /dienst/Indexer/build-inverted-indexes.pl " .
+        "and reload data of dienst.pl .\n";
+}
+
+sub replace_bib
+{
+  my $doc = shift;
+  my $bib = "$Doc_Path/$doc/$doc.bib";
+  return 1 if !(-s $bib);
+
+  my $diff = `diff $Bib_Path/$doc/$doc.bib $bib`;
+  my @diff = split /\n/, $diff;
+                  
+  while (scalar(@diff)) {
+    my @words = split /\s+/, shift @diff;
+
+    if (($words[0] eq '<' || $words[0] eq '>') &&
+	$words[1] ne "ENTRY::") {
+      return 1;
+    }
+  }
+  return 0;
+}
