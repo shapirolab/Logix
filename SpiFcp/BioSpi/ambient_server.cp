@@ -523,9 +523,9 @@ serve_ambient(In, Events, FromSub, Done,
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
-    Locus =?= "local",
+    Locus =?= private,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
-	DEBUGT(lookup/3 + "local" + PC + SC1s + SC2s, search,
+	DEBUGT(lookup/3 + private + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
 	        format_channel_list(PrivateChannels, SC1s),
 	        format_channel_list(PrivateChannels', SC2s)
@@ -536,9 +536,9 @@ serve_ambient(In, Events, FromSub, Done,
 	ambient_lookup;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
-    Locus =?= "local",
+    Locus =?= private,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
-	DEBUGT(lookup/4 + "local"(AddRefs) + PC + SC1s + SC2s, search,
+	DEBUGT(lookup/4 + private(AddRefs) + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
 	        format_channel_list(PrivateChannels, SC1s),
 	        format_channel_list(PrivateChannels', SC2s)
@@ -1178,10 +1178,10 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       Debug = _,
       NewChannelList =
 	[Id(SharedChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate?) | ChannelList],
-      write_channel(new_channel(PublicId, NewChannel, Rate), Scheduler),
+      write_channel(new_channel(PublicId, NewChannel, BaseRate?), Scheduler),
       GT = NL |
 	list_to_string(GL, PublicId),
-	DEBUG(lookup, new - PublicId - PrivateChannel),
+	DEBUG(lookup, new - PublicId - PrivateChannel(Type,Rate)),
 	rate_to_baserate,
 	update_new_channel;
 
@@ -1497,7 +1497,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelName),
     tuple(ChannelName),
     Action =\= pass :
-      In ! lookup("local", Channel, NewChannel),
+      In ! lookup(private, Channel, NewChannel),
       MeltedAtoms ! NewChannel? |
 	remove_one_reference,
 	self;
@@ -1509,7 +1509,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
     tuple(ChannelName),
     Action =?= pass,
     read_vector(SPI_CHANNEL_REFS, Channel, Refs) :
-      In ! lookup("local", Channel, NewChannel, Refs),
+      In ! lookup(private, Channel, NewChannel, Refs),
       MeltedAtoms ! NewChannel? |
 	self;
 
