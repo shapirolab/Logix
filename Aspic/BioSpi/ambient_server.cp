@@ -15,11 +15,13 @@ AMBIENT_ID => 2.
 DEBUG(TAG,ARG) => true.
 TERMS(Terms) => true.
 DEBUGT(TAG,ARG,Terms) => true.
+DEBUGC(THING1,THING2) => THING1.
 /**/
 
 /*
 DEBUG(TAG,ARG) => debug_out(Ambient, TAG, ARG,  Debug).
 TERMS(Terms) => Terms.
+DEBUGC(THING1,THING2) => THING2.
 DEBUGT(TAG,ARG,Terms) => (debug_out(Ambient, TAG, ARG,  Debug), Terms).
 
 debug_out(Ambient, Tag, Item, Debug) :-
@@ -32,7 +34,37 @@ debug_out(Ambient, Tag, Item, Debug) :-
       Debug = _,
       Item = _,
       Tag = _.
+
+debug_remove_channels(Ambient, ChannelTuple, WaitChannelTuple, Debug) :-
+    tuple(ChannelTuple),
+    arity(ChannelTuple, Index),
+    make_tuple(Index, OutTuple) :
+    Ready = ready |
+	debug_channel_tuple,
+	debug_out(Ambient, close, FormattedChannelTuple?, Debug);
+
+    otherwise :
+      Ambient = _,
+      Debug = _,
+      WaitChannelTuple = ChannelTuple.
+
+  debug_channel_tuple(Index, ChannelTuple, WaitChannelTuple,
+			OutTuple, FormattedChannelTuple, Ready) :-
+    known(Ready),
+    arg(Index, ChannelTuple, Channel),
+    arg(Index, OutTuple, OutChannel),
+    Index-- |
+	user_macros#expand(format_channel(CHAR_d, Channel, OutChannel),
+				Ready\Ready'),
+	self;
+
+    known(Ready),
+    otherwise :
+      Index = _,
+      FormattedChannelTuple = OutTuple,
+      WaitChannelTuple = ChannelTuple.
 */
+
 
 run(Commands) :-
 	run(Commands, _System, _Out).
@@ -392,7 +424,9 @@ serve_ambient(In, Events, FromSub, Done,
 /* Procedure Services */
 
     In ? Close, Close =?= close(ChannelTuple) :
-      write_channel(close(ChannelTuple, Reply), Scheduler) |
+      write_channel(close(DEBUGC(ChannelTuple, WaitChannelTuple?), Reply),
+		    Scheduler) |
+	DEBUGC(true,debug_remove_channels),
 	DEBUG(close - Reply - ChannelTuple - PrivateChannels - SharedChannels,
 		scheduler),
 	remove_local_channels(Reply, ChannelTuple,
@@ -1230,7 +1264,20 @@ remove_local_channels(Indices, ChannelTuple,
       ChannelTuple = _,
       NewPrivateChannels = PrivateChannels,
       NewSharedChannels = SharedChannels,
-      Unremoved = [].
+      Unremoved = [];
+
+    Indices =\= true, Indices =\= [_|_], Indices =\= [] :
+      ChannelTuple = _,
+      NewPrivateChannels = PrivateChannels,
+      NewSharedChannels = SharedChannels,
+      Unremoved = [] |
+	spi_utils#show_value(Indices, [], Failure),
+	wait_fail.
+
+  wait_fail(Failure) :-
+    known(Failure) |
+	fail(Failure).
+
 
 remove_shared_channels(ChannelTuple, SharedChannels, NewSharedChannels,
 				Unremoved) + (Index = 1) :-
@@ -1873,8 +1920,8 @@ resume_controls_when_ready(Reply1, Reply2, Reply3, Ready,
       Controls = [resume | NewControls].
 
 /***************************** formatting ***********************************/
-
 /*
+
 format_channel_tuple(Tuple, Out) :-
 
     arity(Tuple, Arity),
