@@ -159,7 +159,7 @@ sub adjust_widths
 sub print_options
 {
   my $quit = shift;
-  print "report-users version $VERSION.\n" .
+  print "report-usage version $VERSION.\n" .
         "Options are: -h, -t<title>, -m<first month>-<last month>\n" .
         "   where <month> has the form yyyymm, and\n" .
         "   <first month> does not exceed <last month>.\n";
