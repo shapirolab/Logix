@@ -231,6 +231,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  heapT V0 ; 
  heapP Pa ,Pb ,OpEntry ,ChP ,Tag ,Mult ,
        MessageList ,MessageTail ,ComShTpl ,Link ,Message ;
+ int IC, InstCount = 0;
  
  deref_ptr(PId);
  deref_ptr(OpList);
@@ -257,7 +258,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  if (!IsNil(*Pa)) { //if it's not end with a Nil
    return(False);
  }
- do			/* Pass 1  */
+ do			/* Pass 0  */
    { 
      if ((OpEntry=set_opentry(OpList))==False){
        return(False);
@@ -315,16 +316,68 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
        return(False);
      }
      if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS) {
+       /*
        TrIn = transmit_instantaneous(OpEntry, ChP, PId,
 				     ChannelType, Value, Chosen ,Reply);
        if (TrIn != QUEUE)
 	 return(TrIn);
+       */
+       InstCount++;
      }
    }
 
    OpList=Cdr(OpList);
    deref_ptr(OpList);
-   }while(!IsNil(*OpList));  /* End Pass 1 */
+   }while(!IsNil(*OpList));  /* End Pass 0 */
+
+ if (InstCount) {
+   heapP *InstList = NULL;
+   int IC = 0;
+
+   OpList = Pb;
+   InstList = malloc(sizeof(heapP));
+   do			/* Pass 1 */
+     {
+       OpEntry = set_opentry(OpList);
+       ChP=OpEntry+SPI_MS_CHANNEL;  // the channel
+       deref_ptr(ChP);
+       MsType=which_mode(OpEntry+SPI_MS_TYPE);
+       channel_type(ChP, &ChannelType);
+       if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS) {
+	 InstList[IC] = OpEntry;
+	 IC++;
+       }
+       OpList=Cdr(OpList);
+       deref_ptr(OpList);
+     } while(IC < InstCount && !IsNil(*OpList));  /* End Pass 1 */
+   /* Kluge - just walk through them */
+   do
+     {
+       if (InstCount > 1) {
+	 IC = (random()/2147483648.0)*InstCount;
+	 if (IC == InstCount)
+	   IC--;
+       }
+       else
+	 IC = 0;
+       OpEntry = InstList[IC];
+       ChP=OpEntry+SPI_MS_CHANNEL;  // the channel
+       deref_ptr(ChP);
+       TrIn = transmit_instantaneous(OpEntry, ChP, PId,
+				     SPI_INSTANTANEOUS, Value, Chosen ,Reply);
+       if (TrIn != QUEUE) {
+	 free(InstList);
+	 return(TrIn);
+       }
+       /* Couldn't transmit - remove this entry from the list. */
+       InstCount--;
+       while (IC < InstCount) {
+	 InstList[IC] = InstList[IC+1];
+	 IC++;
+       }
+     } while (InstCount > 0);
+   free(InstList);
+ }  
   
  MessageTail=HP;
  *HP=Word(0,NilTag); //The start of the list
@@ -1303,7 +1356,7 @@ heapP Now ,Anchor ,NowP ,Reply ;
        return(False);
      }
      deref(KOutA,NextChannel);
-   } while(NextChannel!=Anchor);   /* End While - Pass 1 */
+   } while(NextChannel!=Anchor);   /* End While - Pass 2 */
 
    if  (SumWeights != 0) {
      Uniform1 = random()/2147483647.0;
