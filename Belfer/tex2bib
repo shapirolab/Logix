@@ -1,5 +1,5 @@
 #!/usr/local/bin/perl
-my $START = 'MCS';                         # default input prefix
+my @START = ('MCS', 'CS', '');             # default input prefixes
 my $END_OF_HEADING = "\\\\smallskip";      # a line following the title.
 my @SEPARATORS = ('and', '&', ',', ';');
 my @MONTHS = (January, February, March, April, May, June, July, August, September, October, November, December);
@@ -10,13 +10,13 @@ my $BIB_AUTHORITY = "ncstrl.weizmann_il";  # default prefix
 my $BIB_ID = "CS";                         # default id
 my $Output_Entry = "";                     # Month day, Year
 my $Output_Date = "January 1, 1999";       # ???
+my $InputFile = "abstracts.tex";
 
 my @Abstracts;
 my $Authors;
 my @Authors;
 my $Title;
 my $Lines;
-my $OutputId;
 my $Filtered;
 
 
@@ -30,6 +30,7 @@ my %IGNORE = (
 	      "vfill" => 1,
 	      "eject" => 1,
 	      "endpage" => 1,
+	      "linebreak" => 1,
 	      "bigskip" => 1,
 	      "medskip" => 1,
 	      "smallskip" => 1,
@@ -41,7 +42,6 @@ my %IGNORE = (
 	       "\^" => 1,
 	       "'" => 1,
 	       "`" => 1,
-	       "(" => 1,
 	       "=" => 1,
 	       "!" => 1,
 	       "/" => 1,
@@ -60,7 +60,7 @@ sub replace
   $part =~ s/\{//g;
   $part =~ s/\}//g;
   $part =~ s/\$//g;
-  $part =~ s/~//g;
+  $part =~ s/~/ /g;
   $Filtered .= $part;
 }
 	       
@@ -94,6 +94,7 @@ sub backslash
       $Filtered .= "\\$word";
     }
   }
+  $Filtered =~ s/<P><P>/<P>/g;
   return $reply;
 }
 
@@ -114,13 +115,18 @@ sub filter_tex
       last;
     }
   }
+  $Filtered =~ s/^(.*)% *$/$1/;
+  $Filtered =~ s/^ *(\S.*)/$1/;
+  $Filtered =~ s/  / /g;
+  $Filtered =~ s/(.*)<P> *$/$1/g;
+  
   return $Filtered;
 }
 
 sub format_output
 {
   my $line = (shift) . '::';
-  my @text = split / /, shift;
+  my @text = split / +/, shift;
   my $min  = length($line);
   my $word;
 
@@ -157,11 +163,13 @@ sub next_abstract
 {
   $Lines = shift @Abstracts;
 
-  if ($Lines =~ s/^\{\{\\bf (\D+)(\d+)--(\d+)\}\}(.*)$/$4/) {
-    if ($START eq $1) {
-      return "$2-$3";
+  if ($Lines =~ s/^\{\{\\bf (\D*)(\d+)--(\d+)\}\}(.*)$/$4/) {
+    foreach (@START) {
+      if ($_ eq $1) {
+	return "$2-$3";
+      }
     }
-    print "ID does not match $START for \" $1$2--$3\"\n";
+    print "ID does not match any of @START for \" $1$2--$3\"\n";
     exit;
   }
   ($_) = split /\}\}/, $Lines;
@@ -219,7 +227,7 @@ sub extract_authors
     if ($name) {
       $name = join ' ', $name . ',', @author;
       # Press out any double-spaces.
-      $name =~ s/^\s*(\S+)  (.*)$/$1 $2/g;
+      $name =~ s/^ *(\S+)  (.*)$/$1 $2/g;
       push @Authors, $name;
     }
   }
@@ -234,14 +242,12 @@ sub extract_title
 }
 
 # main
-
-open(ABSTRACTS, "a.tex") or die "Can't open a.tex: $!\n";
+open(ABSTRACTS, $InputFile) or die "Can't open $InputFile - $!\n";
 
 my ($sec, $min, $hour, $mday, $mon, $year) = localtime;
 $Output_Entry = $MONTHS[$mon] . " $mday, " . ($year +1900); 
 
 read_abstracts();
-
 while (scalar @Abstracts) {
   my ($year, $index) = split /-/, next_abstract();
 
@@ -253,7 +259,7 @@ while (scalar @Abstracts) {
   my $docname = "$BIB_ID$year-$index";
   mkdir $docname, 7*64 + 7*8 +5;
   open(BIB, "> $docname/$docname.bib") or
-    die "Can't open : $docname/$docname.bib!\n";
+    die "Can't open $docname/$docname.bib - $!\n";
   format_output("BIB-VERSION", $BIB_VERSION);
   format_output("ID", "$BIB_AUTHORITY//$docname");
   format_output("ENTRY", $Output_Entry);
@@ -263,8 +269,6 @@ while (scalar @Abstracts) {
   }
   format_output("TITLE", $Title);
   filter_tex($Lines);
-  $Filtered =~ s/^ *(\S.*)/$1/;
-  $Filtered =~ s/  / /g;
   format_output("ABSTRACT", $Filtered);
   format_output("END", "$BIB_AUTHORITY//$docname");
   close BIB;
