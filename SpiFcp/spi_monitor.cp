@@ -735,8 +735,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Wakeup' = _,
       Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
-      Record = [Now, end(PName1(RCId1, "->", CNId1)),
-		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
+		     end(PName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
       Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
 	self;
 
@@ -755,8 +755,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Wakeup' = _,
       Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
-      Record = [Now, end(PrefixedName1(RCId1, "->", CNId1)),
-		     end(PrefixedName2(RCId2, "<-", CNId2)) | Record'?],
+      Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
+		     end(PrefixedName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
       Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
 	self;
 
@@ -835,8 +835,8 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     tuple(PId2), arg(1, PId2, PName2),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
-      Record = [Now, end(PName1(RCId1, "->", CNId1)),
-		     end(PName2(RCId2, "<-", CNId2)) | Record'?],
+      Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
+		     end(PName2(RCId2, RECEIVED_ARROW, CNId2)) | Record'?],
       Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
 	scheduling;
 
@@ -852,8 +852,9 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     list_to_string(PX2, PrefixedName2),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
-      Record = [Now, end(PrefixedName1(RCId1, "->", CNId1)),
-		     end(PrefixedName2(RCId2, "<-", CNId2)) | Record'?],
+      Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
+		     end(PrefixedName2(RCId2, RECEIVED_ARROW, CNId2))
+	       | Record'?],
       Debug ! done(Now, PId1(RCId1, CNId1), PId2(RCId2, CNId2)) |
 	scheduling;
 

@@ -3,6 +3,8 @@
 EMPTY => "".
 NULL => "_".
 DOT => ".".
+RECEIVED_ARROW => "<-".
+SENT_ARROW => "->".
 
 /* Characters */
 
