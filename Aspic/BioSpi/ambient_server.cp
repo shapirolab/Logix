@@ -1272,23 +1272,29 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
-    Type =?= SharedType :
+    bitwise_and(Type, SPI_PRIME_MASK, Type'),
+    bitwise_and(SharedType, SPI_PRIME_MASK, SharedType'),
+    Type' =?= SharedType' :
       Scheduler = _,
       SharedChannel = Channel,
       NewChannelList = ChannelList;
 
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
-    Type =?= SPI_UNKNOWN,
-    SharedType =\= SPI_UNKNOWN :
+    bitwise_and(Type, SPI_PRIME_MASK, Type'),
+    bitwise_and(SharedType, SPI_PRIME_MASK, SharedType'),
+    Type' =?= SPI_UNKNOWN,
+    SharedType' =\= SPI_UNKNOWN :
       Scheduler = _,
       SharedChannel = Channel,
       NewChannelList = ChannelList;
 
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
     read_vector(SPI_CHANNEL_TYPE, Channel, SharedType),
-    Type =\= SPI_UNKNOWN,
-    SharedType =?= SPI_UNKNOWN :
+    bitwise_and(Type, SPI_PRIME_MASK, Type'),
+    bitwise_and(SharedType, SPI_PRIME_MASK, SharedType'),
+    Type' =\= SPI_UNKNOWN,
+    SharedType' =?= SPI_UNKNOWN :
       Scheduler = _,
       store_vector(SPI_CHANNEL_TYPE, Type, Channel),
       SharedChannel = Channel,
