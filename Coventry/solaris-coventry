@@ -5,6 +5,7 @@
 killproc() {            # kill the named process(es)
         pid=`/usr/bin/ps -A -o pid,args |
              /usr/bin/grep $1 |
+             /usr/bin/grep $2 |
              /usr/bin/sed -e 's/^ *//' -e 's/ .*//'`
         [ "$pid" != "" ] && kill $pid
 }
@@ -19,14 +20,14 @@ ECHO=echo
 case $1 in
 	'start')
             if test -x $COVENTRYD; then
-		killproc coventryd
+		killproc perl coventryd
 	        $ECHO Starting coventry daemon
 	        $COVENTRYD -D$AUXILIARY_DIR &
 	    fi
 	;;
 	'stop')
 		$ECHO Stopping coventry daemon.
-		killproc coventryd
+		killproc perl coventryd
 	;;
 	*)
 		echo "usage: $0 {start|stop}"
