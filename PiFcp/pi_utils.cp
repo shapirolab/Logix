@@ -1,6 +1,6 @@
 -language(compound).
 -mode(failsafe).
--export([make_channel/1, make_channel/4,
+-export([make_channel/1, make_channel/4, parse_options/5,
 	 show_channel/3, show_goal/3, show_goals/3, show_resolvent/3,
 	 show_tree/3, close_tree/1,
 	 receive/2, send/2]).
