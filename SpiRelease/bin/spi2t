@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 my $Period = 1;
 
@@ -79,6 +79,10 @@ while ($line = <RECORD>) {
     }
     $type = "-1";
   }
+  elsif ($line =~ /^!(.*)$/) {
+    $item = $1;
+    $type = "xx";
+  }
   elsif ($line =~ /^\s*\d+\.\d+\s*$/) {
     next if $type eq "00";
     next if $line < $nexttime;
@@ -129,7 +133,14 @@ while ($line = <TEMP>) {
   $line =~ /^(..)(.*)\n$/;
   my $k = $1;
   my $j = $2;
-  if ($k ne "00") {
+  if ($k eq "xx") {
+    foreach $process (@Processes) {
+      if ($process =~ /^$j/) {
+	$Columns[$Processes{$process}] = 0;
+      }
+    }
+  }
+  elsif ($k ne "00") {
     $Columns[$Processes{$j}] += $k;
   }
   else {
