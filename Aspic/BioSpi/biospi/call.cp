@@ -4,9 +4,9 @@ Precompiler for Stic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2002/05/29 06:20:03 $
+		       	$Date: 2003/01/12 08:40:39 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -102,12 +102,12 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
   prime_substitutes(Channel, ChannelP, SubsIn, SubsOut) :-
 
-    SubsIn ? (Substitute = Sub), Sub =?= Channel :
-      SubsOut ! (Substitute = ChannelP) |
+    SubsIn ? {Substitute, Sub}, Sub =?= Channel :
+      SubsOut ! {Substitute, ChannelP} |
 	self;
 
-    SubsIn ?  (Substitute = Sub), Sub =\= Channel :
-      SubsOut !  (Substitute = Sub) |
+    SubsIn ?  {Substitute, Sub}, Sub =\= Channel :
+      SubsOut !  {Substitute, Sub} |
 	self;
 
     SubsIn =?= [] :
