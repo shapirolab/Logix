@@ -37,7 +37,7 @@ BNF for PiFcp
 
 <channel_declaration> ::=  <channel>
                            <channel>(<base_rate>)
-                           <channel>(<base_rate> , <weighter>)
+                           <channel>(<base_rate> , <weighter_declaration>)
 
 <base_rate>            ::= <number>
                            infinite
@@ -172,17 +172,23 @@ A <base_rate> is a real number, which is a factor in the stochastic weighting
 of a <channel>.  When the <base_rate> of a <channel> is 0, the
 channel acts as a sink - all messages on that channel are discarded.
 
+A <base_rate> may be specified by a logix variable for a new channel,
+but not for the default nor for a global channel.  The logix variable
+should be instantiated to a number.
+
 
 A <weighter> is an alpha-numeric string, beginning with a lower-case
 alphabetic character; the string may contain underscore (_)
 characters.
 
 A <weighter> may be specified by a logix variable for a new channel,
-but not for the default nor for a global channel. (Not yet implemented).
+but not for the default nor for a global channel.  The logix variable
+should be instantiated to a string.
 
 Any <weighter_parameter_list> element may be specified by a logix
 variable for a new channel, but not for the default nor for a global
-channel.  (Not yet implemented).
+channel.  The logix variable should be instantiated to a string as
+above (for the <weighter> name) or to a number (for any other parameter).
 
 
 A <process_name> is an alpha-numeric string, beginning with an upper case
