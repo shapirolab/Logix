@@ -3,8 +3,8 @@
 # Constant definitions
 
 #see sys/resource.h
-$PRIO_MIN     = -20;         # On SGI - not on Solaris
-$PRIO_MAX =      20;         # On SGI - not on Solaris
+$PRIO_MIN     = -20;          # SGI - not on Solaris
+$PRIO_MAX =      20;          # SGI - not on Solaris
 $PRIO_PROCESS  =  0;
 $PRIO_PGRP     =  1;
 $PRIO_USER     =  2;
@@ -24,6 +24,10 @@ $GREED_BOUND   =  5;          # Minimum used time between iterations before
                               # changing nice.
 $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 
+# see sys/schedctl.h            SGI only
+$NDPNORMMAX    = 40;          # Best Normal Non-deteriorating priority
+$NDPNORMMIN    = 127;         # Worst  "     "   " " "  "  "    "  "
+
 # Default exclusion hashes.
 
 %users = (
@@ -36,6 +40,7 @@ $QUERY_MINIMUM =  1;          # Default minimum minutes of displayed processes.
 
 # Maximum length of a command name is 30 characters (see below).
 %commands = (
+	     biod => 1,
 	     csh  => 1,
 	     ftpd => 1,
 	     nfsd => 1,
@@ -156,21 +161,19 @@ if ($debug) {# debug
 #
 # Return 1 if the process is not excluded by one of the exclusion hashes.
 #
-# Global variables set are:
-#    $user,    $nice,       $seconds,        $pid,     $comm
-# User name, nice value, elapsed seconds, process id, command
-#
 # Note: This subroutine should be modified as necessary per platform.
 #       It works fine on SGI and Solaris System V platforms.
 
 sub parse_process
 {
     my $time;
+    my $user, $nice, $seconds, $pid, $comm, $class;
 
     ($user, $pid, $nice, $class, $time, $comm) = split;
 
     if ($users{$user} || $commands{$comm} || 
-	($class ne "TS" && $class ne "ts")) {
+	($class ne "TS" && $class ne "ts") ||
+	$NICE_DEFAULT > $nice || $nice > $NICE_COVENTRY) {
 	return 0;
     }
 
@@ -191,14 +194,16 @@ sub parse_process
     $time =~ /(\d+):(\d\d)/;
     $seconds += 60*$1 + $2;
 
-    return 1;
+    return [$user,$nice,$seconds,$pid,$comm,$class];
+
 }
 
 # sortrefs is called by the sort function to compare two process references.
 #
 # The arguments $a and $b are the two process references.
 #
-# A process reference points to an array of 5 arguments in collation order.
+# A process reference points to an array of 6 arguments in collation order
+# of the first 4 elements.
 
 sub sortrefs #context {$a, $b}
 {
@@ -232,7 +237,7 @@ sub setnice #(processid, nice)
 sub query_processes #(query)
 {
     my $minmins, $minsecs, $mins, $secs;
-    my $comm, $nice, $pid, $seconds, $user;
+    my $class, $comm, $nice, $pid, $seconds, $user;
     my $title;
     my @display_processes;
 
@@ -249,7 +254,7 @@ sub query_processes #(query)
 	print_process_count($#display_processes+1, $title);
 	if ($#display_processes >= 0) {
 	    foreach (@display_processes) {
-		($user, $nice, $seconds, $pid, $comm) = @{$_};
+		($user, $nice, $seconds, $pid, $comm, $class) = @{$_};
 
 		$mins = int ($seconds/60);
 		$secs = $seconds % 60;
@@ -292,7 +297,7 @@ sub print_refed_process #(title, reference)
   
     my @list;
 
-    for (my $i = 0; $i < 5; $i++) {
+    for (my $i = 0; $i < 6; $i++) {
 	push @list, $ref->[$i];
     }
     print sprintf("%s - $title: %s\n",
@@ -327,6 +332,11 @@ sub print_process_count #(count, title)
 sub collect_current_processes
 {
     my @ps_lines;
+    my $process;
+
+# Shared with parse_process.
+    local ($class, $comm, $nice, $pid, $seconds, $user);
+
 
     undef(%current_processes);
     $count = 0;
@@ -334,10 +344,11 @@ sub collect_current_processes
     @ps_lines = `$pscomm`;
     shift(@ps_lines);
     foreach (@ps_lines) {
-	if (parse_process() &&
-	    $NICE_DEFAULT <= $nice && $nice <= $NICE_COVENTRY) {
+	$process = parse_process();
+	if (defined($process)) {
 	    $count++;
-	    $current_processes{$pid} = [$user,$nice,$seconds,$pid,$comm];
+	    $current_processes{$pid} = $process;
+#		[$user,$nice,$seconds,$pid,$comm,$class];
 	}
     }
 
@@ -384,13 +395,13 @@ elsif ($debug) {# debug
 
 sub send_to_coventry
 {
-    my $comm, $nice, $pid, $seconds, $user;
+    my $class, $comm, $nice, $pid, $seconds, $user;
     my $changed, $previous, $process, $used;
     my $bound, $freedid, $niced, $oldsecs;
     my @pids;
 
     foreach $process (values(%current_processes)) {
-	($user, $nice, $seconds, $pid, $comm) = @{$process};
+	($user, $nice, $seconds, $pid, $comm, $class) = @{$process};
 	$previous = $previous_processes{$pid};
 	if (defined($previous)) {
 	    $used = $seconds - $previous->[2];
@@ -403,7 +414,7 @@ sub send_to_coventry
 			    && ! $bound;
 		$nice += $NICE_INCR if $changed;
 		$freedid = "$user($nice)";
-		$process = [$user, $nice, $seconds, $pid, $comm];
+		$process = [$user, $nice, $seconds, $pid, $comm, $class];
 		if (defined($freed_processes{$freedid}) || $bound) {
 		    push @pids, $pid;
 		    push @coventry, $process;
