@@ -5,9 +5,9 @@ Domain Server of Distributed Logix System
 Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:02:51 $
+		       	$Date: 2004/08/17 04:44:16 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/domain_server.cp,v $
 
 Copyright (C) 1989, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -43,7 +43,7 @@ ServiceId ::= [String].	% move to self.cp
 
 % Dictionary Entry.
 
-Locus ::= remote ; local.
+Locus ::= remote ; "local".
 Close ::= close.
 
 Service ::= Locus(Close).
@@ -79,7 +79,7 @@ procedure close_service(Locus, SSC).
 
 close_service(Locus, SSC) :-
 
-    Locus = local,
+    Locus = "local",
     channel(SSC) |
 	close_channel(SSC);
 
@@ -331,28 +331,28 @@ new_service(Answer, SCC, DSC, ServiceId, Locus, SSC, Close) :-
 
     Answer = module(Module, Kind, CloseModule) |
 	SSC = IMS!,
-	Locus = local,
+	Locus = "local",
 	Close = CloseModule?,
 	activate_module(IMS?, Module, ServiceId, ModuleKind, DSC),
 	module_kind(ModuleKind?, SCC, IMS!, Kind);
 
     Answer = director(Module, Kind, CloseModule) :
 	SSC = IMS!,
-	Locus = local,
+	Locus = "local",
 	Close = CloseModule?,
 	activate_module(IMS?, Module, [self | ServiceId], ModuleKind, DSC),
 	module_kind(ModuleKind?, SCC, IMS!, Kind);
 
     Answer = director(CloseModule) |
 	SSC = In!,
-	Locus = local,
+	Locus = "local",
 	Close = CloseModule?,
 	director(In?, ServiceId, DSC),
 	closeCC(SCC);
 
     Answer = import([], CloseModule) :
 	SSC = NOs!,
-	Locus = local,
+	Locus = "local",
 	copy_listener(CloseModule?, CloseModule1, CloseModule2),
 	Close = CloseModule1?,
 	closeCC(SCC),
@@ -529,11 +529,7 @@ domain_goals(Goals, UCC, DRC, CallInfo, Scope, Closed, Serve) :-
     Goals = clause(Goals', Body) |
 	unify_without_failure(Body, true),
 	domain_goals;
-/*
-    Goals = clause(Goal, Body, Controls) |
-	declause(Goal, Body, Controls, Goals'),
-	domain_goals;
-*/
+
     Goals = clause(Goal, Body, Id, Result) |
 	declause(Goal, Body, _(Id, Result), Goals'),
 	domain_goals;
@@ -1082,6 +1078,7 @@ activated(In, Module, ServiceId, Kind, Domain, Attributes,
 
     ActivateControls = Monitor(Input?, ML, MR, Output!),
     Monitor =\= procedures,
+    Monitor =\= meta_suspend,
     Distributor = Vector(Left, Right?),
     listener(ServiceId),
     listener(Domain) | Module = _,
@@ -1106,7 +1103,13 @@ activated(In, Module, ServiceId, Kind, Domain, Attributes,
 			Domain, Distributor
 	);
 
-    ActivateControls = MK(_, _, _), MK =\= procedures,
+    ActivateControls = MK(_, _, _), MK = meta,
+    Distributor = _(L, R) | Attributes = _,
+	R = L,
+	Kind = procedures,
+	meta(In, Module, ServiceId, Domain, MK);
+
+    ActivateControls = MK(_, _, _, _), MK = meta_suspend,
     Distributor = _(L, R) | Attributes = _,
 	R = L,
 	Kind = procedures,
@@ -1241,11 +1244,7 @@ monitor_goals(Goals, Domain, ML, MR, Stop, Monitor, Attributes,
     Goals = clause(Goals', Body) |
 	unify_without_failure(Body, true),
 	self;
-/*
-   Goals = clause(Goal, Body, Controls) |
-	declause(Goal, Body, Controls, Goals'),
-	self;
-*/
+
    Goals = clause(Goal, Body, Id, Result) |
 	declause(Goal, Body, _(Id, Result), Goals'),
 	self;
@@ -1278,10 +1277,8 @@ monitor_goals(Goals, Domain, ML, MR, Stop, Monitor, Attributes,
     listener(CO),
     channel(InChannel) | Stop = _, Attributes = _,
 	MR = ML,
-%	write_channel({Goals, Common1}, InChannel),
 	write_channel(GoalCommon?, InChannel),
 	shared_common_interface(Goals, GoalCommon, Done, CO, COC!),
-%	common_interface(Common, Done, done([]), CO, COC!),
 	output(CallInfo, ServiceId, COC?, {CO, CL, CR, CC}, Done?, [], [], [],
 			relay, Domain
 	);
@@ -1342,10 +1339,8 @@ private_goals(Input, ServiceId, CallInfo, UCC, In, Domain) :-
     listener(ServiceId),
     listener(Domain),
     listener(CO) |
-%	In ! {Goal, Common},
 	In ! GoalCommon?,
 	shared_common_interface(Goal, GoalCommon, Done, CO, COC!),
-%	common_interface(Common, Done, done([]), CO, COC!),
 	output(GoalInfo, ServiceId, COC?, CCC, Done?, [], [], [],
 			relay, Domain
 	),
@@ -1596,7 +1591,6 @@ layer_goals(Goals, LO, RO, ModeFunctor, Interrupt, Module, CO) :-
     Goals =\= [_|_],
     Goals =\= [],
     Goals =\= clause(_,_),
-%    Goals =\= clause(_,_,_),
     Goals =\= clause(_,_,_,_),
     ModeFunctor = interrupt(Functor) |
 	activate(Module, Functor(Goals), procedures(Interrupt?, LO, RO, CO)) ;
@@ -1604,7 +1598,6 @@ layer_goals(Goals, LO, RO, ModeFunctor, Interrupt, Module, CO) :-
     Goals =\= [_|_],
     Goals =\= [],
     Goals =\= clause(_,_),
-%    Goals =\= clause(_,_,_),
     Goals =\= clause(_,_,_,_),
     ModeFunctor = failsafe(_) | Interrupt = _,
 	activate(Module, export(Goals), procedures(LO, RO, CO)) ;
@@ -1629,10 +1622,6 @@ layer_goals(Goals, LO, RO, ModeFunctor, Interrupt, Module, CO) :-
 
     Goals = clause(Goals', Body) |
 	unify_without_failure(Body, true),
-	layer_goals;
-
-    Goals = clause(Goal, Body, Controls) |
-	declause(Goal, Body, Controls, Goals'),
 	layer_goals;
 
     Goals = clause(Goal, Body, Id, Result) |
@@ -1680,18 +1669,15 @@ procedure meta_goals(Goals, LO, RO, Functor, Interrupt, Module, CO, MetaKind).
 meta_goals(Goals, LO, RO, Functor, Interrupt, Module, CO, MK) :-
 
     Goals =\= clause(_,_),
-%    Goals =\= clause(_,_,_),
     Goals =\= clause(_,_,_,_),
     Goals =\= [_|_],
     Goals =\= [],
     Goals =\= _#_,
     Goals =\= true,
     listener(Goals) |
-%	activate(Module, Functor(Goals), MK(Body, _, MR)),
 	shared_activate_reduce(Module, Functor, Goals, MK, LO, RO,
 				Interrupt, CO
 	);
-%	reduce(Body, LO, RO, MR, Goals, Interrupt, Module, CO, MK);
 
     Goals ? Goal,
     unknown(Interrupt),
@@ -1707,51 +1693,29 @@ meta_goals(Goals, LO, RO, Functor, Interrupt, Module, CO, MK) :-
     channel(CO) | Functor = _, Interrupt = _, Module = _, MK = _,
 	write_channel(exception(unknown, Goals, LO, RO), CO) ;	% fast path
 
-    MK = meta,
     Goals = clause(Goal, Body),
     Goal =\= "_close"(_),
     Goal =\= "_unique_id"(_),
     Goal =\= service_id(_),
     Goal =\= clause(_,_),
-%    Goal =\= clause(_,_,_),
     Goal =\= clause(_,_,_,_),
     Goal =\= [_|_],
     Goal =\= [],
     Goal =\= true | Functor = _, CO = _,
-%	activate(Module, reduce(Goal), meta(Body, Id, MR)),
-	shared_activate_clause_MR(Module, Goal, Body, LO, RO, Interrupt,
+	shared_activate_clause_MR(Module, Goal, Body, MK, LO, RO, Interrupt,
 					_Result, Goals, _Id
 	);
-%	clause(Id?, LO, RO, MR?, Interrupt, _Result, Goals);
 
-/*
-    Goals = clause(Goal, _, _),
-    Goal =\= "_close"(_),
-    Goal =\= "_unique_id"(_),
-    Goal =\= service_id(_),
-    Goal =\= clause(_,_),
-%    Goal =\= clause(_,_,_),
-    Goal =\= clause(_,_,_,_),
-    Goal =\= [_|_],
-    Goal =\= [],
-    Goal =\= true,
-    listener(Goal) | Functor = _, CO = _,
-	activate(Module, reduce(Goal), MC?),
-	control_clause(Goals, LO, RO, MK, Interrupt, MC);
-*/
-
-    MK = meta,
     Goals = clause(Goal, Body, Id?, Result),
     Goal =\= "_close"(_),
     Goal =\= "_unique_id"(_),
     Goal =\= service_id(_),
     Goal =\= clause(_,_),
-%    Goal =\= clause(_,_,_),
     Goal =\= clause(_,_,_,_),
     Goal =\= [_|_],
     Goal =\= [],
     Goal =\= true | Functor = _, CO = _,
-	shared_activate_clause_MR(Module, Goal, Body, LO, RO, Interrupt,
+	shared_activate_clause_MR(Module, Goal, Body, MK, LO, RO, Interrupt,
 					Result, Goals, Id
 	);
 
@@ -1763,79 +1727,29 @@ meta_goals(Goals, LO, RO, Functor, Interrupt, Module, CO, MK) :-
 
 % kluge null calls clause/reduce so that they wont be elided by inherit ***
     Goals = false | Functor = _, Interrupt = _,
-	reduce(true,LO,LO'?,_,[],_,Module,CO,MK),
-	clause(_,LO',RO,0,[],_,none);
+	reduce(true,LO,LO'?,_,[],[],_,Module,CO,MK),
+	clause(_,LO',RO,0,[],_,none, _);
 
     tuple(Goals),
-%    arg(1, Goals, clause),
     unknown(Interrupt),
     otherwise,
     listener(MK) |
-	declauser(MK, Goals, Goals'),
+	declauser(Goals, Goals'),
 	self;
 
     known(Interrupt),
     RO = Done(List) | Functor = _, Module = _, CO = _, MK = _,
 	LO = Done([[Goals] | List]) .
-/*
-procedure control_clause(Clause, LO, RO, MetaKind, Interrupt, MetaControl).
 
-control_clause(Clause, LO, RO, MK, Interrupt, MC) :-
+procedure declauser(Clause, Clause).
 
-    MK = "meta-s",
-    Clause = clause(Goal, Body, Controls) |
-	Controls = Suspense(Id, Result),
-	MC = MK(Body, Suspense(Id), MR),
-	clause(Id, LO, RO, MR?, Interrupt, Result,
-		clause(Goal, Body, reduce(Id, Result))
-	);
+declauser(DClause, Clause) :-
 
-    MK = meta,
-    Clause = clause(Goal, Body, Controls) :
-      Controls = Suspense(Id, Result),
-      MC = MK(Body, Id, MR) |
-	clause(Id, LO, RO, MR, Interrupt, Result,
-		clause(Goal, Body, reduce(Id, Result))
-	),
-	unify_without_failure(Suspense, unknown);
-
-    MK = "meta-s",
-    Clause = clause(_, Body, Controls), Controls =\= {_,_,_} :
-      MC = MK(Body, _(Id), MR) |
-	clause(Id, LO, RO, MR, Interrupt, _, Clause);
-
-    MK = meta,
-    Clause = clause(_, Body, Controls), Controls =\= {_,_,_} :
-      MC = MK(Body, Id, MR) |
-	clause(Id, LO, RO, MR, Interrupt, _, Clause);
-
-    known(Interrupt) :
-      MC = MK(_, _, abort) |
-	clause(_, LO, RO, _, Interrupt, _, Clause).
-*/
-
-procedure declauser(MetaKind, Clause, Clause).
-
-declauser(MK, DClause, Clause) :-
-
-    MK = meta,
     DClause = clause(Clause^, Body) |
 	unify_without_failure(Body, true);
 
-    MK = meta,
     DClause = clause(IClause, Body, Id, Result) |
-	declause(IClause, Body, _(Id, Result), Clause);
-/*    
-    DClause = clause(IClause, Body, Controls) | MK = _,
-	declause(IClause, Body, Controls, Clause);
-*/
-    MK = "meta-s",
-    DClause = clause(Goal, Body) |
-	Clause = clause(Goal, Body, {_, _, _});
-
-    MK = "meta-s",
-    DClause = clause(Goal, Body, Id, Result) |
-	Clause = clause(Goal, Body, _(Id, Result)) .
+	declause(IClause, Body, _(Id, Result), Clause).
 
 procedure declause(Goal, Body, Controls, Goals).
 
@@ -1859,31 +1773,32 @@ declause(Goal1, Body, Controls, Goal2) :-
 	unify_without_failure(Body, true).
 
 
-procedure clause(Id, LO, RO, MetaResult, Interrupt, Result, Clause).
+procedure clause(Id, LO, RO, MetaResult, Interrupt, Result, Clause, Suspend).
 
-clause(Id, LO, RO, MR, Interrupt, Result, Clause) :-
+clause(Id, LO, RO, MR, Interrupt, Result, Clause, Suspend) :-
 
-    number(MR) | Id = _, Interrupt = _, Clause = _,
+    number(MR) | Id = _, Interrupt = _, Clause = _, Suspend = _,
 	Result = MR,
 	LO = RO ;
 
     string(MR),
-    Clause = clause(_, Body) | Id = _, Interrupt = _, Result =  _,
+    Clause = clause(_, Body) | Id = _, Interrupt = _, Result =  _, Suspend = _,
 	LO = RO,
 	unify_without_failure(Body, true);
 
-    string(MR), Clause =\= clause(_, _) | Id = _, Interrupt = _,
+    string(MR), Clause =\= clause(_, _) | Id = _, Interrupt = _, Suspend = _,
 	info(5, T),
 	arg(2, Clause, Goal),
 	LO = RO,
 	unify_without_failure(Result, MR(Goal?, T?));
 
     known(Interrupt),
-    RO = Done(List) | Id = _, Interrupt = _, Result = _,
+    known(Suspend),
+    RO = Done(List) | Clause = _, Id = _, Interrupt = _, Result = _,
 	MR = abort,
-	LO = Done([Clause | List]);
+	LO = Done([Suspend | List]);
 
-    string(Id)  | Interrupt = _,
+    string(Id)  | Interrupt = _, Suspend = _,
 	arg(2, Clause, Goal),
 	MR = abort,
 	unify_without_failure(LO, RO),
@@ -1892,11 +1807,11 @@ clause(Id, LO, RO, MR, Interrupt, Result, Clause) :-
 
 /******************** M E T A - I N T E R P R E T E R ************************/
 
-procedure reduce(Goals, LO, RO, Result, Called, Interrupt, Module, CO,
+procedure reduce(Goals, LO, RO, Result, Called, Suspend, Interrupt, Module, CO,
 			MetaKind
 ).
 
-reduce(Goals, LO, RO, Result, Called, Interrupt, Module, CO, MK) :-
+reduce(Goals, LO, RO, Result, Called, Suspend, Interrupt, Module, CO, MK) :-
 
     Goals = (Goal, Goals'),
     Goal =\= true,
@@ -1907,23 +1822,19 @@ reduce(Goals, LO, RO, Result, Called, Interrupt, Module, CO, MK) :-
     listener(Module),
     listener(CO),
     listener(MK) | Interrupt = _,
-%	activate(Module, reduce(Goal), MK(Body, _, Result1)),
 	shared_activate_reduce(Module, reduce, Goal, MK, LO, LO'?,
 				Interrupt, CO
 	),
-%	reduce(Body, LO, LO'?, Result1, Goal, Interrupt, Module, CO, MK),
 	self;
 
     unknown(Interrupt),
     Goals =\= true,
     Goals =\= _#_,
     Goals =\= _@_,
-    Goals =\= (_,_) | Result = _, Called = _,
-%	activate(Module, reduce(Goals), MK(Goals', _, Result')),
+    Goals =\= (_,_) | Result = _, Called = _, Suspend = _,
 	shared_activate_reduce(Module, reduce, Goals, MK, LO, RO,
 				Interrupt, CO
 	);
-%	reduce(Goals', LO, RO, Result', Interrupt, Module, CO, MK);
 
     Goals = (true, Goals') |
 	self;
@@ -1939,17 +1850,17 @@ reduce(Goals, LO, RO, Result, Called, Interrupt, Module, CO, MK) :-
 	self;
 
     Goals = true | Result = _, Called = _, Interrupt = _,
-		   Module = _, CO = _, MK = _,
+		   Module = _, CO = _, MK = _, Suspend = _,
 	unify_without_failure(LO, RO);
 
     Goals = Target # Goal,
     channel(CO) | Result = _, Called = _, Interrupt = _,
-		  Module = _, MK = _,
+		  Module = _, MK = _, Suspend = _,
 	write_channel(transmit(Target, Goal, LO, RO), CO) ;
 
     Goals = Goal @ LinkName,
     channel(CO) | Result = _, Called = _, Interrupt = _,
-		  Module = _, MK = _,
+		  Module = _, MK = _, Suspend = _,
 	write_channel(link(LinkName, Goal, LO, RO), CO) ;
 
     known(Interrupt),
@@ -1957,17 +1868,19 @@ reduce(Goals, LO, RO, Result, Called, Interrupt, Module, CO, MK) :-
     Goals =\= _#_,
     Goals =\= _@_,
     Goals =\= (_,_),
-    RO = Done(List) |  Result = _, Called = _, Module = _, CO = _, MK = _,
+    RO = Done(List) |  Result = _, Called = _,
+			Module = _, CO = _, MK = _, Suspend = _,
 	LO = Done([Goals | List]) ;
 
     known(Interrupt),
     writable(Result),
-    RO = Done(List) |  Goals = _, Interrupt = _, Module = _, CO = _, MK = _,
+    RO = Done(List) |  Called = _, Goals = _, Interrupt = _,
+			Module = _, CO = _, MK = _,
 	Result = abort,		% this must be atomic in the reduction!
-	LO = Done([Called | List]) ;
+	LO = Done([Suspend | List]) ;
 
     string(Result),
-    channel(CO) | Goals = _, Interrupt = _, Module = _, MK = _,
+    channel(CO) | Goals = _, Interrupt = _, Module = _, MK = _, Suspend = _,
 	write_channel(exception(Result, Called, LO, RO), CO) .
 
 /************ C O M P U T A T I O N   C A L L   S E R V E R ******************/
