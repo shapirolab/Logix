@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - utilities.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/27 11:01:10 $
+		       	$Date: 2000/07/26 07:16:32 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/utilities.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -298,7 +298,8 @@ verify_channel(Name, ChannelName, ChannelNames, Locals, OkChannelName,
 	defined_channel;
 
     ChannelName = `ChannelName',
-    string(ChannelName'), ChannelName' =\= "_", ChannelName' =\= "" |
+    nth_char(1, ChannelName', C),
+    ascii('A') =< C, C =< ascii('Z') |
 	defined_channel;
 
     otherwise :
