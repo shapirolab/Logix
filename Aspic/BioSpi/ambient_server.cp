@@ -439,6 +439,7 @@ serve_ambient0(In, Events, FromSub, Done,
 **    state(State^)
 **    suspend(Reply^)
 **    tree(Format, Tree^)
+**    update_references(List)
 **
 ** and debugging commands:
 **
@@ -560,12 +561,7 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
     Locus =?= public,
-    read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id),
-    string(Id),
-    string_length(Id) > 7,
-    string_to_dlist(Id, IdL, []),
-    string_to_dlist("public.", Prefix, NL) :
-      IdL = Prefix |
+    read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/3 + public + PC + SC1s + SC2s, search ,
 	       (format_channel(PrivateChannel, PC),
 	        copy_public_channels(PublicChannels, GCsBefore),
@@ -574,7 +570,6 @@ serve_ambient(In, Events, FromSub, Done,
 	        format_channel_list(GCsAfter, SC2s)
 	       )
 	),
-	list_to_string(NL, Name),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
 	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
@@ -666,6 +661,11 @@ serve_ambient(In, Events, FromSub, Done,
 	),
 	self;
 
+    In ? Update, Update = update_references(_List) :
+      write_channel(Update, Scheduler) |
+	DEBUG(update_references/1, scheduler),
+	self;
+
 /******************** Inter-ambient communication **************************/
 
     In ? Remove, Remove =?= remove_channels(ChannelTuple, SubAmbient) :
@@ -684,15 +684,9 @@ serve_ambient(In, Events, FromSub, Done,
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
     Locus =?= public,
     AddRefs--,
-    read_vector(SPI_CHANNEL_NAME, PrivateChannel, Id),
-    string(Id),
-    string_length(Id) > 7,
-    string_to_dlist(Id, IdL, []),
-    string_to_dlist("public.", Prefix, NL) :
-      IdL = Prefix |
+    read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUG(lookup/4 - public(AddRefs') - PrivateChannel -
 		PublicChannels - PublicChannels', search),
-	list_to_string(NL, Name),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs',
 	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
@@ -1125,9 +1119,9 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
     vector(Channel),
     read_vector(SPI_CHANNEL_REFS, Channel, Refs),
     Refs > 0,
-    Refs += AddRefs,
     read_vector(SPI_CHANNEL_NAME, Channel, ChannelId),
-    ChannelId =?= Id :
+    ChannelId =?= Id,
+    Refs += AddRefs :
       Ambient = _,
       Debug = _,
       Last = _,
@@ -1174,8 +1168,6 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 
     ChannelList =?= [Name1(_, _, _) | _],
     Last @< Id, Id @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Id, NL, []),
     AddRefs++,
     read_vector(SPI_CHANNEL_TYPE, PrivateChannel, Type),
     read_vector(SPI_CHANNEL_RATE, PrivateChannel, Rate),
@@ -1184,9 +1176,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       Debug = _,
       NewChannelList =
 	[Id(SharedChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate?) | ChannelList],
-      write_channel(new_channel(PublicId, NewChannel, BaseRate?), Scheduler),
-      GT = NL |
-	list_to_string(GL, PublicId),
+      write_channel(new_public_channel(Id, NewChannel, BaseRate?), Scheduler) |
 	DEBUG(lookup, new - PublicId - PrivateChannel(Type,Rate)),
 	rate_to_baserate,
 	update_new_channel;
@@ -1643,18 +1633,15 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
     we(NewChannel),
     PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Name, NL, []) :
+    Last @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
       PublicChannels' =
 	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate)
 	| PublicChannels],
-      write_channel(new_channel(Id?, SpiChannel, SPI_DEFAULT_WEIGHT_NAME,
-				BaseRate), Scheduler),
-      GT = NL |
-	list_to_string(GL, Id),
+      write_channel(new_public_channel(Name, SpiChannel,
+				       SPI_DEFAULT_WEIGHT_NAME, BaseRate),
+		    Scheduler) |
 	self;
 
     List ? Name(NewChannel, BaseRate),
@@ -1737,17 +1724,14 @@ merge_public_channels(List, PublicChannels, NewPublicChannels, Scheduler,
     we(NewChannel),
     PublicChannels =?= [Name1(_, _, _) | _],
     string(Name),
-    Last @< Name, Name @< Name1,
-    string_to_dlist("public.", GL, GT),
-    string_to_dlist(Name, NL, []) :
+    Last @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
       PublicChannels' = [Name(SpiChannel?, ComputeWeight, BaseRate)
 			| PublicChannels],
-      write_channel(new_channel(Id?, SpiChannel, ComputeWeight, BaseRate),
-			Scheduler),
-      GT = NL |
-	list_to_string(GL, Id),
+      write_channel(new_public_channel(Name, SpiChannel,
+				       ComputeWeight, BaseRate),
+		    Scheduler) |
 	self;
 
     otherwise,
