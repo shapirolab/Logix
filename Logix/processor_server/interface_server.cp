@@ -6,9 +6,9 @@ Michael Hirsch, Feb 1986
 Bill Silverman, Feb 1988
 
 	$Author: bill $
-    	$Date: 1999/07/09 07:03:39 $
+    	$Date: 1999/11/28 12:37:19 $
 	$Locker:  $
-	$Revision: 1.1 $
+	$Revision: 1.2 $
 	$Source: /home/qiana/Repository/Logix/processor_server/interface_server.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -145,6 +145,12 @@ convert_date(GivenDate, FullDate, Ok, Common) :-
       Ok = true,
       Common = done;
 
+    string(GivenDate),
+    string_length(GivenDate) =:= 14 :
+      FullDate = GivenDate,
+      Ok = true,
+      Common = done;
+
     otherwise : GivenDate = _,
       FullDate = yymmddhhmmss,
       Ok = false(wrong_length),
@@ -185,6 +191,17 @@ date_time(FullDate, Date, Time) :-
       ascii('/', S),
       ascii(':', C) |
 	list_to_string([D1, D2, S, M1, M2, S, Y1, Y2], Date),
+	list_to_string([H1, H2, C, I1, I2, C, S1, S2], Time);
+
+    string(FullDate),
+    string_to_dlist(FullDate, [Y1, Y2, Y3, Y4, M1, M2, D1, D2,
+			       H1, H2, I1, I2, S1, S2
+			      ],
+		    []
+    ) :
+      ascii('/', S),
+      ascii(':', C) |
+	list_to_string([D1, D2, S, M1, M2, S, Y3, Y4], Date),
 	list_to_string([H1, H2, C, I1, I2, C, S1, S2], Time).
 
 errno(Offset, Errno, Diagnostic, Ok, Common) :-
