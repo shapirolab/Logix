@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/27 11:01:08 $
+		       	$Date: 2000/07/03 04:58:08 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -414,8 +414,9 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 	arg(1, OuterLHS, PName),
 	make_communication_name(PName, ".comm", Communicator),
 	utilities#make_predicate_list(';', ClauseList, FcpClauses),
-	prepares_to_guards(Prepares, PrepareGuards, Results),
-	make_communication_atom + (ChoiceVars = [`psifcp(chosen) | Results]);
+	prepares_to_guards(Prepares, PrepareGuards),
+	make_communication_atom +
+		(ChoiceVars = [`psifcp(chosen), `"Message."]);
 
     /* compared, logix, none */
     Mode =\= communicate, Mode =\= compare, Mode =\= conflict :
@@ -444,7 +445,7 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       Scope = [error("conflicting_guards") | NextScope].
       
 
-  prepares_to_guards(Prepares, PrepareGuards, Results) +
+  prepares_to_guards(Prepares, PrepareGuards) +
 	(NextAsk, Asks = NextAsk?, NextTell, Tells = NextTell?) :-
 
     Prepares ? {Ask, Tell} :
@@ -452,17 +453,10 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
       NextTell ! Tell |
 	self;
 
-    Prepares ? {Ask, Tell, Result} :
-      NextAsk ! Ask,
-      NextTell ! Tell,
-      Results ! Result |
-	self;
-
     Prepares =?= [] :
       NextAsk = [],
       NextTell = [],
-      PrepareGuards = (Asks'? : Tells'?),
-      Results = [] |
+      PrepareGuards = (Asks'? : Tells'?) |
 	utilities#make_predicate_list(',', Asks, Asks'),
 	utilities#make_predicate_list(',', Tells, Tells').
 
@@ -501,16 +495,14 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 	ClauseList, NextClauseList, Prepares, NextPrepares) :-
 
     Mode =?= receive,
-    RHSList ? ({{Identify, Write}, Consume} | Body),
-    Consume =?= (Result = _)  :
+    RHSList ? ({{Identify, Write}, Consume} | Body) :
       ClauseList ! (`psifcp(chosen) = Index, Consume | Body),
-      Prepares ! {Identify, Write, Result} |
+      Prepares ! {Identify, Write} |
 	self;
 
     Mode =?= send,
-    RHSList ? ({{Identify, Write}, Unify}  | Body),
-    Unify =?= (Result = _) :
-      Prepares ! {Identify, Write, Result},
+    RHSList ? ({{Identify, Write}, Unify}  | Body) :
+      Prepares ! {Identify, Write},
       ClauseList ! (`psifcp(chosen) = Index : Unify | Body) |
 	self;
 

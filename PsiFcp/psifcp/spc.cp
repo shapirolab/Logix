@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/29 09:45:46 $
+		       	$Date: 2000/07/03 04:58:09 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.2 $
+			$Revision: 1.3 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -116,22 +116,25 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 
     Procedure =?= (Atom :- Communicate1),
     RHSS =?= [(Ask : Writes | Body)] :
-      NewRHSS = (Ask : Tell | Body),
+      NewRHSS = (Ask? : Tell? | Body),
       Terms ! (Atom :- Communicate2?) |
 	utilities#untuple_predicate_list(',', Ask, Asks),
 	utilities#untuple_predicate_list(',', Writes, Writes'),
 	utilities#untuple_predicate_list(';', Communicate1, Communicate1'),
 	analyze_rhss(Communicate1'?, Prototype, Writes'?, ChannelTables,
 			ProcessTable, ProcessTable'?),
-	utilities#make_predicate_list(',',
-		[write_channel(start(Name), `"Scheduler.") | Writes'?], Tell),
-	extract_communication_list,
-	rewrite_clauses,
-	update_rhss(true, Communicate2''?, ChannelTables,
-			ProcessTable', ProcessTable''?, Communicate2'),
         /* Check for homodimerized communication (send and receive on the
            same channel). Convert one of the operations to "dimer" and
            suppress the other, retaining its .comm clause.               */
+	dimerize_requests(Writes'?, Writes''),
+	utils#binary_sort_merge(Writes'', Tell'),
+	utilities#make_predicate_list(',',
+		[write_channel(start(Name), `"Scheduler.") | Tell'?], Tell),
+	extract_communication_list,
+	utils#binary_sort_merge(CommunicationsList, Communications),
+	rewrite_clauses,
+	update_rhss(true, Communicate2''?, ChannelTables,
+			ProcessTable', ProcessTable''?, Communicate2'),
 	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
 	output.
 
@@ -144,17 +147,43 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
     Channels = [] :
       Prototype = [].
 
-  extract_communication_list(Asks, Writes, Communications) :-
+  extract_communication_list(Asks, Writes, CommunicationsList) :-
 
     Asks ? Identify,
     Writes ? _write_channel(Ms, Channel),
     Ms = Type(_Id, _Message, Tag, Multiplier, _Chosen) :
-      Communications ! {Tag, Identify, Type, Multiplier, Channel} |
+      CommunicationsList ! {Tag, Identify, Type, Multiplier, Channel} |
 	self;
 
     Asks = [],
     Writes = [] :
-       Communications = [].
+       CommunicationsList = [].
+
+update_dimerized(Writes, Tell) :-
+
+    Writes ? Write, Write =?= write_channel(Request, _Channel),
+    arg(1, Request, Type), Type =\= dimer :
+      Tell ! Write |
+	self;
+
+    Writes ? Write,
+    otherwise :
+      Tell ! Write |
+	remove_second_dimer(Write, Writes', Writes''),
+	self;
+
+    Writes = [] :
+      Tell = [].
+
+  remove_second_dimer(Write, Writes, NewWrites) :-
+
+    Writes ? Write :
+      NewWrites = Writes';
+
+    Writes? Other, Other =\= Write :
+      NewWrites ! Write |
+	self.
+
 
 update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
 
@@ -235,11 +264,11 @@ update_body_list(BodyList, NewGlobals, NewBody) :-
       Body = NextBody.
 
 
-rewrite_clauses(Communicate1, Communications, Communicate2) :-
+rewrite_clauses(Communicate1, Writes, Communications, Communicate2) :-
 
     Communicate1 ? (Ask | Body),
     Ask = (Select, Consume),
-    Select = (_Chosen = ClauseTag) :
+    Writes ? write_channel(_Type(_Id, _Ms, ClauseTag, _Mult, _Chosen), _Ch) :
       Communicate2 ! (Ask'? : Withdrawn? | Body),
       Asks = [Select, Consume | Identifies?] |
 	generate_withdraws,
@@ -249,7 +278,7 @@ rewrite_clauses(Communicate1, Communications, Communicate2) :-
 
     Communicate1 ? (Guard | Body),
     Guard = (Select : Unify),
-    Select = (_Chosen = ClauseTag) :
+    Writes ? write_channel(_Type(_Id, _Ms, ClauseTag, _Mult, _Chosen), _Ch) :
       Communicate2 ! (Select, Identifies? : Unify, Withdrawn? | Body) |
 	generate_withdraws,
 	utilities#make_predicate_list(',', Identifies'?, Identifies),
@@ -257,6 +286,7 @@ rewrite_clauses(Communicate1, Communications, Communicate2) :-
 	self;
 
     Communicate1 = [] :
+      Writes = _,
       Communications = _,
       Communicate2 = [].
 
@@ -571,11 +601,11 @@ reduce_channel_table(Entries, AddAsk, AddTell, Table, NextTable) :-
 update_tell(Comm, Tell, NewTell, Table, NextTable) :-
 
     Comm = true,
-    Tell = [(`psims(ChannelName) = Message) | Tail],
+    Tell = [(`"Message." = Message) | Tail],
     tuple(Message),
     arity(Message, A),
     make_tuple(A, Message') :
-      NewTell = [(`psims(ChannelName) = Message') | Tail] |
+      NewTell = [(`"Message." = Message') | Tail] |
 	replace_sent_channels(1, Message, Message', Table, NextTable);
 
     otherwise :
@@ -748,6 +778,43 @@ update_implicit(Channels, Substitutions, Table, NextTable) :-
       ChannelName = _,
       Value = _ |
 	update_implicit.    
+
+
+dimerize_requests(Tell, NewTell) :-
+
+    Tell ? write_channel(Request, Channel) :
+      NewTell ! write_channel(NewRequest?, Channel) |
+	dimerize_requests(Retell?, NewTell'),
+	dimerize_requests1;
+
+    Tell = [] :
+      NewTell = [].
+
+  dimerize_requests1(Tell, Request, Channel, NewRequest, Retell) :-
+
+    Tell ? write_channel(Send, Channel),
+    Send = send(Id, Message, SendTag, Multiplier, Chosen),
+    Request =?= receive(Id, Message, ReceiveTag, Multiplier, Chosen) :
+      NewRequest = dimer(Id, Message, {SendTag, ReceiveTag},
+				Multiplier, Chosen),
+      Retell = [write_channel(NewRequest, Channel) | Tell'?] ;
+
+    Tell ? write_channel(Receive, Channel),
+    Receive = receive(Id, Message, ReceiveTag, Multiplier, Chosen),
+    Request =?= send(Id, Message, SendTag, Multiplier, Chosen) :
+      NewRequest = dimer(Id, Message, {SendTag, ReceiveTag},
+				Multiplier, Chosen),
+      Retell = [write_channel(NewRequest, Channel) | Tell'?] ;
+
+    /* No change if already dimerized. */
+    Tell ? Other :
+      Retell ! Other |
+	self;
+
+    Tell =?= [] :
+      Channel = _,
+      NewRequest = Request,
+      Retell = [].      
 
 
 construct_newgoal(Functor, Substitutions, NewGoal) :-
