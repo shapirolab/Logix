@@ -4,9 +4,9 @@ Precompiler for Pi Calculus procedures - Stochastic Pi Calculus Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2000/06/27 11:01:09 $
+		       	$Date: 2000/06/29 09:45:46 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/PsiFcp/psifcp/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -60,9 +60,7 @@ stochasticize(In, Terms) :-
 **
 **      Procedure is [] or the compound procedure's communication part.
 **
-**        ProcedureName.Mode(<arguments'>) :- <compound rhs>
-**
-**      where Mode is in {send, mixed}.
+**        ProcedureName.comm(<arguments'>) :- <compound rhs>
 **
 ** Output:
 **
@@ -76,11 +74,14 @@ output(In, ProcessTable, Terms) :-
 	self;
 
     In ? export(Atom, RHSS, _Procedure) :
-      Terms ! (Atom'? :- RHSS) |
+      Terms ! (Atom'? :- RHSS'?) |
 	utilities#tuple_to_atom(Atom, Atom'),
+	/* Eliminate unused global channels for this export. */
+	update_globals(RHSS, RHSS', ProcessTable, ProcessTable'?),
 	self;
 
-
+    /* We could add a check here for unused channels, i.e. ones
+       that are not needed by the derived procedure. */
     In ? outer(Atom, RHSS, _Procedure) :
       Terms ! (Atom' :- RHSS) |
 	utilities#tuple_to_atom(Atom, Atom'),
@@ -105,22 +106,18 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 		NewRHSS) :-
 
     Procedure =\= (_ :- _) :
-      Name = _ /*,
-      NewRHSS = RHSS*/ |				/* fix this */
+      Name = _ |
 	analyze_rhss(RHSS, Prototype, [], ChannelTables,
 			ProcessTable, ProcessTable'?),
 	update_rhss(false, RHSS, ChannelTables,
 			ProcessTable', ProcessTable''?, Rhss),
 	utilities#make_predicate_list(';', Rhss, NewRHSS),
-%display_update(Name, Rhss),
-%display_tables(Name, ChannelTables),
 	output;
 
     Procedure =?= (Atom :- Communicate1),
-%arg(1, Atom, CommName),
     RHSS =?= [(Ask : Writes | Body)] :
       NewRHSS = (Ask : Tell | Body),
-      Terms ! (Atom :- Communicate2?) |		/* fix this */
+      Terms ! (Atom :- Communicate2?) |
 	utilities#untuple_predicate_list(',', Ask, Asks),
 	utilities#untuple_predicate_list(',', Writes, Writes'),
 	utilities#untuple_predicate_list(';', Communicate1, Communicate1'),
@@ -132,8 +129,10 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
 	rewrite_clauses,
 	update_rhss(true, Communicate2''?, ChannelTables,
 			ProcessTable', ProcessTable''?, Communicate2'),
+        /* Check for homodimerized communication (send and receive on the
+           same channel). Convert one of the operations to "dimer" and
+           suppress the other, retaining its .comm clause.               */
 	utilities#make_predicate_list(';', Communicate2'?, Communicate2),
-%display_update(CommName, Rhss),
 	output.
 
   prototype_channel_table(Channels, Prototype) :-
@@ -156,6 +155,85 @@ stochastic(In, ProcessTable, Terms, Name, RHSS, Prototype, Procedure,
     Asks = [],
     Writes = [] :
        Communications = [].
+
+update_globals(RHSS, NewRHSS, ProcessTable, NextProcessTable) :-
+
+    RHSS =?=  (psi_monitor # global_channels(Globals, Scheduler), Body) :
+      NewRHSS = (psi_monitor # global_channels(NewGlobals?, Scheduler),
+						NewBody?),
+      ProcessTable = [member(Name, Channels, Ok) | NextProcessTable] |
+	extract_entry_name,
+	update_globals1,
+	update_body_list,
+	utilities#make_predicate_list(',', NewBody'?, NewBody);
+
+    otherwise :
+      NewRHSS = RHSS,
+      NextProcessTable = ProcessTable.
+
+  extract_entry_name(Body, Name, BodyList) :-
+
+    Body =?= (Assignment, Body'), Assignment =?= (_Variable = _Real) :
+      BodyList ! Assignment |
+	self;
+
+    otherwise :
+      Name = Body,
+      BodyList = [Body].
+
+  update_globals1(Globals, Channels, NewGlobals, Ok) :-
+
+    Ok = true,
+    Globals ? Name(`Name, Multiplier) |
+	update_global_list(Name, Channels, Multiplier,
+		NewGlobals, NewGlobals'?),
+	self;
+
+    otherwise :
+      Ok = _,
+      Channels = _,
+      NewGlobals = Globals.
+
+  update_global_list(Name, Channels, Multiplier, NewGlobals, NextNewGlobals) :-
+
+    Channels ? Name :
+      Channels' = _,
+      NewGlobals = [Name(`Name, Multiplier) | NextNewGlobals];
+
+    Channels ? Other, Other =\= Name |
+	self;
+
+    Channels =?= [] :
+      Name = _,
+      Multiplier = _,
+      NewGlobals = NextNewGlobals.
+
+update_body_list(BodyList, NewGlobals, NewBody) :-
+
+    BodyList ? Assignment, Assignment =?= (Variable = _Real) |
+	ignore_unused_assignment(Assignment, Variable, NewGlobals,
+					NewBody, NewBody'?),
+	self;
+
+    otherwise :
+      NewGlobals = _,
+      NewBody = BodyList.
+
+  ignore_unused_assignment(Assignment, Variable, Globals, Body, NextBody) :-
+
+    Globals ? _Name(_Vector, Variable) :
+      Globals' = _,
+      Body = [Assignment | NextBody];
+
+    Globals ? _Other,
+    otherwise |
+	self;
+
+    Globals =?= [] :
+      Assignment = _,
+      Variable = _,
+      Body = NextBody.
+
 
 rewrite_clauses(Communicate1, Communications, Communicate2) :-
 
