@@ -2,6 +2,7 @@
 
 #define DEFAULT 0
 
+#define MICHAELIS 1
 /******************************  Examples *******************************/
 #define SQUARE 100
 #define POLY   101
@@ -18,6 +19,8 @@ struct weighter weighttab[] = {
   /* Add weighter entries here in the form:
     { name, index },
   */
+
+  {"michaelis", MICHAELIS},
 
   /*****************************  Examples ******************************/
   { "square", SQUARE },
@@ -61,6 +64,13 @@ double psi_compute_bimolecular_weight(int method,
     }
   */
 
+    case MICHAELIS: {
+      double div = receives + argv[0];
+      result = (argn >= 1 && div > 0) ?
+	(rate*(sends*receives))/(receives + argv[0]) :
+	0;
+      break;
+    }
     /*****************************  Examples ******************************/
 
     case SQUARE: {
