@@ -1,6 +1,6 @@
 -language(biospi).
 
-global(bind, in, receptor_IC).
+public(bind, in, receptor_IC).
 baserate(1).
 
 

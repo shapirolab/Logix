@@ -1,6 +1,6 @@
 -language(biospi).
 
-global(b,c,d,e).
+public(b,c,d,e).
 baserate(1).
 
 

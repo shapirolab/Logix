@@ -1,6 +1,6 @@
 -language(biospi).
 
-global(cell1, cell2).
+public(cell1, cell2).
 baserate(1).
 
 

@@ -1,6 +1,6 @@
 -language(biospi).
 
-global(complexAB,breakAB,breakAB1(infinite)).
+public(complexAB,breakAB,breakAB1(infinite)).
 baserate(1).
 
 
