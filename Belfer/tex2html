@@ -165,11 +165,11 @@ sub next_abstract
 	return "$2-$3";
       }
     }
-    print "ID does not match any of @START for \" $1$2--$3\"\n";
+    print STDERR "ID does not match any of @START for \" $1$2--$3\"\n";
     exit;
   }
   ($_) = split /\}\}/, $Lines;
-  print "Invalid ID format: \"$_\}\}\"\n";
+  print STDERR "Invalid ID format: \"$_\}\}\"\n";
   exit;
 }
 
