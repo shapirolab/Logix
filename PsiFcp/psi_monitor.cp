@@ -19,7 +19,7 @@ STOPPED => Reply = _.
 
 /*
 ** Arguments of PSIOFFSETS correspond to the C-executable (pcicomm.c)
-** sub-functions, Close, Transmit, Step.
+** sub-functions, Close, Post, Step.
 **
 ** To test the C-executable, change an argument to PsiOffset, - e.g. 
 ** 
@@ -28,7 +28,7 @@ STOPPED => Reply = _.
 ** to allow the monitor to call the C step function.
 */
 
-PSIOFFSETS => {unbound, unbound, unbound}.
+PSIOFFSETS => {PsiOffset, PsiOffset, PsiOffset}.
 
 serve(In) + (Options = []) :-
 
@@ -43,6 +43,20 @@ serve(In) + (Options = []) :-
 	start_scheduling(Scheduler, Offset, PSIOFFSETS, Ok).
 
 server(In, Options, Scheduler) + (Globals = [{0, _, -1}, {[], _, -1}]) :-
+
+    In ? debug(Debug) :
+      Debug = Debug'?,
+      write_channel(debug(Debug'), Scheduler) |
+	self;
+
+    In ? end_debug :
+      write_channel(end_debug, Scheduler) |
+	self;
+
+    In ? end_record(Stream) :
+      Stream = Stream'?,
+      write_channel(end_record(Stream'), Scheduler) |
+	self;
 
     In ? global_channels(List) |
 	merge_global_channels(List, Globals, Globals', "", Scheduler),
@@ -62,23 +76,23 @@ server(In, Options, Scheduler) + (Globals = [{0, _, -1}, {[], _, -1}]) :-
       write_channel(New, Scheduler) |
 	self;
 
-    In ? reset :
-      Globals = _,
-      close_channel(Scheduler) |
-	serve;
-
     In ? options(New, Old) :
       Options' = New? |
 	unify_without_failure(Options, Old),
 	self;
 
-    In ? debug(Debug^) :
-      write_channel(debug(Debug), Scheduler) |
-	self;
-
     In ? psifunctions(List) :
       write_channel(psifunctions(List), Scheduler) |
 	self;
+
+    In ? record(Record^) :
+      write_channel(record(Record), Scheduler) |
+	self;
+
+    In ? reset :
+      Globals = _,
+      close_channel(Scheduler) |
+	serve;
 
     In ? scheduler(Scheduler^) |
 	self;
@@ -260,16 +274,16 @@ make_channel_anchor(Name, Anchor) :-
 **
 ** It recognises:
 **
+**    close(Tuple)
 **    cutoff(Time)
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel, BaseRate)
 **    pause(Continue)
 **    record(Record?^)
-**    end_record(Record'?^)
-**    start(String)					% Old Methods
-**    start(String, OpList, Value, Chosen)		% New Methods
+**    end_record(Record?^)
+**    start(String, OpList, Value, Chosen)
 **    status(List^)
-**    step(Continue)					% New Methods
+**    step(Continue)
 **
 ** and the debugging aids:
 **
@@ -280,8 +294,8 @@ make_channel_anchor(Name, Anchor) :-
 **
 ** Maintain time  Now
 **
-** Whenever the system becomes idle, execute  PsiOffset
-** to select a transmission to complete.
+** Whenever the system becomes idle, execute(PsiOffset, {PSI_STEP, ...})
+** to select and  complete a transmission.
 **
 ** Record:
 **
@@ -359,17 +373,17 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
 
     /* Start a transmission process. */
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
-    arg(PSI_TRANSMIT, PsiOffsets, PsiOffset),
+    arg(PSI_POST, PsiOffsets, PsiOffset),
     PsiOffset =?= unbound :
       Record ! start(PId),
       Debug ! start(PId) |
-	execute(Offset, transmit(PId, OpList, Value, Chosen, Reply)),
+	execute(Offset, post(PId, OpList, Value, Chosen, Reply)),
 	continue_waiting;
 
     Schedule ? Start, Start =?= start(PId, OpList, Value, Chosen),
-    arg(PSI_TRANSMIT, PsiOffsets, PsiOffset),
+    arg(PSI_POST, PsiOffsets, PsiOffset),
     PsiOffset =\= unbound :
-      execute(PsiOffset, {PSI_TRANSMIT, PId, OpList, Value, Chosen, Reply}),
+      execute(PsiOffset, {PSI_POST, PId, OpList, Value, Chosen, Reply}),
       Record ! start(PId),
       Debug ! start(PId) |
 	continue_waiting;
@@ -392,11 +406,11 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     Schedule ? psifunctions(List),
     make_tuple(3, PsiOffsets'),
     arg(PSI_CLOSE, PsiOffsets', Close),
-    arg(PSI_TRANSMIT, PsiOffsets', Transmit),
+    arg(PSI_POST, PsiOffsets', Post),
     arg(PSI_STEP, PsiOffsets', Step) :
       PsiOffsets = _,
       Close = Close'?,
-      Transmit = Transmit'?,
+      Post = Post'?,
       Step = Step'? |
 	processor#link(lookup(psicomm, PsiOffset), _Ok),
 	psifunctions,
@@ -446,7 +460,6 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     arg(PSI_STEP, PsiOffsets, PsiOffset),
     PsiOffset =?= unbound :
       Waiting = _,
-      Record ! Now,
       Waiting' = false |
 	sum_weights(BasedAnchor, 0, Total),
 	total_weight1(Offset, BasedAnchor, Now, Total, Wakeup', Now',
@@ -458,7 +471,6 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
     arg(PSI_STEP, PsiOffsets, PsiOffset),
     PsiOffset =\= unbound :
       Waiting = _,
-      Record ! Now,
       execute(PsiOffset, {PSI_STEP, Now, BasedAnchor, Now', Wakeup'}),
       Waiting' = false |
 	self;
@@ -468,8 +480,7 @@ scheduling(Schedule, Offset, PsiOffsets, Waiter,
       Wakeup' = _,
       Waiter ! machine(idle_wait(Wakeup'), _Ok),
       Waiting' = true,
-      Record ! end(PId1(CId1)),
-      Record' ! end(PId2(CId2)),
+      Record = [Now, end(PId1(CId1)), end(PId2(CId2)) | Record'?],
       Debug ! done(PId1(CId1), PId2(CId2)) |
 	self;
 
@@ -523,8 +534,7 @@ continue_waiting(Schedule, Offset, PsiOffsets, Waiter,
 	scheduling;
 
     Reply =?= true(PId1, CId1, PId2, CId2) :
-      Record ! end(PId1(CId1)),
-      Record' ! end(PId2(CId2)),
+      Record = [Now, end(PId1(CId1)), end(PId2(CId2)) | Record'?],
       Debug ! done(PId1(CId1), PId2(CId2)) |
 	scheduling;
 
@@ -589,7 +599,7 @@ pause_scheduling(Continue,
       Wakeup = ResetWakeup.
 
 
-psifunctions(List, PsiOffset, Close, Transmit, Step) :-
+psifunctions(List, PsiOffset, Close, Post, Step) :-
 
     List ? C,
     nth_char(1, C, Char),
@@ -597,10 +607,10 @@ psifunctions(List, PsiOffset, Close, Transmit, Step) :-
       Close = PsiOffset? |
 	self;
 
-    List ? T,
-    nth_char(1, T, Char),
-    Char =:= ascii('t') :
-      Transmit = PsiOffset? |
+    List ? P,
+    nth_char(1, P, Char),
+    Char =:= ascii('P') :
+      Post = PsiOffset? |
 	self;
 
     List ? S,
@@ -621,7 +631,7 @@ psifunctions(List, PsiOffset, Close, Transmit, Step) :-
     List =?= [] :
       PsiOffset = _ |
 	unify_without_failure(unbound, Close),
-	unify_without_failure(unbound, Transmit),
+	unify_without_failure(unbound, Post),
 	unify_without_failure(unbound, Step).
 
 
@@ -704,12 +714,12 @@ queue_channel(Channel, Anchor) :-
 
 execute(Offset, Arguments) :-
 
-    Arguments = transmit(PId, OpList, Value, Chosen, Reply) :
+    Arguments = post(PId, OpList, Value, Chosen, Reply) :
       Offset = _,
       Common = {PId, Messages, Value, Chosen},
       Messages = AddMessages? |
-	transmit_test,
-	transmit ;
+	post_pass1,
+	post ;
 
     Arguments = step(Now, Anchor, NewNow, Reply) |
 	sum_weights(Anchor, 0, Total),
@@ -762,9 +772,9 @@ close_channels(Channels, N, Reply) :-
       Reply = close_failed(N, Channels).
 
 
-/************************ transmit procedures ********************************/
+/************************ post procedures ********************************/
 
-transmit_test(OpList, Common, Ok) :-
+post_pass1(OpList, Common, Ok) :-
 
     OpList ? Operation,
     Operation = {MessageType, _CId, Channel , Multiplier, _Tags},
@@ -863,7 +873,7 @@ transmit_test(OpList, Common, Ok) :-
       Ok = invalid_transmission - OpList.
 
 
-transmit(OpList, Reply, Common, Messages, AddMessages, Ok) :-
+post(OpList, Reply, Common, Messages, AddMessages, Ok) :-
 
     Ok =?= true,
     OpList ? Operation,
@@ -928,7 +938,7 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
       Operation = _,
       Message = _,
       MTX = _ |
-	transmit_test;
+	post_pass1;
 
   % Test for end of list
     arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
@@ -936,7 +946,7 @@ do_instantaneous_transmit(Operation, MTX, Anchor, Message, Common, OpList,
     Message' =?= Anchor :
       Operation = _,
       MTX = _ |
-	transmit_test;
+	post_pass1;
 
     % This Message has the same Chosen as the Operation - mixed communication. 
     arg(PSI_MESSAGE_LINKS, Message, MessageLinks),
@@ -967,12 +977,13 @@ sum_weights(Channel, Sum, Total) :-
     Sum += Rate*SendWeight*ReceiveWeight |
 	self;    
 
+    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
     read_vector(PSI_BLOCKED, Channel', Blocked),
     Blocked =?= FALSE,
-    read_vector(PSI_NEXT_CHANNEL, Channel, Channel'),
     read_vector(PSI_CHANNEL_TYPE, Channel', Type),
     Type =?= PSI_HOMODIMERIZED,
-    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_DIMER_ANCHOR, Channel', Anchor),
+    arg(PSI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(PSI_NEXT_MS, FirstLink, Message),
     arg(PSI_MESSAGE_LINKS, Message, DimerLink),
     read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
@@ -1058,7 +1069,8 @@ select_channel(Residue, Channel, Reply) :-
     Blocked =?= FALSE,
     read_vector(PSI_CHANNEL_TYPE, Channel', Type),
     Type =?= PSI_HOMODIMERIZED,
-    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_DIMER_ANCHOR, Channel', Anchor),
+    arg(PSI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(PSI_NEXT_MS, FirstLink, Message),
     arg(PSI_MESSAGE_LINKS, Message, DimerLink),
     read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
@@ -1075,7 +1087,8 @@ select_channel(Residue, Channel, Reply) :-
     Blocked =?= FALSE,
     read_vector(PSI_CHANNEL_TYPE, Channel', Type),
     Type =?= PSI_HOMODIMERIZED,
-    arg(PSI_MESSAGE_LINKS, Channel, FirstLink),
+    read_vector(PSI_DIMER_ANCHOR, Channel', Anchor),
+    arg(PSI_MESSAGE_LINKS, Anchor, FirstLink),
     read_vector(PSI_NEXT_MS, FirstLink, Message),
     arg(PSI_MESSAGE_LINKS, Message, DimerLink),
     read_vector(PSI_NEXT_MS, DimerLink, DimerMs),
@@ -1083,6 +1096,7 @@ select_channel(Residue, Channel, Reply) :-
     MsType =\= PSI_MESSAGE_ANCHOR,
     read_vector(PSI_CHANNEL_RATE, Channel', Rate),
     read_vector(PSI_DIMER_WEIGHT, Channel', DimerWeight),
+
     Residue -= Rate*DimerWeight*(DimerWeight-1)/2,
     Residue' > 0 |
 	self;
@@ -1139,44 +1153,39 @@ do_bimolecular_send(Channel, Reply, Send, Receive) :-
 
 do_homodimerized_transmit(Channel, Reply) :-
 
-    read_vector(PSI_DIMER_ANCHOR, Channel, SendAnchor),
-    arg(PSI_MESSAGE_LINKS, SendAnchor, SendLinks),
-    read_vector(PSI_NEXT_MS, SendLinks, Send),
-    read_vector(PSI_RECEIVE_ANCHOR, Channel, ReceiveAnchor),
-    arg(PSI_MESSAGE_LINKS, ReceiveAnchor, ReceiveLinks),
-    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive) |
-	do_homodimerized_send(Channel, Reply, Send, Receive).
+    read_vector(PSI_DIMER_ANCHOR, Channel, DimerAnchor),
+    arg(PSI_MESSAGE_LINKS, DimerAnchor, DimerLinks),
+    read_vector(PSI_NEXT_MS, DimerLinks, Receive),
+    arg(PSI_MESSAGE_LINKS, Receive, Links),
+    read_vector(PSI_NEXT_MS, Links, Dimer) |
+	do_homodimerized_send(Channel, Reply, Receive, Dimer).
 
-do_homodimerized_send(Channel, Reply, Send, Receive) :-
+do_homodimerized_send(Channel, Reply, Receive, Dimer) :-
 
-    Send =?= {PSI_SEND, SendCId, _, _, SendTag, _, SendCommon, _},
-    Receive =?= {PSI_RECEIVE, ReceiveCId, _, _, _,
-					ReceiveTag, ReceiveCommon, _},
-    SendCommon =?= {SendPId, SendList, SendValue, SendChosen},
-    ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen} :
+    Receive =?= {PSI_DIMER, ReceiveCId, _, _, _, ReceiveTag, ReceiveCommon, _},
+    Dimer =?= {PSI_DIMER, DimerCId, _, _, DimerTag, _, DimerCommon, _},
+    ReceiveCommon =?= {ReceivePId, ReceiveList, ReceiveValue, ReceiveChosen},
+    we(ReceiveChosen),
+    DimerCommon =?= {DimerPId, DimerList, DimerValue, DimerChosen},
+    we(DimerChosen) :
       Channel = _,
-      SendChosen = SendTag,
       ReceiveChosen = ReceiveTag,
-      ReceiveValue = SendValue?,
-      Reply = true(SendPId, SendCId, ReceivePId, ReceiveCId) |
-	discount(SendList),
-	discount(ReceiveList);
+      DimerChosen = DimerTag,
+      DimerValue = ReceiveValue?,
+      Reply = true(ReceivePId, ReceiveCId, DimerPId, DimerCId) |
+	discount(ReceiveList),
+	discount(DimerList);
 
-    Send =?= {PSI_SEND, _, _, _, _, _, SendCommon, SendLinks},
-    Receive =?= {PSI_RECEIVE, _, _, _, _, _, ReceiveCommon, _},
-    SendCommon =?= {_, _, _, Chosen},
+    Receive =?= {PSI_DIMER, _, _, _, _, _, ReceiveCommon, _},
+    Dimer =?= {PSI_DIMER, _, _, _, _, _, DimerCommon, Links},
     ReceiveCommon =?= {_, _, _, Chosen},
-    read_vector(PSI_NEXT_MS, SendLinks, Send') |
+    DimerCommon =?= {_, _, _, Chosen},
+    arg(PSI_MESSAGE_LINKS, Links, NextLink),
+    read_vector(PSI_NEXT_MS, NextLink, Dimer') |
 	self;
 
-    Send =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, SendLinks},
-    Receive =?= {PSI_RECEIVE, _, _, _, _, _, _, ReceiveLinks},
-    read_vector(PSI_NEXT_MS, SendLinks, Send'),
-    read_vector(PSI_NEXT_MS, ReceiveLinks, Receive') |
-	self;
-
-    Receive =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, _} :
-      Send = _,
+    Dimer =?= {PSI_MESSAGE_ANCHOR, _, _, _, _, _, _, _} :
+      Receive = _,
       store_vector(PSI_BLOCKED, TRUE, Channel),
       Reply = done.
 
