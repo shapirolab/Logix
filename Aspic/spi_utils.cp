@@ -339,7 +339,9 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
     otherwise :
       SpiChannel = _,
       Options = _,
-      Display = [Name].
+      Display = [FormattedName?] |
+	parse_options(Options, _Depth, _Order, _Sender, _Which, Format(short)),
+	format_channel_name.
 
 
 inspect_channel(SpiChannel/*, Format*/, Status) :-
@@ -654,8 +656,9 @@ show_channel_argument(Name, SpiChannel, Which, Depth, Sender, Format, Display,
       Depth = _,
       Sender = _,
       Format = _,
-      Display = [Name],
-      Left = Right.
+      Display = [FormattedName?],
+      Left = Right |
+	format_channel_name.
 
 channel_argument(Status, Which, Depth, Sender, Format, Display, Left, Right) :-
 
@@ -1060,17 +1063,17 @@ goal_channels1(Goal, Index, Which, Depth, Sender, Format,
 
 /* Exclude trailing non-pi arguments (mostly) */
 
-    Index > 1, arg(Index, Goal, Argument),
+    Index > 2, arg(Index, Goal, Argument),
     we(Argument),
     Index-- |
 	self;
 
-    Index > 1, arg(Index, Goal, Argument),
+    Index > 2, arg(Index, Goal, Argument),
     ro(Argument),
     Index-- |
 	self;
 
-    Index > 1, arg(Index, Goal, Argument),
+    Index > 2, arg(Index, Goal, Argument),
     vector(Argument), arity(Argument, CHANNEL_SIZE),
     make_tuple(Index, Tuple),
     arg(1, Goal, Name),
@@ -1079,11 +1082,21 @@ goal_channels1(Goal, Index, Which, Depth, Sender, Format,
       SpiFcp = Tuple |
 	goal_channels2;
 
-    Index-- > 1,
+    Index > 2, arg(Index, Goal, Argument),
+    vector(Argument), arity(Argument, 2),
+    Index--,
+    make_tuple(Index', Tuple),
+    arg(1, Goal, Name),
+    arg(1, Tuple, N) :
+      N = Name,
+      SpiFcp = Tuple |
+	goal_channels2;
+
+    Index-- > 2,
     otherwise |
 	self;
 
-    Index =< 1,
+    Index =< 2,
     arg(1, Goal, Name) :
       Which = _,
       Depth = _,
