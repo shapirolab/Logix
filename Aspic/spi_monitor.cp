@@ -468,6 +468,11 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets, DefaultWeighter,
 **   Complete Transmission
 */
 
+STATUS => [anchors([BasedAnchor, InstantaneousAnchor]),
+	   cutoff(Cutoff), debug(Debug?), ordinal(Ordinal),
+	   now(Now), record(Record?), waiting(Waiting)].
+
+
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		BasedAnchor, InstantaneousAnchor,
 		Scheduler, Record, Debug,
@@ -575,7 +580,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     /* Close the recording stream, and start a new one. */
     Schedule ? end_record(Stream),
-    convert_to_real("0.0", Now') :
+    convert_to_real(0, Now') :
       Now = _,
       Record = [],
       Stream = Record'? |
@@ -740,9 +745,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;		
 
     Schedule ? status(Status) :
-      Status = [anchors([BasedAnchor, InstantaneousAnchor]),
-		cutoff(Cutoff), debug(Debug?), ordinal(Ordinal),
-		now(Now), record(Record?), waiting(Waiting)] |
+      Status = STATUS |
 	self;		
 
     /* Step and resume */
@@ -970,8 +973,9 @@ pause_scheduling(Continue,
 		 SavedInput, SaveInput) :-
 
     Schedule ? Input,
-    Input =?= status(_) :
-      ResetSchedule ! Input |
+    Input =?= status(Status) :
+      Status ! pausing,
+      ResetSchedule ! status(Status') |
 	self;
 
     Schedule ? Input,
