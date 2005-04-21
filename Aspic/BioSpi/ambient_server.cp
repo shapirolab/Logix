@@ -72,14 +72,17 @@ run(Commands) :-
 run(Commands, System) :-
 	run(Commands, System, _Out).
 run(Commands, System, Out) :-
-   true :
+	spi_monitor # [reset, scheduler(Scheduler)],
+	synchronize.
+
+synchronize(Commands, System, Out, Scheduler) :-
+   vector(Scheduler) :
       SharedChannels = [],
       make_vector(AMBIENT_ARITY, System, InTuple),
       InTuple = {In, _AmbientId},
       store_vector(AMBIENT_ID, system, System),
       make_channel(Debug, Out),
       Children = [Ambient?] |
-	spi_monitor # scheduler(Scheduler),
 	computation # events(Events),
 	computation # self # service_id(SId),
 	serve_system + (Ambient = System, UniqueId = 0, Status = running),
@@ -97,7 +100,7 @@ run(Commands, System, Out) :-
 ** It recognises commands:
 **
 **    ambient_id(AmbientId^)
-**    done(Child, Reply^)
+**    done(Child, Really, Reply^)
 **    lookup(Locus, PrivateChannel, SharedChannel?^, Addrefs)
 **    remove_channels(ChannelTuple, SubAmbient)
 **    new_child(Child)
@@ -153,10 +156,11 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
 	self;
 
-    In ? done(Child, Reply) |
+    In ? done(Child, Really, Reply) |
 	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
+	record_ambient_item(Really, Children', Scheduler),
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
@@ -197,6 +201,15 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     In ? state(State) :
       State = [id(system), children(Children), unique_id(UniqueId)] |
 	self;
+
+/**************************** Serve Capability ******************************/
+
+    In ? withdraw(Child, Removed) |
+        DEBUG(withdraw(Removed), ChildId),
+        TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
+        remove_shared_communications(Child, SharedChannels, Scheduler,
+                                        Removed),
+        self;
 
 /**************************** External Signals ******************************/
 
@@ -256,11 +269,11 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     Children =?= [],
     unknown(In) :
       Events  = _,
-      Scheduler = _,
       SharedChannels = _,
       Status = _,
       UniqueId = _,
       close_vector(AMBIENT_CONTROL, Ambient) |
+	record_ambient_item(terminated(Ambient,Ambient), done, Scheduler),
 	close_debug;
 
     Events ? aborted :
@@ -282,6 +295,9 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
   new_debug(Debug, Children) :-
     Children ? Child :
       write_vector(AMBIENT_CONTROL, debug(Debug), Child) |
+	self;
+    Children ? _Child,
+    otherwise |
 	self;
     Children = [] :
       Debug = _.
@@ -345,6 +361,7 @@ ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
 	request_commands(Commands, Requests, Requests'),
 	computation # events(RelayEvents),
 	watcher + (Done = AmbientDone),
+	record_ambient_item(new(Ambient, Parent), AmbientId?, Scheduler),
 	serve_ambient0.
 
   make_ambient_id(AmbientName, UniqueId, ParentId, AmbientId, Scheduler) :-
@@ -431,7 +448,7 @@ serve_ambient0(In, Events, FromSub, Done,
 ** It recognises commands:
 **
 **    ambient_id(AmbientId^)
-**    done(Child, Reply^)
+**    done(Child, Really, Reply^)
 **    lookup(Locus, PrivateChannel, SharedChannel?^, Addrefs)
 **    remove_channels(ChannelTuple, SubAmbient)
 **    new_child(Child)
@@ -488,10 +505,11 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
 	self;
 
-    In ? done(Child, Reply) |
+    In ? done(Child, Really, Reply) |
 	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
+	record_ambient_item(Really, Children', Scheduler),
 	self;
 
     In ? NewId, NewId =?= new_id(_Id) :
@@ -602,21 +620,6 @@ serve_ambient(In, Events, FromSub, Done,
 		   Parent, Parent') |
 	DEBUG(lookup/3 - Locus - PrivateChannel, pass),
 	ambient_lookup;
-
-    /***** Obsolescent
-    In ? new_ambient(Name, ModuleId, Goal, NewAmbient?^),
-    ModuleId = [ModuleName | SId] :
-      Children' = [NewAmbient'? | Children] |
-	DEBUG(new_ambient, ambient - AId?),
-	TERMS(read_vector(AMBIENT_ID, NewAmbient, AId)),
-	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
-	merge_local_channels(Idle, Goal, NewGoal, copy,	Ambient, NewAmbient,
-				Lookups, []),
-	copy_initial_commands(Lookups, NewAmbient, NewAmbient'),
-	ambient(Name, SId, ModuleName # NewGoal?,
-		Ambient, NewAmbient, Debug),
-	self;
-     *****/
 
     In ? new_ambient(Name, ModuleId, Goal),
     ModuleId = [ModuleName | SId] :
@@ -744,8 +747,9 @@ serve_ambient(In, Events, FromSub, Done,
 		   change_parent(Ambient, Removed?, Ready),
 		   Enterer) |
 	DEBUG("enter"(Removed, Ready), move - EntererId - into - MyId),
-        TERMS((read_vector(AMBIENT_ID, Enterer, EntererId),
+	TERMS((read_vector(AMBIENT_ID, Enterer, EntererId),
 	       read_vector(AMBIENT_ID, Ambient, MyId))),
+	record_ambient_item(enter(Enterer, Ambient), Ready, Scheduler),
 	self;
 
     In ? exit(Exiter, Ready) :
@@ -753,10 +757,11 @@ serve_ambient(In, Events, FromSub, Done,
 		   change_parent(Parent, Removed, Ready),
 		   Exiter) |
 	DEBUG("exit"(Removed, Ready), move - ExiterId - into - ParentId),
-        TERMS((read_vector(AMBIENT_ID, Exiter, ExiterId),
-	       read_vector(AMBIENT_ID, Parent, ParentId))),
+	TERMS((read_vector(AMBIENT_ID, Enterer, ExiterId),
+	       read_vector(AMBIENT_ID, Ambient, MyId))),
 	remove_shared_communications(Exiter, SharedChannels, Scheduler,
 					Removed),
+	record_ambient_item(exit(Exiter, Parent), Ready, Scheduler),
 	self;
 
     In ? merge(MergingAmbient, Ready),
@@ -771,22 +776,23 @@ serve_ambient(In, Events, FromSub, Done,
 	merge_local_channels(Idle, Goals, MergedGoals, pass,
 			     MergingAmbient', Ambient, In'', In'),
 	add_merged_goals(MergedGoals?, Requests, Requests', Ready),
+	record_ambient_item(merge(MergingAmbient, Ambient), Ready, Scheduler),
 	self;
 
 /* Capability Services */
 
     In ? change_parent(Parent', false, Ready) :
-      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
+      write_vector(AMBIENT_CONTROL, done(Ambient, false, Ready), Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Ready = true |
-        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	DEBUG(change_parent, NewParentId-"no_remove"),
+        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	self;
 
     In ? change_parent(Parent', true, Ready),
     read_vector(AMBIENT_ID, Ambient, AmbientId) :
       write_channel(record_item(reset(AmbientId)), Scheduler),
-      write_vector(AMBIENT_CONTROL, done(Ambient, Ready), Parent, _Parent),
+      write_vector(AMBIENT_CONTROL, done(Ambient, false, Ready), Parent, _Parent),
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
 	DEBUG(change_parent, NewParentId-"remove p2c & all local communications"),
@@ -928,7 +934,8 @@ serve_ambient(In, Events, FromSub, Done,
   ambient_done(Ambient, Parent) :-
 
     true :
-      write_vector(AMBIENT_CONTROL, done(Ambient, _Reply), Parent);
+      write_vector(AMBIENT_CONTROL,
+		   done(Ambient, done(Ambient, Parent), _Reply), Parent);
 
     otherwise :
       Parent = _,
@@ -1019,6 +1026,22 @@ serve_ambient(In, Events, FromSub, Done,
 	utils#list_to_tuple(Unremoved, ChannelTuple),
 	serve_ambient.
 
+  record_ambient_item(Really, Wait, Scheduler) :-
+
+    Really =?= Action(A1, A2),	/* the Action might be "false" */
+    known(Wait),
+    vector(A1),
+    read_vector(AMBIENT_ID, A1, Id1),
+    vector(A2),
+    read_vector(AMBIENT_ID, A2, Id2) :
+      write_channel(record_item(ambient(Action(Id1, Id2))), Scheduler);
+
+    otherwise :		/* the scheduler might be closed */
+      Really = _,
+      Scheduler = _,
+      Wait = _.
+
+
   remove_child(Ambient, Children, NewChildren) :-
 
     Children ? Ambient :
@@ -1072,12 +1095,12 @@ serve_ambient(In, Events, FromSub, Done,
 		
     Event =?= comment(Comment),
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
-	computation # comment(AmbientId@Comment),
+	computation # comment(Comment@AmbientId),
 	serve_ambient;
 
     Event =?= diagnostic(Diagnostic),
     read_vector(AMBIENT_ID, Ambient, AmbientId) |
-	computation # diagnostic(AmbientId@Diagnostic),
+	computation # diagnostic(Diagnostic@AmbientId),
 	serve_ambient;
 
     otherwise :
@@ -1104,6 +1127,10 @@ serve_ambient(In, Events, FromSub, Done,
 					Removed),
 	self;
 
+    Children ? _Child,
+    otherwise |
+	self;
+
     Children =?= [] :
       MergedAmbient = _,
       Parameters = _,
@@ -1120,11 +1147,11 @@ serve_ambient(In, Events, FromSub, Done,
 	event_failed1;
 
     otherwise |
-	computation # failed(AmbientId@Goal, Reason).
+	computation # failed(Goal@AmbientId, Reason).
 
   event_failed1(AmbientId, Module, Call, Reason) :-
     known(Call) |
-	computation # failed(AmbientId@Module#Call, Reason).
+	computation # failed(Module#Call@AmbientId, Reason).
 
 lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
 	 Scheduler, Ambient, Debug) + (Last = "") :-
@@ -1721,7 +1748,6 @@ merge_public_objects(List, Parameters, NewParameters, LastParameter,
       NewPublicChannels ! Entry |
 	self;
 
-
     List ? Name(NewChannel, CW, BaseRate), string(Name),
     LastPublic @< Name,
     we(NewChannel),
@@ -1785,7 +1811,7 @@ merge_public_objects(List, Parameters, NewParameters, LastParameter,
       NewParameters = Parameters,
       NewPublicChannels = PublicChannels,
       ReadyAmbient = Ambient |
-	computation # failed(AmbientId@merge_public_objects(List)).
+	server_failed(AmbientId, merge_public_objects(List)).
 
   wait_parameter_result(List, PublicChannels, NewPublicChannels, LastPublic,
 			Parameters, NewParameters, LastParameter,
@@ -1833,8 +1859,8 @@ ambient_tree(Kind, Children, NewChildren, SubTrees) + (Done = done) :-
       SubTrees ! Kind(ChildId, [], []) |
 	self;
 
-    known(Done),
     Children =?= [] :
+      Done = _,
       Kind = _,
       NewChildren = [],
       SubTrees = [].
@@ -1871,6 +1897,11 @@ control_children(Control, Children, NewChildren, Ready) + (Done = done) :-
     Children ? Child :
       NewChildren ! Child',
       write_vector(AMBIENT_CONTROL, Control(Done'), Child, Child') |
+	self;
+
+    known(Done),
+    Children ? _Child,
+    otherwise |
 	self;
 
     known(Done),
@@ -2051,7 +2082,9 @@ server_failed(Server, Failure) :-
       Server = _;
 
     otherwise |
-	fail(Server # Failure).
+        self#service_id(Scope),
+        service_id_path(Server, Scope, RPC),
+        computation # failed(RPC, Failure).
 
 /***************************** formatting ***********************************/
 /*
