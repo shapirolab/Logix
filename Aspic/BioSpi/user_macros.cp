@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2005/01/01 10:24:32 $
+		       	$Date: 2005/04/21 18:02:41 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.18 $
+			$Revision: 1.19 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -78,7 +78,7 @@ expand(Command, Cs) :-
 
     Command = ph :
       CL = [	" a / a(No)          - abort computation No",
-		" atr / atr(Ambient) - ambient tree",
+		" atr / atr(Ambient) - display ambient tree",
 		" btr / btr(Ambient) - ambient tree with busy channels",
 		" c / c(Module)      - compile(Module)",
 		" cno / cno(No)      - current computation number",
@@ -99,10 +99,13 @@ expand(Command, Cs) :-
 		" record(GS,F,L,S,O) - run Goals, record to File until Limit,",
 		"                      scaled by Scale, with format Option.",
                 " reset              - reset Spi monitor",
-		" run(GS)            - run Goals.",
+		" run(GS)            - run Goals (no limit).",
 		" run(GS, L)         - run Goals until Limit.",
-		" trace(GS, F, L)    - run Goals, trace to File until Limit.",
-		" trace(GS,F,L,S,O)  - run Goals, trace to File until Limit,",
+		" atrace(GS)         - run Goals, display trees (no limit).",
+		" atrace(GS, F)      - run Goals, trees to File (no limit).",
+		" atrace(GS, F, L)   - run Goals, trees to File until Limit.",
+		" trace(GS, F, L)   - trace Goals to File until Limit.",
+		" trace(GS,F,L,S,O) - trace Goals to File until Limit,",
 		"                      scaled by Scale, with format Option.",
 		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
@@ -110,14 +113,32 @@ expand(Command, Cs) :-
 		"        name options for channel display",
 		"             short/base/creator/full",
 		"        annotation options for channel display:",
-                "             none/active/note",
-		"        additional option for ptree:",
-		"           process replaces base above",
-                "           goal order:",
-		"             prefix/execute"
+                "             none/active/note"
 		
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
+
+    Command = atrace(Goals) :
+      Cs = [ambient_trace#run(Run?, "") | Commands]\Commands |
+	ambient_run(Goals, Run ,_,_);
+
+    Command = atrace(Goals, File) :
+      Cs = [ambient_trace#run(Run?, File) | Commands]\Commands |
+	ambient_run(Goals, Run ,_, _);
+
+    Command = atrace(Goals, File, Limit) :
+      Cs = [ambient_trace#run(Run?, File, Limit) | Commands]\Commands |
+	ambient_run(Goals, Run ,_, _);
+
+    Command = trace(Goals, File, Limit) |
+	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
+
+    Command = trace(Goals, File, Limit, Scale) |
+        ambient_run(Goals, Run, spi_trace#run(Run, File, Limit, Scale), Cs);
+
+    Command = trace(Goals, File, Limit, Scale, Format) |
+	ambient_run(Goals, Run,
+		    spi_trace#run(Run, File, Limit, Scale, Format), Cs);
 
     Command = pr(C, M) :
       Cs = [to_context(spi_utils # receive(C, M)) | Commands]\Commands;
@@ -424,9 +445,6 @@ expand(Command, Cs) :-
       Cs = [state(No,Goal,_,_)|Commands]\Commands1 |
 	ambient_signal(suspend, No, Goal, Commands, Commands1) ;
 
-    Command = t :
-      Cs = [trace|Commands]\Commands ;
-
     Command = vi |
 	edit(vi, _Module, Cs);
     Command = vi(Module) |
@@ -542,20 +560,19 @@ ambient_run(Goals, Run, Action, Cs) :-
     Goals =?= (Service # _Call),
     Goals =\= (_ * _ # _) :
       Run = Goals |
-      Cs = [to_context(spi_monitor#reset),
-	    ambient_server#run(Action, _ControlChannel),
-	    service(Service?) | Commands]\Commands;
+      Cs = [ambient_server#run(Action, _ControlChannel), service(Service?)
+	   | Commands]\Commands;
 
     Goals =?= (# Call) :
       Run = (Service? # Call),
-      Cs = [service(Service), to_context(spi_monitor#reset),
-	    ambient_server#run(Action, _ControlChannel),
-	    service(Service?) | Commands]\Commands;
+      Cs = [service(Service), ambient_server#run(Action, _ControlChannel),
+	    service(Service?)
+	   | Commands]\Commands;
 
     otherwise :
        Run = repeat#run(Goals),
-       Cs = [to_context(spi_monitor#reset),
-	     ambient_server#run(Action, _ControlChannel) | Commands]\Commands.
+       Cs = [ambient_server#run(Action, _ControlChannel)
+	    | Commands]\Commands.
 
 ambient_signal(Signal, No, Goal, Commands, Commands1) :-
 
