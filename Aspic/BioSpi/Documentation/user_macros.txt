@@ -185,7 +185,30 @@ Notes:
 6. An ambient which has no remaining processes and no children is
    elided from the tree and its resources are garbage-collected.
 
+Ambient trees may also be recorded dynamically, using the macro atrace.
+The most general form of the macro call is:
 
+    atrace(<quantified process set>, <file_name>, <limit>)
+
+similar to the user macro, record  (see
+
+     Documentation/user_macros.txt)
+
+The trees are written to two files, one with the given name, and one
+with the same name with suffix ".list"  The first file contains a
+sequence of displayed trees, similar to the examples in
+
+    BioSpi/Documentation/user_macros.txt
+
+The second file is a list of fully parenthesized trees, where each
+line is like a LISP description of a tree, except that when a node
+of the tree had sub-trees (children), they are represented in a
+list delimited by square brackets - e.g.
+
+    [system(3.486569), [public(1), [molecule(3), cell(2), [membrane(4)]]]]
+
+The decimal value in the system node is the internal time preceding
+the extraction of the line representing the tree.
 
 Resolvent
 ---------

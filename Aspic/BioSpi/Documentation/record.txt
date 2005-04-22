@@ -23,6 +23,28 @@ the actual process name - e.g.
 
       !molecule(9)
 
+   e. Another form of file element is:
+
+      ambient(<ambient_action>(<ambient identifier>, <ambient identifier>))
+
+      where <ambient_action> is one of:
+
+      (1) "new", indicating creation of an ambient - e.g.
+
+          new(molecule(15), molecule(12)
+
+      (2) one of the capability functors, "merge", "enter", "exit" - e.g.
+
+          enter(molecule(5), cell(2))
+
+      (3) "done", indicating termination of a nested ambient - e.g.
+
+          done(molecule(3), cell(2))
+
+      (4) "terminated" indicating termination of the ambient tree -
+
+          terminated(system, system)
+        
 Inter-ambient communications in annotated output include a locus or
 capability indicator - e.g.
 

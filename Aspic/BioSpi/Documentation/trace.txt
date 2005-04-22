@@ -1,0 +1,23 @@
+The ambient_trace process can run an Ambient Stochastic Pi Calculus
+(spifcp) process and trace the behavior of its ambients.
+
+   ambient_trace#run(<call program>, <file_name>, <time limit>)
+
+If the <time limit> argument is omitted, the program runs until it
+terminates or is aborted.  A list of all ambient trees recorded
+during the run is then written to the file and to another file with
+the prefix file name and the suffix ".list".  The second file is a
+list of one line per tree of all of the ambient trees.  Each node
+in a tree which has any sub-tree, is followed by a list of the
+sub-tree nodes enclosed in square brackets - e.g.
+
+    [system(3.486569), [public(1), [molecule(3), cell(2), [membrane(4)]]]]
+
+The fixed-point value indexing the first node, is the internal time
+at which the tree was last modified.
+
+The file name may be omitted as well, or represented by the empty
+string (""), in which case the trees (in normal indented format) are
+displayed following termination of the program.
+
+See user_macros, atrace, for more information.
