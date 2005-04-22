@@ -119,6 +119,15 @@ output_trees(State, System, Record, LastTime,
 	out_tuple(LastTuple, OutTuple, FileOut, FileOut'),
 	self;
 
+    Record ? idle(_Number) :
+      LastTime = _,
+      LastTuple = _,
+      Record' = _,
+      State = _,
+      System = _,
+      FileOut = [],
+      Done = done;
+
     Record ? _,
     otherwise |
 	self;
@@ -126,10 +135,10 @@ output_trees(State, System, Record, LastTime,
     Record =?= [] :
       LastTime = _,
       LastTuple = _,
+      State = _,
       System = _,
       FileOut = [],
-      Done = done |
-	unify_without_failure(State, done);
+      Done = done;
 
     unknown(Record),
     known(State) :
@@ -140,18 +149,19 @@ output_trees(State, System, Record, LastTime,
       FileOut = [],
       Done = done.
 
-  out_tuple(LastTuple, OutTuple, FileOut, FileOut') :-
+  out_tuple(LastTuple, OutTuple, FileOut, NextFileOut) :-
 
     arg(2, LastTuple, Last),
     Last ? _,
     arg(2, OutTuple, List),
     List ? _,
     Last' =?= List' :
-      FileOut = FileOut';
+      FileOut = NextFileOut;
 
     otherwise :
       LastTuple = _,
-      FileOut ! OutTuple.
+      FileOut ! OutTuple,
+      FileOut' = NextFileOut.
 
 
 output_tree(State, Time, System, OutTuple) :-
