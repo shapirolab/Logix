@@ -71,13 +71,15 @@ Examples:
    does the same thing as 2, recording on fff with fully annotated
    output.
 
-The elements of the file are lines which have one of three forms.
+The elements of the file are lines which have one of four forms.
 
    a. A positive real-valued time.
 
    b. +<process name>, which records the start of a procedure.
 
    c. -<process name>, which records the termination of a procedure.
+
+   d. idle(<number>), a note that the process terminated or deadlocked.
 
 Annotation appears on c lines:
 
