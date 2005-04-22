@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2005/01/01 10:24:23 $
+		       	$Date: 2005/04/22 08:35:42 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.13 $
+			$Revision: 1.14 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -421,9 +421,6 @@ expand(Command, Cs) :-
       Cs = [suspend|Commands]\Commands ;
     Command = s(Computation) :
       Cs = [suspend(Computation)|Commands]\Commands ;
-
-    Command = t :
-      Cs = [trace|Commands]\Commands ;
 
     Command = vi |
 	edit(vi, _Module, Cs);
