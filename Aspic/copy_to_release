@@ -29,8 +29,10 @@ cp -p spifcp/Bin/self.bin system/transform/spifcp/Bin
 rm -f system/transform/biospi/Bin/self.bin
 cp -p BioSpi/biospi/Bin/self.bin system/transform/biospi/Bin
 
-rm -f release/BioSpi/Bin/ambient_server.bin
-cp -p BioSpi/Bin/ambient_server.bin release/BioSpi/Bin
+rm -f system/Bin/ambient_server.bin
+cp -p BioSpi/Bin/ambient_server.bin system/Bin
+rm -f system/Bin/ambient_trace.bin
+cp -p BioSpi/Bin/ambient_trace.bin system/Bin
 rm -f release/BioSpi/Bin/user_macros.bin
 cp -p BioSpi/Bin/user_macros.bin release/BioSpi/Bin
 
@@ -65,6 +67,8 @@ rm -f release/BioSpi/Documentation/attributes.txt
 cp -p BioSpi/Documentation/attributes.txt release/BioSpi/Documentation
 rm -f release/BioSpi/Documentation/record.txt
 cp -p BioSpi/Documentation/record.txt release/BioSpi/Documentation
+rm -f release/BioSpi/Documentation/trace.txt
+cp -p BioSpi/Documentation/trace.txt release/BioSpi/Documentation
 
 rm -f release/Examples/boolean/band.cp
 cp -p Examples/boolean/band.cp release/Examples/boolean/band.cp
