@@ -680,7 +680,15 @@ filter_full(Stream, Events, Out, Scale) :-
 
 filter_end(Stream, Events, Out, Scale) :-
 
+    Stream ? idle(Number),
+    Number' := Scale*Number :
+      Events = _,
+      Stream' = _,
+      Out = [Number', "
+"];
+
     Stream ? Element,
+    otherwise,
     list_to_string([CHAR_QUERY, CHAR_EOL], String) :
       Events = _,
       Scale = _,

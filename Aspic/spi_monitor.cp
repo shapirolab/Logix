@@ -982,6 +982,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Wakeup' = _,
       Waiting' = false,
       Idle = idle(Now),
+      Record ! Idle,
       Debug ! Idle |
 	self;
 
