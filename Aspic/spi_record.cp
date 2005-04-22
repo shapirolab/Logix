@@ -147,6 +147,10 @@ filter_none(Stream, Events, Out, Scale) :-
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
 	self;
 
+    Stream ? ambient(_) |
+	/* Just ignore it for now */
+	self;
+
     otherwise |
 	filter_end;
 
@@ -239,6 +243,10 @@ filter_process(Stream, Events, Out, Scale) :-
     string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
+	self;
+
+    Stream ? ambient(_) |
+	/* Just ignore it for now */
 	self;
 
    otherwise |
@@ -386,6 +394,10 @@ filter_creator(Stream, Events, Out, Scale) :-
     string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
+	self;
+
+    Stream ? ambient(_) |
+	/* Just ignore it for now */
 	self;
 
     otherwise |
@@ -619,6 +631,10 @@ filter_full(Stream, Events, Out, Scale) :-
     string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
       Out ! ResetPrefix? |
 	list_to_string([CHAR_BANG | CN], ResetPrefix),
+	self;
+
+    Stream ? ambient(_) |
+	/* Just ignore it for now */
 	self;
 
     otherwise |
