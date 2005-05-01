@@ -1,4 +1,5 @@
-The repeat process can run a quantified set of Stochastic Pi Calculus (spifcp)
+The repeat process can run a quantified set of Stochastic Pi Calculus
+(spifcp)
 processes.
 
     repeat#run(<quantified process set>)
@@ -6,7 +7,8 @@ processes.
 where:
 
     <quantified process set> ::=
-	<external_call>
+    <remote procedure call>
+        <repetition> * <remote procedure call>
         [<process set>]
         <repetition> * [<process set>]
 
@@ -14,12 +16,20 @@ where:
         <quantified process set>
         <process set> , <quantified process set>
 
+    <remote procedure call> ::=
+        <service name> # <goal>
+	<service name> # [<goal list>]
+        <service name> # <remote_procedure_call>
+	
+    <goal list> ::=
+        <repeated goal>
+        <repeated goal> , <goal list>
+
+    <repeated goal> ::=
+        <goal>
+        <repetition> * <goal>
+
     <repetition> ::= <integer>
-
-See BNF.txt for the definition of <external_call>.
-
-The square brackets may be omitted in the case where <process set>
-is simply an <external_call>.
 
 A negative <repetition> is treated as zero.
 
@@ -34,4 +44,10 @@ Examples:
 3. repeat#run([2*[activator#"A_GENE",3*repressor#"R_GENE"],
                hysteresis#"MODULE"])
 
-This process is used by the run and record macros (see record.txt).
+This process is used by the run, record and trace macros (see record.txt).
+
+4. atrace(porinN#[4*"Mole", 2*"Cell"], file, 10)
+
+   (See BioSpi/Examples, BioSpi/Documentation/user_macros.txt).
+
+
