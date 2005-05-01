@@ -238,6 +238,11 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 
 /****************************** Ambient Tree ********************************/
 
+    In ? tree(ambients, Tree) :
+      Tree = ambients(system, [], SubTrees?) |
+	ambient_tree(ambients, Children, Children', SubTrees),
+	self;
+
     In ? tree(channels, Tree) :
       Tree = channels(system, SharedChannels?, SubTrees?) |
 	ambient_tree(channels, Children, Children', SubTrees),
@@ -456,7 +461,7 @@ serve_ambient0(In, Events, FromSub, Done,
 **    resume(Reply^)
 **    state(State^)
 **    suspend(Reply^)
-**    tree(Format, Tree^)
+**    tree(Format, Channels^, Tree^)
 **    update_references(List)
 **
 ** and debugging commands:
@@ -824,6 +829,11 @@ serve_ambient(In, Events, FromSub, Done,
 	control_children(resume, Children, Children', Ready),
 	self;
 
+    In ? tree(ambients, NoChannels, SubTrees) :
+      NoChannels = [] |
+	ambient_tree(ambients, Children, Children', SubTrees),
+	self;
+
     In ? tree(channels, AllChannels, SubTrees) |
 	copy_public_channels,
 	concatenate_lists([SharedChannels, Channels, PrivateChannels],
@@ -914,11 +924,16 @@ serve_ambient(In, Events, FromSub, Done,
 	DEBUG((request-from(From) = Event), trash),
 	self;
 
+    unknown(In),
+    Done =?= done, Children =?= [] :
+      close_vector(AMBIENT_CONTROL, Ambient) |
+	self;
+
+    In =?= [],
     Done =?= done, Children =?= [] :
       Debug = _,
       Events = _,
       FromSub = _,
-      In = _,
       Parameters = _,
       Scheduler = _,
       Controls = [],
@@ -938,8 +953,8 @@ serve_ambient(In, Events, FromSub, Done,
 		   done(Ambient, done(Ambient, Parent), _Reply), Parent);
 
     otherwise :
-      Parent = _,
-      close_vector(AMBIENT_CONTROL, Ambient).
+      Ambient = _,
+      Parent = _.
 
 
   add_merged_goals(Goals, Requests, NewRequests, Ready) :-
