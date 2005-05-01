@@ -109,6 +109,8 @@ rm -f release/BioSpi/Examples/eg3.cp
 cp -p BioSpi/Examples/eg3.cp release/BioSpi/Examples/eg3.cp
 rm -f release/BioSpi/Examples/porin.cp
 cp -p BioSpi/Examples/porin.cp release/BioSpi/Examples/porin.cp
+rm -f release/BioSpi/Examples/porinN.cp
+cp -p BioSpi/Examples/porin.cp release/BioSpi/Examples/porinN.cp
 rm -f release/BioSpi/Examples/receptor_endo.cp
 cp -p BioSpi/Examples/receptor_endo.cp release/BioSpi/Examples/receptor_endo.cp
 rm -f release/BioSpi/Examples/symporter_comm.cp
