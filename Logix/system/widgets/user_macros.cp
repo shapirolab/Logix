@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:23 $
+		       	$Date: 2005/05/01 15:00:39 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/widgets/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -165,9 +165,6 @@ expand(Command, Cs) :-
       Cs = [suspend|Commands]\Commands ;
     Command = s(Computation) :
       Cs = [suspend(Computation)|Commands]\Commands ;
-
-    Command = t :
-      Cs = [trace|Commands]\Commands ;
 
     Command = vi |
 	edit(vi, _Module, Cs);
