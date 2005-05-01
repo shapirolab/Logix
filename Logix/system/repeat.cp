@@ -1,5 +1,5 @@
 -language(compound).
--mode(interpret).
+-mode(interrupt).
 -export(run/1).
 
 run(Specs) :-
@@ -38,10 +38,47 @@ repeat(Count, Goal) :-
 	run(Goal);
 
     Count-- > 0,
-    Goal =\= [_ | _], Goal =\= _*_, Goal =\= _*_#_, Goal =\= [] |
-	computation#Goal,
-	self;
+    Goal =\= [_ | _], Goal =\= [],
+    Goal =\= _*_, Goal =\= _*_#_ |
+	self,
+	rpc,
+	computation#RPC? ;
 
     otherwise :
       Count = _,
       Goal = _.
+
+rpc(Goal, RPC) :-
+
+    Goal =?= Service#Goal', Goal' =?= _#_ :
+      RPC = Service#RPC' |
+	self;
+
+    Goal =?= Service#List, List =\= _#_ :
+      RPC = Service#PredicateList? |
+	predicate_list;
+
+    otherwise:
+      RPC = Goal.
+
+predicate_list(List, PredicateList) :-
+
+    List ? N*Predicate, N-- > 0 :
+      PredicateList ! Predicate,
+      List'' = [N'*Predicate | List'] |
+	self;
+
+    List ? N*_, N =< 0 |
+	self;
+
+    List ? Other,
+    otherwise :
+      PredicateList ! Other |
+	self;
+
+    List =?= [] :
+      PredicateList = [];
+
+    List =\= [_|_], List =\= [] :
+      List' = [List] |
+	self.
