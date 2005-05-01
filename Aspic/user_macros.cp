@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2005/04/22 08:35:42 $
+		       	$Date: 2005/05/01 13:28:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.14 $
+			$Revision: 1.15 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -581,16 +581,16 @@ display_variable(Reply, Id, Value, Options, Xs) :-
 
 spi_run(Goals, Run, Action, Cs) :-
 
-    Goals =?= (Service # _Call),
-    Goals =\= (_ * _ # _) :
-      Run = Goals |
-      Cs = [to_context(spi_monitor#reset), Action, service(Service?)
-	   | Commands]\Commands;
-
     Goals =?= (# Call) :
-      Run = Service? # Call,
+      Run = repeat#run(Service? # Call),
       Cs = [service(Service), to_context(spi_monitor#reset), Action,
 	    service(Service?) | Commands]\Commands;
+
+    Goals =?= (Service # Call),
+    Goals =\= (_ * _ # _), Call =\= [_|_], Call =\= (_#_) :
+      Run = Goals,
+      Cs = [to_context(spi_monitor#reset), Action, service(Service?)
+	   | Commands]\Commands;
 
     otherwise :
        Run = repeat#run(Goals),
