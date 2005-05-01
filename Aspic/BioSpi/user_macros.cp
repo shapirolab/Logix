@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2005/04/21 18:02:41 $
+		       	$Date: 2005/05/01 14:33:25 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.19 $
+			$Revision: 1.20 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -118,17 +118,14 @@ expand(Command, Cs) :-
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
 
-    Command = atrace(Goals) :
-      Cs = [ambient_trace#run(Run?, "") | Commands]\Commands |
-	ambient_run(Goals, Run ,_,_);
+    Command = atrace(Goals) |
+	ambient_trace(Goals, Run ,ambient_trace#run(Run?, ""), Cs);
 
-    Command = atrace(Goals, File) :
-      Cs = [ambient_trace#run(Run?, File) | Commands]\Commands |
-	ambient_run(Goals, Run ,_, _);
+    Command = atrace(Goals, File) |
+	ambient_trace(Goals, Run ,ambient_trace#run(Run?, File), Cs);
 
-    Command = atrace(Goals, File, Limit) :
-      Cs = [ambient_trace#run(Run?, File, Limit) | Commands]\Commands |
-	ambient_run(Goals, Run ,_, _);
+    Command = atrace(Goals, File, Limit) |
+	ambient_trace(Goals, Run ,ambient_trace#run(Run?, File, Limit), Cs);
 
     Command = trace(Goals, File, Limit) |
 	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
@@ -555,23 +552,39 @@ format_tree_parts(Selector, Aux, SubTree, Out, Out1, Id, List) :-
 	ambient_tree2(Selector, Aux', SubTree, Out'', Out1).
 
 
-ambient_run(Goals, Run, Action, Cs) :-
-
-    Goals =?= (Service # _Call),
-    Goals =\= (_ * _ # _) :
-      Run = Goals |
-      Cs = [ambient_server#run(Action, _ControlChannel), service(Service?)
-	   | Commands]\Commands;
+ambient_trace(Goals, Run, ATR, Cs)  :-
 
     Goals =?= (# Call) :
-      Run = (Service? # Call),
-      Cs = [service(Service), ambient_server#run(Action, _ControlChannel),
-	    service(Service?)
+      Run = repeat#run(Service? # Call),
+      Cs = [service(Service), ATR , service(Service?)
+	   | Commands] \ Commands;
+
+    Goals =?= (Service # Call),
+    Goals =\= (_ * _ # _), Call =\= [_|_], Call =\= (_#_) :
+      Run = Goals |
+	Cs = [ATR, service(Service) | Commands]\Commands;
+
+    otherwise :
+      Run = repeat#run(Goals),
+      Cs = [ATR | Commands]\Commands.	
+
+ambient_run(Goals, Run, Action, Cs) :-
+
+    Goals =?= (# Call) :
+      Run = repeat#run(Service? # Call),
+      Cs = [service(Service),
+	    ambient_server#run(Action, _ControlChannel),
+	    service(Service?) | Commands] \ Commands;
+
+    Goals =?= (Service # Call),
+    Goals =\= (_ * _ # _), Call =\= [_|_], Call =\= (_#_) :
+      Run = Goals |
+      Cs = [ambient_server#run(Action, _ControlChannel), service(Service)
 	   | Commands]\Commands;
 
     otherwise :
-       Run = repeat#run(Goals),
-       Cs = [ambient_server#run(Action, _ControlChannel)
+      Run = repeat#run(Goals),
+      Cs = [ambient_server#run(Action, _ControlChannel)
 	    | Commands]\Commands.
 
 ambient_signal(Signal, No, Goal, Commands, Commands1) :-
