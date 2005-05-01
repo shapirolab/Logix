@@ -1,6 +1,6 @@
 -mode(failsafe).
 -language([evaluate,compound,colon]).
--export([run/2, run/3]).
+-export([run/2, run/3, indent/2]).
 -include(spi_constants).
 
 run(Goal, File) :-
@@ -95,7 +95,7 @@ start_ambient(Goal, Limit, State, Options) :-
       Goal = Start.
 
 output_trees(State, System, Record, LastTime,
-		LastTuple, FileOut, Done) :-
+		LastList, FileOut, Done) :-
 
     Record ? Line,
     convert_to_real(Line, LastTime') :
@@ -105,7 +105,7 @@ output_trees(State, System, Record, LastTime,
     Record ? ambient(Action),
     arg(1, Action, terminated) :
       LastTime = _,
-      LastTuple = _,
+      LastList = _,
       Record' = _,
       State = _,
       System = _,
@@ -114,14 +114,15 @@ output_trees(State, System, Record, LastTime,
 
     Record ? ambient(Action),
     arg(1, Action, Other), Other =\= terminated :
-      LastTuple' = OutTuple? |
-	output_tree(State, LastTime, System, OutTuple),
-	out_tuple(LastTuple, OutTuple, FileOut, FileOut'),
+      LastList' = OutList? |
+	ambient_tree,
+	filter_list(State, LastTime, List, OutList),
+	out_list(LastList, OutList, FileOut, FileOut'),
 	self;
 
     Record ? idle(_Number) :
       LastTime = _,
-      LastTuple = _,
+      LastList = _,
       Record' = _,
       State = _,
       System = _,
@@ -134,7 +135,7 @@ output_trees(State, System, Record, LastTime,
 
     Record =?= [] :
       LastTime = _,
-      LastTuple = _,
+      LastList = _,
       State = _,
       System = _,
       FileOut = [],
@@ -143,82 +144,66 @@ output_trees(State, System, Record, LastTime,
     unknown(Record),
     known(State) :
       LastTime = _,
-      LastTuple = _,
+      LastList = _,
       Record = _,
       System = _,
       FileOut = [],
       Done = done.
 
-  out_tuple(LastTuple, OutTuple, FileOut, NextFileOut) :-
+  out_list(LastList, OutList, FileOut, NextFileOut) :-
 
-    arg(2, LastTuple, Last),
-    Last ? _,
-    arg(2, OutTuple, List),
-    List ? _,
-    Last' =?= List' :
+    LastList ? _,
+    OutList ? _,
+    LastList' =?= OutList' :
       FileOut = NextFileOut;
 
     otherwise :
-      LastTuple = _,
-      FileOut ! OutTuple,
+      LastList = _,
+      FileOut ! OutList,
       FileOut' = NextFileOut.
 
 
-output_tree(State, Time, System, OutTuple) :-
-
-	ambient_tree,
-	format_output(State, Time, Out, "", Output),
-	filter_list(State, Time, List, OutList),
-	OutTuple = {Output?, OutList?}.
-
-
-ambient_tree(System, State, Out, List) :-
+ambient_tree(System, State, List) :-
 
     channel(System) :
-      write_channel(tree(channels, Tree), System) |
-        ambient_tree1 + (Out1 = [], List1 = []);
+      write_channel(tree(ambients, Tree), System) |
+        ambient_tree1 + (List1 = []);
 
     otherwise :		/* the server has closed the system tree */
       State = _,
       System = _,
-      Out = [],
       List = [].
 
-  ambient_tree1(Tree, State, Out, Out1, List, List1) :-
+  ambient_tree1(Tree, State, List, List1) :-
 
     Tree =?= _Type(Id, _Channels, SubTree),
     Id =?= system :
-      Out ! system,
       List = [system, SubList | List1] |
 	ambient_tree2 + (SubList1 = []);
 
     Tree =?= _Type(Id, _Channels, SubTree),
     Id =\= system :
-      Out = ["+", Id | Out'?],
       List = [Id, SubList | List1] |
-	ambient_tree2(SubTree, State, Out', ["-" | Out1], SubList, []);
+	ambient_tree2(SubTree, State, SubList, []);
 
     unknown(Tree),
     known(State) :
       Tree = _,
-      Out = Out1,
       List = List1.
 
-  ambient_tree2(SubTree, State, Out, Out1, SubList, SubList1) :-
+  ambient_tree2(SubTree, State, SubList, SubList1) :-
 
     SubTree ? Tree |
-        ambient_tree1(Tree, State, Out, Out'?, SubList, SubList'),
+        ambient_tree1(Tree, State, SubList, SubList'),
         self;
 
     SubTree =?= [] :
       State = _,
-      Out = Out1,
       SubList = SubList1;
 
     unknown(SubTree),
     known(State) :
       SubTree = _,
-      Out = Out1,
       SubList = SubList1.
 
 
@@ -301,9 +286,13 @@ filter_list(State, Time, Terms, OutList) :-
 write_files(Done, State, Options, FileOut) :-
 
     Done = done,
-    FileOut ? {Output, OutList} :
+    FileOut ? TreeList, list(TreeList) :
       Done' = _ |
+	indent(TreeList, Indented),
 	formatted_output,
+	self;
+
+    FileOut ? [] |
 	self;
 
     FileOut =?= [] :
@@ -317,12 +306,37 @@ write_files(Done, State, Options, FileOut) :-
       FileOut = _,
       Options = _.
 
-  formatted_output(Output, OutList, Options, Done) :-
+  formatted_output(TreeList, Indented, Options, Done) :-
 
     list(Options) :
-      OutList = _ |
-	screen # display_stream(["" | Output], [close(Done, done) | Options]);
+      TreeList = _ |
+	screen # display_stream(["" | Indented],
+				[close(Done, done) | Options]);
 
     Options = {FOpts, LOpts} |
-	screen # display_stream(["" | Output], [close(Done1, done) | FOpts]),
-	screen # display(OutList, [close(Done, Done1) | LOpts]).
+	screen # display_stream(["" | Indented], [close(Done1, done) | FOpts]),
+	screen # display(TreeList, [close(Done, Done1) | LOpts]).
+
+
+indent(TreeList, Indented) + (Tail = [], Indent = "") :-
+
+    TreeList ? Id(Index),
+    string_to_dlist(Id, LC, []),
+    string_to_dlist(Indent, LI, LC) :
+      Indented ! IndentedId(Index) |
+        list_to_string(LI, IndentedId),
+        self;
+
+    TreeList ? Children, list(Children),
+    string_to_dlist(Indent, LI, []),
+    list_to_string([CHAR_SPACE | LI], IndentChild) |
+        indent(Children, Indented, Indented', IndentChild),
+        self;
+
+    TreeList ? _Other,
+    otherwise |
+        self;
+
+    TreeList =?= [] :
+      Indent = _,
+      Indented = Tail.
