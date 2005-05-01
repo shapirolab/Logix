@@ -987,14 +987,14 @@ show_goal1(Goal, Which, Depth, Format, SpiFcp, Left, Right) :-
     otherwise,
     make_tuple(Index, Tuple),
     arg(1, Tuple, N) :
+      SpiFcp = Tuple,
       N = Name |
-	goal_channels2 + (Left = Left, Right = Left'),
+	goal_channels2 + (Left = Completed, Right = Tuple),
 	complete_goal.
 
-  complete_goal(Left, Right, Tuple, SpiFcp) :-
-    known(Left) :
-      Left = Right,
-      SpiFcp = Tuple.
+  complete_goal(Left, Right, Completed) :-
+    known(Completed) :
+      Left = Right.
 
   % Blocked code may begin with a lower-case directory name.
   % Check the first character after '$'.
