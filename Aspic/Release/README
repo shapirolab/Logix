@@ -27,24 +27,22 @@ for Logix help, or:
     @ph
 
 for Stochastic Pi Calculus help.  See user_macros.txt in sub-
-directory Documentation for details about the user macros.
+directory SpiFcp/Documentation and in BioSpi/Documentation for
+details about the user macros.
 
-The Documentation file includes Stochastic Pi Calculus BNF and
-various notes.  The notes also apply in most part to Ambient
-Stochastic Pi Calculus.
+The SpiFcp sub-directory supports applications written in dialect
+"spifcp" of Stochastic Pi Calculus.  It includes the source of
+the implementation, and examples in sub-directory Examples.  It
+also has a sub-directory, Documentation, which contains the BNF of
+Stochastic Pi Calculus and other notes specific to it.
+
+The BioSpi sub-directory supports applications written in dialect
+biospi of Ambient Stochastic Pi Calculus, including examples in its
+sub-directory, Examples.  It also has a sub-directory, Documentation,
+which contains the BNF of Ambient Stochastic Pi Calculus and other
+notes specific to it.
 
 The files in bin are used to extract tabular information from a
-Stochastic Pi Calculus application session (see record.txt in
-sub-directory Documentation).  The files in Bin are utilities.
-To make these files generally available, copy them to the
-directories of the same names in your home directory.
-
-Some examples of Stochastic Pi Calculus programs are included in
-its sub-directory,  Examples.
-
-The BioSpi sub-directory supports applications written in Ambient
-Stochastic Pi Calculus, including examples in its sub-directory,
-Examples.  It also has a sub-directory, Documentation, which
-contains the BNF of Ambient Stochastic Pi Calculus and other
-notes specific to it.
+(Ambient) Stochastic Pi Calculus application session (see record.txt
+in sub-directory SpiFcp/Documentation).
 
