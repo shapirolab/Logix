@@ -6,17 +6,16 @@ The source of the Stochastic Pi Calculus system (not including
 the Logix system) is in this directory.  The modules of the
 system are written in FCP dialect "compound" or in multiplex
 dialect [evaluate, compound, colon], except for spi_constants.cp,
-which is included and evaluated in may modules.  See chapter 7 of
-Aspic-release/Documentation/supplement.mss for further information
-about dialects of FCP.
+which is included and evaluated in many modules.  See chapter 7
+of supplement.mss for further information about dialects of FCP.
 
 The module user_macros.cp defines the user macros of SpiFcp.
 See user_macros.txt in sub-directory Documentation for details
 about the user macros.
 
-The files in Bin are the compiled forms of the source.  They are
-linked to files of the same name in Aspic-release/Logix/system/Bin,
-and they should not be recompiled here without breaking the link.
+The files in Bin are the compiled forms of the source.  Those
+.bin files which are linked to Aspic-release/Logix/system/Bin,
+should not be recompiled here without breaking the link.
 
 Some examples of Stochastic Pi Calculus programs are included in
 sub-directory, Examples.
