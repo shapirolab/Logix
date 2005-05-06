@@ -1,9 +1,20 @@
 This directory should serve as a base for testing biospi programs.
-If you need to use another directory for development, soft link
-the sub-directory Bin to it or to one of its enclosing directories
-which is within your home directory.
+It includes the source of the additions to aspic which implement
+Ambients.
 
-The file ambient_server.bin is the "executable" of the ambient
-management process.  The file user_macros.bin provides useful
-user macros for using biospi - try command "ph" for a list of user
-macros.
+The "executables" of the source are in sub-directory Bin.  If you
+need to use another directory for development, soft link the sub-
+directory Bin, or copy the Bin to it or to one of its enclosing
+directories which is within your home directory,
+
+The module user_macros.cp defines the user macros of BioSpi.  Try
+command "ph" for a list of user macros.  For further information
+about the user macros see the documents named user_macros.txt in
+the Documentation sub-directories.
+
+The files in Bin are the "executable" forms of the source.  Two are
+linked to files of the same name in Aspic-release/Logix/system/Bin,
+and they should not be recompiled here without breaking the link.
+The file ambient_server.bin implements the ambient management process.
+The file ambient_trace.bin implements the user macro "atrace" - see
+Documentation/trace.txt for details.
