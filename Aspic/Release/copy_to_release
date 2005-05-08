@@ -1,7 +1,5 @@
 rm -f release/README
 cp -p README release
-rm -f release/BioSpi/README
-cp -p BioSpi/README release/BioSpi
 
 rm -f release/bin/????*
 cp -p bin/????* release/bin
@@ -28,3 +26,5 @@ cp -p Emulator/SGI/makefile release/Logix/SGI
 rm -f release/Logix/SOLARIS/makefile
 cp -p Emulator/SOLARIS/makefile release/Logix/SOLARIS
 
+rm -f ASPIC/versions
+cp -p versions ASPIC/versions
