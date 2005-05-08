@@ -1,22 +1,21 @@
 rm -f system/../Bin/reserved_text.bin
 
+rm -f release/SpiFcp/*.cp
+cp -p spi_*.cp release/SpiFcp
+cp -p user_macros.cp release/SpiFcp
 rm -f system/*.cp
 cp -p spi_constants.cp system
-cp -p spi_status.cp system
-cp -p spi_wait.cp system
 
+rm -f release/SpiFcp/Bin/*.bin
+cp -p Bin/spi_*.bin release/SpiFcp/Bin
+cp -p Bin/user_macros.bin release/SpiFcp/Bin
 rm -f system/Bin/spi_*.bin
-cp -p Bin/spi_debug.bin system/Bin
-cp -p Bin/spi_macros.bin system/Bin
-cp -p Bin/spi_monitor.bin system/Bin
-cp -p Bin/spi_record.bin system/Bin
-cp -p Bin/spi_status.bin system/Bin
-cp -p Bin/spi_trace.bin system/Bin
-cp -p Bin/spi_utils.bin system/Bin
-cp -p Bin/spi_wait.bin system/Bin
-
+ln    release/SpiFcp/Bin/spi_*.bin system/Bin
 rm -f system/user_macros.bin
-cp    Bin/user_macros.bin system
+cp -p Bin/user_macros.bin system
+
+rm -f release/SpiFcp/library_server/spi_library.cp
+cp -p library_server/spi_library.cp release/SpiFcp/library_server
 
 rm -f system/library_server/Bin/spi_library.bin
 cp -p library_server/Bin/spi_library.bin system/library_server/Bin
@@ -24,40 +23,51 @@ cp -p library_server/Bin/spi_library.bin system/library_server/Bin
 rm -f system/spidbg/Bin/self.bin
 cp -p spidbg/Bin/self.bin system/spidbg/Bin
 
+rm -f release/SpiFcp/spifcp/*.cp
+cp -p spifcp/*.cp release/SpiFcp/spifcp
+
+rm -f release/BioSpi/*.cp
+cp -p BioSpi/*.cp release/BioSpi
+
+rm -f release/BioSpi/Bin/*.bin
+cp -p BioSpi/Bin/*.bin release/BioSpi/Bin
+rm -f system/Bin/ambient_*.bin
+ln    release/BioSpi/Bin/ambient_*.bin system/Bin
+
+rm -f release/SpiFcp/spifcp/*.cp
+cp -p spifcp/*.cp release/SpiFcp/spifcp
+
 rm -f system/transform/spifcp/Bin/self.bin
 cp -p spifcp/Bin/self.bin system/transform/spifcp/Bin
+
+rm -f release/BioSpi/biospi/*.cp
+cp -p BioSpi/biospi/*.cp release/BioSpi/biospi
+
 rm -f system/transform/biospi/Bin/self.bin
 cp -p BioSpi/biospi/Bin/self.bin system/transform/biospi/Bin
 
-rm -f system/Bin/ambient_server.bin
-cp -p BioSpi/Bin/ambient_server.bin system/Bin
-rm -f system/Bin/ambient_trace.bin
-cp -p BioSpi/Bin/ambient_trace.bin system/Bin
-rm -f release/BioSpi/Bin/user_macros.bin
-cp -p BioSpi/Bin/user_macros.bin release/BioSpi/Bin
-
-rm -f release/Documentation/BNF.txt
-cp -p Documentation/BNF.txt release/Documentation
-rm -f release/Documentation/attributes.txt
-cp -p Documentation/attributes.txt release/Documentation
-rm -f release/Documentation/public.txt
-cp -p Documentation/public.txt release/Documentation
-rm -f release/Documentation/program_macros.txt
-cp -p Documentation/program_macros.txt release/Documentation
-rm -f release/Documentation/public_variables.txt
-cp -p Documentation/public_variables.txt release/Documentation
-rm -f release/Documentation/record.txt
-cp -p Documentation/record.txt release/Documentation
-rm -f release/Documentation/repeat.txt
-cp -p Documentation/repeat.txt release/Documentation
-rm -f release/Documentation/stochastic.txt
-cp -p Documentation/stochastic.txt release/Documentation
-rm -f release/Documentation/trace.txt
-cp -p Documentation/trace.txt release/Documentation
-rm -f release/Documentation/user_macros.txt
-cp -p Documentation/user_macros.txt release/Documentation
-rm -f release/Documentation/weighter.txt
-cp -p Documentation/weighter.txt release/Documentation
+rm -f release/SpiFcp/Documentation/BNF.txt
+cp -p Documentation/BNF.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/attributes.txt
+cp -p Documentation/attributes.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/public.txt
+cp -p Documentation/public.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/program_macros.txt
+cp -p Documentation/program_macros.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/public_variables.txt
+cp -p Documentation/public_variables.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/record.txt
+cp -p Documentation/record.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/repeat.txt
+cp -p Documentation/repeat.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/stochastic.txt
+cp -p Documentation/stochastic.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/trace.txt
+cp -p Documentation/trace.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/user_macros.txt
+cp -p Documentation/user_macros.txt release/SpiFcp/Documentation
+rm -f release/SpiFcp/Documentation/weighter.txt
+cp -p Documentation/weighter.txt release/SpiFcp/Documentation
 
 rm -f release/BioSpi/Documentation/BNF.txt
 cp -p BioSpi/Documentation/BNF.txt release/BioSpi/Documentation
@@ -70,65 +80,26 @@ cp -p BioSpi/Documentation/record.txt release/BioSpi/Documentation
 rm -f release/BioSpi/Documentation/trace.txt
 cp -p BioSpi/Documentation/trace.txt release/BioSpi/Documentation
 
-rm -f release/Examples/boolean/band.cp
-cp -p Examples/boolean/band.cp release/Examples/boolean/band.cp
-rm -f release/Examples/boolean/bnot.cp
-cp -p Examples/boolean/bnot.cp release/Examples/boolean/bnot.cp
-rm -f release/Examples/boolean/booland.cp
-cp -p Examples/boolean/booland.cp release/Examples/boolean/booland.cp
-rm -f release/Examples/boolean/boolean.cp
-cp -p Examples/boolean/boolean.cp release/Examples/boolean/boolean.cp
-rm -f release/Examples/boolean/btest.cp
-cp -p Examples/boolean/btest.cp release/Examples/boolean/btest.cp
-rm -f release/Examples/boolean/tand.cp
-cp -p Examples/boolean/tand.cp release/Examples/boolean/tand.cp
-rm -f release/Examples/boolean/tnot.cp
-cp -p Examples/boolean/tnot.cp release/Examples/boolean/tnot.cp
-rm -f release/Examples/circadian/activator.cp
-cp -p Examples/circadian/activator.cp release/Examples/circadian/activator.cp
-rm -f release/Examples/circadian/hysteresis.cp
-cp -p Examples/circadian/hysteresis.cp release/Examples/circadian/hysteresis.cp
-rm -f release/Examples/circadian/machineries.cp
-cp -p Examples/circadian/machineries.cp release/Examples/circadian/machineries.cp
-rm -f release/Examples/circadian/rates.cp
-cp -p Examples/circadian/rates.cp release/Examples/circadian/rates.cp
-rm -f release/Examples/circadian/repressor.cp
-cp -p Examples/circadian/repressor.cp release/Examples/circadian/repressor.cp
-rm -f release/Examples/circadian/self.cp
-cp -p Examples/circadian/self.cp release/Examples/circadian/self.cp
-rm -f release/Examples/circadian/think.cp
-cp -p Examples/circadian/think.cp release/Examples/circadian/think.cp
+rm -f release/SpiFcp/Examples/boolean/*.cp
+cp -p Examples/boolean/*.cp release/SpiFcp/Examples/boolean
+rm -f release/SpiFcp/Examples/circadian/*.cp
+cp -p Examples/circadian/*.cp release/SpiFcp/Examples/circadian
 
+rm -f release/SpiFcp/README
+cp -p README release/SpiFcp/README
+rm -f release/SpiFcp/Examples/README
+cp -p Examples/README release/SpiFcp/Examples/README
+rm -f release/BioSpi/README
+cp -p BioSpi/README release/BioSpi/README
 rm -f release/BioSpi/Examples/README
 cp -p BioSpi/Examples/README release/BioSpi/Examples/README
-rm -f release/BioSpi/Examples/complex_merge.cp
-cp -p BioSpi/Examples/complex_merge.cp release/BioSpi/Examples/complex_merge.cp
-rm -f release/BioSpi/Examples/eg1.cp
-cp -p BioSpi/Examples/eg1.cp release/BioSpi/Examples/eg1.cp
-rm -f release/BioSpi/Examples/eg3.cp
-cp -p BioSpi/Examples/eg3.cp release/BioSpi/Examples/eg3.cp
-rm -f release/BioSpi/Examples/porin.cp
-cp -p BioSpi/Examples/porin.cp release/BioSpi/Examples/porin.cp
-rm -f release/BioSpi/Examples/porinN.cp
-cp -p BioSpi/Examples/porin.cp release/BioSpi/Examples/porinN.cp
-rm -f release/BioSpi/Examples/receptor_endo.cp
-cp -p BioSpi/Examples/receptor_endo.cp release/BioSpi/Examples/receptor_endo.cp
-rm -f release/BioSpi/Examples/symporter_comm.cp
-cp -p BioSpi/Examples/symporter_comm.cp release/BioSpi/Examples/symporter_comm.cp
-rm -f release/BioSpi/Examples/vesicle_merge.cp
-cp -p BioSpi/Examples/vesicle_merge.cp release/BioSpi/Examples/vesicle_merge.cp
-rm -f release/BioSpi/Examples/vesicle/cell.cp
-cp -p BioSpi/Examples/vesicle/cell.cp release/BioSpi/Examples/vesicle/cell.cp
-rm -f release/BioSpi/Examples/vesicle/self.cp
-cp -p BioSpi/Examples/vesicle/self.cp release/BioSpi/Examples/vesicle/self.cp
-rm -f release/BioSpi/Examples/vesicle/vesicle.cp
-cp -p BioSpi/Examples/vesicle/vesicle.cp release/BioSpi/Examples/vesicle/vesicle.cp
-rm -f release/BioSpi/Examples/complex/proteinA.cp
-cp -p BioSpi/Examples/complex/proteinA.cp release/BioSpi/Examples/complex/proteinA.cp
-rm -f release/BioSpi/Examples/complex/proteinB.cp
-cp -p BioSpi/Examples/complex/proteinB.cp release/BioSpi/Examples/complex/proteinB.cp
-rm -f release/BioSpi/Examples/complex/self.cp
-cp -p BioSpi/Examples/complex/self.cp release/BioSpi/Examples/complex/self.cp
+
+rm -f release/BioSpi/Examples/*.cp
+cp -p BioSpi/Examples/*.cp release/BioSpi/Examples
+rm -f release/BioSpi/Examples/vesicle/*.cp
+cp -p BioSpi/Examples/vesicle/*.cp release/BioSpi/Examples/vesicle
+rm -f release/BioSpi/Examples/complex/*.cp
+cp -p BioSpi/Examples/complex/*.cp release/BioSpi/Examples/complex
 
 rm -f release/Tutorial/bland.cp
 cp -p Tutorial/bland.cp release/Tutorial/bland.cp
