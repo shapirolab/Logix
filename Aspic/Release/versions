@@ -62,3 +62,22 @@ Added automatic randomization of selection among multiple instantaneous
 offers within a simultaneous set of offers (e.g. in one procedure).
 Fixed some bugs.
 
+Version Aspic-release.2005-04-22.tar.gz
+
+Updated user_macros: removed "t".
+Added atrace to BioSpi/user_macros, and removed reset for run, record, etc.
+Fixed some bugs in ambient_server and added synchronization and ambient(_,_)
+record items.
+Added vesicle and complex sub-directories to BioSpi/Examples; also added README.
+Added trace.txt to BioSpi/Documents; modified user_macros.txt & record.txt.
+Added idle(Number) item to monitor's record output stream.
+
+Version Aspic-release.2005-05-07.tar.gz
+
+Restructured Aspic-release, moved Documentation and Examples to new first
+level directory, SpiFcp.  Added source to SpiFcp and to BioSpi.  Hard-linked
+most of the .bin files (not user_macros nor library_server#spi_library).
+Added recognition and processing of <service>#[<predicates>] to repeat.
+Revised both versions of user_macros.cp for release to users.  Fixed various
+bugs in ambient_server, ambient_trace, repeat, spi_utils, user_macros (both).
+Updated SpiFcp/Documentation/repeat.txt .
