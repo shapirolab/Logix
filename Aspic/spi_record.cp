@@ -1,18 +1,19 @@
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([run/2, run/3, run/4, run/5]).
+-export([run/2, run/3, run/4, run/5
+	, filter_ambient/5]).
 
 -include(spi_constants).
 
-REALTIME => 12.
-
+% Numeric arguments should be evaluated by convert_to_real.
 
 run(Goal, Cutoff) :-
 
     Goal =?= _#_,
-    Cutoff >= 0 |
+    convert_to_real(Cutoff, Cutoff'),
+    Cutoff' >= 0 |
 	spi_monitor#scheduler(Scheduler),
-	write_channel(cutoff(Cutoff), Scheduler),
+	write_channel(cutoff(Cutoff'), Scheduler),
 	computation#Goal;
 
     otherwise |
@@ -22,26 +23,28 @@ run(Goal, File, Cutoff) :-
 	runit + (Scale = 1, Format = none).
 
 run(Goal, File, Cutoff, Arg) :-
-    number(Arg) |
-	runit + (Scale = Arg, Format = none);
+    convert_to_real(Arg, Scale) |
+	runit + (Format = none);
     otherwise |
 	format_arg + (Scale = 1, Format = Arg).
 
 run(Goal, File, Cutoff, Scale, Format) :-
-    number(Scale) |
+    convert_to_real(Scale, Scale') |
 	format_arg.
 run(Goal, File, Cutoff, Format, Scale) :-
-    number(Scale) |
+    convert_to_real(Scale, Scale') |
 	format_arg.
 
 format_arg(Goal, File, Cutoff, Scale, Format) :-
-    Format = none |
+    Format =?= none |
 	runit;
-    Format = process |
+    Format =?= process |
 	runit;
-    Format = creator |
+    Format =?= creator |
 	runit;
-    Format = full |
+    Format =?= full |
+	runit;
+    Format =?= ambient |
 	runit;
     otherwise :
       Cutoff = _,
@@ -54,12 +57,13 @@ runit(Goal, File, Cutoff, Scale, Format) :-
 
     Goal =?= _#_,
     string(File), File =\= "",
-    Cutoff >= 0,
+    convert_to_real(Cutoff, Cutoff'),
+    0 =< Cutoff',
     convert_to_real(Scale, Scale'),
     0 < Scale' |
 	spi_monitor#scheduler(Scheduler),
 	write_channel(record(Stream), Scheduler, Scheduler'),
-	write_channel(cutoff(Cutoff), Scheduler'),
+	write_channel(cutoff(Cutoff'), Scheduler'),
 	computation#[Goal, events(Events)],
 	file#put_file(File, Out?, write, Ok),
 	filter_data,
@@ -103,12 +107,83 @@ filter_data(Stream, Events, Out, Scale, Format) :-
     Format =?= full |
  	filter_full;
 
+    Format =?= ambient |
+ 	filter_ambient + (Last = 0);
+
     otherwise :
       Events = _,
       Scale = _,
       Stream = _,
       Out = [] |
 	fail(invalid_format(Format)).
+
+
+filter_ambient(Stream, Events, Out, Scale, Last) :-
+
+    Stream ? Number, number(Number),
+    Number > 0,
+    Last' := Scale*Number :
+      Last = _ |
+	self;
+
+    Stream ? start(_Name) |
+	self;
+
+    Stream ? end(_Name(_ChannelName, _Action, _FileId)) |
+	self;
+
+/* For ambient merge */
+    Stream ? reset(_Prefix) |
+	self;
+
+    Stream ? ambient(terminated(system, system)) |
+	self;
+
+    Stream ? ambient(F(A1(N1), A2(N2))),
+    string(F), string(A1), number(N1), string(A2), number(N2),
+    Last > 0,
+    convert_to_string(Last, SL),
+    string_to_dlist(SL, DLast, [CHAR_EOL | List?]) :
+      Last' = -1,
+      Out ! TwoLines? |
+	ambient_line_to_list,
+	list_to_string(DLast, TwoLines),
+	self;
+
+    Stream ? ambient(F(A1(N1), A2(N2))),
+    string(F), string(A1), number(N1), string(A2), number(N2),
+    Last =< 0 :
+      Out ! OneLine? |
+	ambient_line_to_list,
+	list_to_string(List, OneLine),
+	self;
+
+    otherwise :
+      Last = _ |
+	filter_end;
+
+    Events ? Event,
+    Event =\= aborted |
+	self;
+
+    unknown(Stream),
+    Events ? aborted :
+      Events' = _,
+      Last = _,
+      Scale = _,
+      Out = [].
+
+  ambient_line_to_list(F, A1, N1, A2, N2, List) :-
+
+    convert_to_string(N2, SN2),
+    string_to_dlist(SN2, DN2, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(A2, DA2, [CHAR_LEFT_PAREN | DN2]),
+    convert_to_string(N1, SN1),
+    string_to_dlist(SN1, DN1, [CHAR_RIGHT_PAREN, CHAR_SPACE | DA2]),
+    string_to_dlist(A1, DA1, [CHAR_LEFT_PAREN | DN1]),
+    string_to_dlist(F, DF, [CHAR_SPACE | DA1]) :
+      List = DF.
+
 
 filter_none(Stream, Events, Out, Scale) :-
 
