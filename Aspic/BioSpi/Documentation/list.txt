@@ -1,0 +1,21 @@
+The ambient_list process can run an Ambient Stochstic Pi Calulus
+(biospi)  process and trace the behavior of its ambients.
+
+   ambient_list#run(<call program>, <file_name>, <time_limit>, <scale>)
+
+If the <time limit> argument is omitted, the program runs until it
+terminates or is aborted.  The scale element (default 1.0) multiplies 
+the recorded time at which an ambient tree is created or changes.  A
+list of all ambient trees recorded during the run is written to the file.
+
+The file is a list of one line per tree of all of the ambient tree
+states.  Each node in a tree which has any sub-tree, is followed by
+a list of the sub-tree nodes enclosed in square brackets - e.g.
+
+    [system(3.486569),[public(1),[molecule(3),cell(2),[membrane(4)]]]]
+
+The fixed-point value indexing the first node, is the internal time
+at which the tree was last modified.
+
+See user_macros, atrace, for more information.
+
