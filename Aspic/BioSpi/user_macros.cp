@@ -4,9 +4,9 @@ User Shell default macros
 Ehud Shapiro, 01-09-86
 
 Last update by		$Author: bill $
-		       	$Date: 2005/05/07 14:55:08 $
+		       	$Date: 2005/06/27 04:27:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.21 $
+			$Revision: 1.22 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -111,11 +111,12 @@ expand_biospi(Command, Cs) :-
                 " reset              - reset Spi monitor",
 		" run(GS)            - run Goals (no limit).",
 		" run(GS, L)         - run Goals until Limit.",
-		" atrace(GS)         - run Goals, display trees (no limit).",
 		" atrace(GS, F)      - run Goals, trees to File (no limit).",
 		" atrace(GS, F, L)   - run Goals, trees to File until Limit.",
-		" trace(GS, F, L)   - trace Goals to File until Limit.",
-		" trace(GS,F,L,S,O) - trace Goals to File until Limit,",
+		" atrace(GS,F,L,S)   - run Goals, trees to File until Limit,",
+                "                      scaled by Scale.",
+		" trace(GS, F, L)    - trace Goals to File until Limit.",
+		" trace(GS,F,L,S,O)  - trace Goals to File until Limit,",
 		"                      scaled by Scale, with format Option.",
 		" weighter(W)        - set the default weighter",
 		" {String}           - invoke UNIX shell sh with String",
@@ -128,14 +129,15 @@ expand_biospi(Command, Cs) :-
 	 ],
       Cs = [to_context(computation # display(stream,CL)) | Commands]\Commands ;
 
-    Command = atrace(Goals) |
-	ambient_trace(Goals, Run ,ambient_trace#run(Run?, ""), Cs);
-
     Command = atrace(Goals, File) |
-	ambient_trace(Goals, Run ,ambient_trace#run(Run?, File), Cs);
+	ambient_list(Goals, Run ,ambient_list#run(Run?, File), Cs);
 
     Command = atrace(Goals, File, Limit) |
-	ambient_trace(Goals, Run ,ambient_trace#run(Run?, File, Limit), Cs);
+	ambient_list(Goals, Run ,ambient_list#run(Run?, File, Limit), Cs);
+
+    Command = atrace(Goals, File, Limit, Scale) |
+	ambient_list(Goals, Run ,ambient_list#run(Run?, File, Limit, Scale),
+			Cs);
 
     Command = trace(Goals, File, Limit) |
 	ambient_run(Goals, Run, spi_trace#run(Run, File, Limit), Cs);
@@ -419,21 +421,21 @@ format_tree_parts(Selector, Aux, SubTree, Out, Out1, Id, List) :-
 	ambient_tree2(Selector, Aux', SubTree, Out'', Out1).
 
 
-ambient_trace(Goals, Run, ATR, Cs)  :-
+ambient_list(Goals, Run, AList, Cs)  :-
 
     Goals =?= (# Call) :
       Run = repeat#run(Service? # Call),
-      Cs = [service(Service), ATR , service(Service?)
+      Cs = [service(Service), AList , service(Service?)
 	   | Commands] \ Commands;
 
     Goals =?= (Service # Call),
     Goals =\= (_ * _ # _), Call =\= [_|_], Call =\= (_#_) :
       Run = Goals |
-	Cs = [ATR, service(Service) | Commands]\Commands;
+	Cs = [AList, service(Service) | Commands]\Commands;
 
     otherwise :
       Run = repeat#run(Goals),
-      Cs = [ATR | Commands]\Commands.	
+      Cs = [AList | Commands]\Commands.	
 
 ambient_run(Goals, Run, Action, Cs) :-
 
