@@ -5,9 +5,9 @@ Source preprocessor
 William Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:02:56 $
+		       	$Date: 2005/06/27 04:20:50 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/get_source.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -270,7 +270,10 @@ module_kind(Abort, Terms1, Kind, Terms2) :-
       Kind = library,
       Terms1' = Terms2 ;
 
-    Terms1 = [First | _], First =\= library : Abort = _,
+/* Add other Kind detection here. */
+
+    otherwise :
+      Abort = _,
       Kind = module,
       Terms1 = Terms2 ;
 
