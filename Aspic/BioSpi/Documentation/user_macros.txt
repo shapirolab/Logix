@@ -1,4 +1,4 @@
-Most of the user macros described in Spi-release/Documentation/user_macros.txt
+Most of the macros in Aspic-release/SpiFcp/Documentation/user_macros.txt
 are available for users of the Ambient Stochastic Pi Calculus implementation.
 The Debugging macros, with the exceptioon of options/1 and options/2 cannot 
 be used.
@@ -185,25 +185,20 @@ Notes:
 6. An ambient which has no remaining processes and no children is
    elided from the tree and its resources are garbage-collected.
 
+ATRACE
+------
 Ambient trees may also be recorded dynamically, using the macro atrace.
 The most general form of the macro call is:
 
-    atrace(<quantified process set>, <file_name>, <limit>)
+    atrace(<quantified process set>, <file_name>, <limit>, <scale>)
 
 similar to the user macro, record  (see
+Aspic-release/SpiFcp/Documentation/user_macros.txt)
 
-     Documentation/user_macros.txt)
-
-The trees are written to two files, one with the given name, and one
-with the same name with suffix ".list"  The first file contains a
-sequence of displayed trees, similar to the examples in
-
-    BioSpi/Documentation/user_macros.txt
-
-The second file is a list of fully parenthesized trees, where each
-line is like a LISP description of a tree, except that when a node
-of the tree had sub-trees (children), they are represented in a
-list delimited by square brackets - e.g.
+The trees are written a file, one line per tree.  Each line is a
+fully parenthesized tree - the line is like a LISP description of a 
+tree, except that when a node of the tree had sub-trees (children),
+they are represented in a list delimited by square brackets - e.g.
 
     [system(3.486569), [public(1), [molecule(3), cell(2), [membrane(4)]]]]
 
@@ -215,9 +210,9 @@ Resolvent
 
 An ambient tree resolvent can be displayed while:
 
- * Running, when the computation is hung up;
+ * Running, when the computation is deadlocked;
 
- * After suspending a computation;
+ * After suspending the computation;
 
  * After a time-limited computation is "done".
 
@@ -286,5 +281,5 @@ Notes:
 
 2. A record session which is run without interruption will difer from
    one which is run with suspension (s(N)) and resumption (re(N)); see
-   Spi-release/Documentation/user_macros.txt).  The records will diverge
-   following the first suspend/resume pair.
+   Aspic-release/SpiFcp/Documentation/user_macros.txt).  The records
+   will diverge following the first suspend/resume pair.

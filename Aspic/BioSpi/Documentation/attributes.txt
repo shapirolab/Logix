@@ -1,4 +1,4 @@
-Changes from Aspic-release/Documentation/attributes.txt .
+Changes from Aspic-release/SpiFcp/Documentation/attributes.txt .
 
 A required attribute for Ambient Stochastic Pi Calculus modules is:
 

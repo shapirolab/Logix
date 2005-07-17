@@ -20,4 +20,5 @@ The file name may be omitted as well, or represented by the empty
 string (""), in which case the trees (in normal indented format) are
 displayed following termination of the program.
 
-See user_macros, atrace, for more information.
+This process is obsolescent, having been replaced by ambient_list,
+which may be called by the user macro atrace (see user_macros.txt).
