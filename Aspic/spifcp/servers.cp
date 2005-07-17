@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2004/12/24 15:41:24 $
+		       	$Date: 2005/07/17 07:12:30 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -1136,11 +1136,6 @@ message_to_channels(Message, Name, ChannelNames, Locals,
       MsChannelNames ! OkChannelName? |
 	utilities#verify_channel(Name, Channel, ChannelNames, Locals,
 				OkChannelName, Errors, Errors'),
-	self;
-
-    arg(Index, Message, _),
-    Index++ :
-      MsChannelNames ! "_" |
 	self;
 
     Index > arity(Message) :
