@@ -81,3 +81,9 @@ Added recognition and processing of <service>#[<predicates>] to repeat.
 Revised both versions of user_macros.cp for release to users.  Fixed various
 bugs in ambient_server, ambient_trace, repeat, spi_utils, user_macros (both).
 Updated SpiFcp/Documentation/repeat.txt .
+
+Version Aspic-release.2005-07-17.tar.gz
+
+Revised documents for restructured release; binary up-to-date; added
+ambient_list, and revised atrace; fixed some minor bugs; fixed bug in send
+channel code generation (spifcp/servers.cp).
