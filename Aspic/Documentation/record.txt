@@ -18,7 +18,7 @@ The time limit forces termination of the run, after that much internal
 time has elapsed.  If the run terminates before the the time limit is
 reached, you will usually want to abort the run (enter: abort<cr>).
 
-When the internal times are very small, or very large, you can scale 
+When the internal times are very small, or very large, you can scale
 the output - this does not effect process behavior.
 
 You may also format the output, which is written to the named file,
@@ -27,7 +27,8 @@ specifying one of the strings:
    none, process, creator, full
 
 The default is "none".  The others add information to the formatted
-output.
+output.  One additional format string is "ambient" - see
+BioSpi/Documentation/record.txt for a description of its output.
 
 You may also use the macros:
 
