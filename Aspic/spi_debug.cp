@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Channel debugging output
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:50 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.6 $
+                        $Source: /home/qiana/Repository/Aspic/spi_debug.cp,v $
+
+Copyright (C) 2001, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([count_requests/2,

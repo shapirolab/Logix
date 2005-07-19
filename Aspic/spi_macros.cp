@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Transformation macros
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:50 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.2 $
+                        $Source: /home/qiana/Repository/Aspic/spi_macros.cp,v $
+
+Copyright (C) 2002, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language(compound).
 -export([transform/2, transform_and_wait/3,
 	 spi2cmp/3, spi2fcp/3]).

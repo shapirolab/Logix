@@ -1,3 +1,18 @@
+/*
+
+SpiFcp wait for internal time exceeded
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:52 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.2 $
+                        $Source: /home/qiana/Repository/Aspic/spi_wait.cp,v $
+
+Copyright (C) 2004, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language(compound).
 -mode(interrupt).
 -export(until/2).

@@ -1,3 +1,18 @@
+/*
+
+User Ambient trace (obsolescent)
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:47:04 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.4 $
+                        $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_trace.cp,v $
+
+Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -mode(failsafe).
 -language([evaluate,compound,colon]).
 -export([run/2, run/3, indent/2]).

@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Channel activity monitor
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:50 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.25 $
+                        $Source: /home/qiana/Repository/Aspic/spi_monitor.cp,v $
+
+Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -monitor(initialize).
 -language([evaluate,compound,colon]).
 -export([get_public_channels/1, public_channels/1, public_channels/2,

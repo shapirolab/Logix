@@ -1,3 +1,18 @@
+/*
+
+User Ambient list (replaces ambient_trace.cp)
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:47:03 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.2 $
+                        $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_list.cp,v $
+
+Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([run/2, run/3, run/4]).

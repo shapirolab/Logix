@@ -1,3 +1,17 @@
+/*
+
+SpiFcp Record channel activity from monitor record output
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:51 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.10 $
+                        $Source: /home/qiana/Repository/Aspic/spi_record.cp,v $
+
+Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([run/2, run/3, run/4, run/5

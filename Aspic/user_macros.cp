@@ -1,12 +1,12 @@
 /*
 
-SpiFcp Shell default macros
-William Silverman - 1998
+SpiFcp Shell macros
+William Silverman - 2005
 
 Last update by		$Author: bill $
-		       	$Date: 2005/05/07 14:54:37 $
+		       	$Date: 2005/07/19 14:46:53 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.16 $
+			$Revision: 1.17 $
 			$Source: /home/qiana/Repository/Aspic/user_macros.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL

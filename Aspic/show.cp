@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Show channel statuses
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:48 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.5 $
+                        $Source: /home/qiana/Repository/Aspic/show.cp,v $
+
+Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language([evaluate,compound,colon]).
 -mode(interrupt).
 -export([based/0, channels/0, channels/1, instantaneous/0, stuff/2]).

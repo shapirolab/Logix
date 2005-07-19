@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Constant definitions
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:49 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.12 $
+                        $Source: /home/qiana/Repository/Aspic/spi_constants.cp,v $
+
+Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 /* Strings */
 
 EMPTY => "".

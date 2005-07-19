@@ -1,3 +1,18 @@
+/*
+
+User Ambient server
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:47:04 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.27 $
+                        $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_server.cp,v $
+
+Copyright (C) 2001, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -mode(trust).
 -language([evaluate,compound,colon]).
 -include(spi_constants).

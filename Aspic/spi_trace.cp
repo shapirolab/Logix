@@ -1,3 +1,18 @@
+/*
+
+SpiFcp Trace channel activity from monitor debug output
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:52 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.3 $
+                        $Source: /home/qiana/Repository/Aspic/spi_trace.cp,v $
+
+Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([run/2, run/3, run/4, run/5]).
@@ -115,12 +130,6 @@ filter_none(Stream, Events, Scale, Values) :-
       Values ! START(Process) |
 	self;
 
-/* Old output */
-    Stream ? end(Name(_ChannelName)) :
-      Values ! END(Name) |
-	self;
-
-/* New output */
     Stream ? done(Now, Sender(_SendName, _SendChannelId),
 	               Receiver(_ReceiveName, _ReceiveChannelId)),
     Scaled := Now*Scale :
@@ -153,13 +162,6 @@ filter_process(Stream, Events, Scale, Values) :-
     Stream ? start(Process) :
       Values ! START(Process) |
 	self;
-
-/* Old output */
-    Stream ? end(Process(ChannelName)) :
-      Values ! (END(Process) : ChannelName) |
-	self;
-
-/* New output */
 
     Stream ? done(Now, Sender(SendName, _SendCreatedId),
 	               Receiver(ReceiveName, _ReceiveCreatedId)),
@@ -195,13 +197,6 @@ filter_creator(Stream, Events, Scale, Values) :-
       Values ! START(Process) |
 	self;
 
-/* Old output */
-    Stream ? end(Process(ChannelName)) :
-      Values ! (END(Process) : ChannelName) |
-	self;
-
-/* New output */
-
     Stream ? done(Now, Sender(_SendName, SendCreatedId),
 	               Receiver(_ReceiveName, ReceiveCreatedId)),
     Scaled := Now*Scale :
@@ -236,13 +231,6 @@ filter_full(Stream, Events, Scale, Values) :-
     Stream ? start(Process) :
       Values ! START(Process) |
 	self;
-
-/* Old output */
-    Stream ? end(Process(ChannelName)) :
-      Values ! (END(Process) : ChannelName) |
-	self;
-
-/* New output */
 
     Stream ? done(Now, Sender(SendName, SendCreatedId),
 	               Receiver(ReceiveName, ReceiveCreatedId)),

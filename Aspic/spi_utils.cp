@@ -1,3 +1,18 @@
+/*
+
+SpiFcp utility processes
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:46:52 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.13 $
+                        $Source: /home/qiana/Repository/Aspic/spi_utils.cp,v $
+
+Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([make_channel/1, make_channel/2, make_channel/3, make_channel/4,

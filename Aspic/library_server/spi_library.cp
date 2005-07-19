@@ -1,3 +1,18 @@
+/*
+
+Spifcp Library processes
+William Silverman
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 14:47:16 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.7 $
+                        $Source: /home/qiana/Repository/Aspic/library_server/spi_library.cp,v $
+
+Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -export([string/1]).
 -mode(trust).
 -language(compound).
