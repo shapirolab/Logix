@@ -1,3 +1,18 @@
+/*
+Circadian rhythm emulation - rates
+
+Aviv Regev
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 10:23:05 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.2 $
+                        $Source: /home/qiana/Repository/Aspic/Examples/circadian/rates.cp,v $
+
+Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 R1 => 10.
 R2 => 4.
 R3 => 1.

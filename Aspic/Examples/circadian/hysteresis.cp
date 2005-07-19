@@ -1,3 +1,18 @@
+/*
+Circadian rhythm emulation
+
+Aviv Regev
+
+Last update by          $Author: bill $
+                        $Date: 2005/07/19 10:23:55 $
+Currently locked by     $Locker:  $
+                        $Revision: 1.4 $
+                        $Source: /home/qiana/Repository/Aspic/Examples/circadian/hysteresis.cp,v $
+
+Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
+
+*/
+
 -language(spifcp).
 -include(rates).
 
