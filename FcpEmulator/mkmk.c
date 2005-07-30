@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.9 2003/12/22 09:09:50 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.10 2005/07/30 13:02:28 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -164,7 +164,7 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       case 't':
@@ -173,12 +173,12 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 'd':
       /* dbg */
@@ -209,7 +209,7 @@ main(argc, argv)
 	    continue;
 	  default:
 	    printf("mkmk: Unknown option %s\n", *argv);
-	    exit();
+	    exit(1);
 	  }
 	case 'x':
 	  /* dbx */
@@ -217,7 +217,7 @@ main(argc, argv)
 	  continue;
 	default:
 	  printf("mkmk: Unknown option %s\n", *argv);
-	  exit();
+	  exit(1);
 	}
       case 'e':
 	/* dec */
@@ -230,12 +230,12 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 'f':
       /* file */
@@ -246,7 +246,7 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       case 'r':
@@ -254,12 +254,12 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 'h':
       /* hppa1d1_hpux_9d05 */
@@ -271,7 +271,7 @@ main(argc, argv)
       LinkFuncNum++;
       if (LinkFuncNum == MaxLinkFunc) {
 	printf("mkmk: Too many foreign functions\n");
-	exit();
+	exit(1);
       }
       continue;
     case 'l':
@@ -289,11 +289,11 @@ main(argc, argv)
 	  continue;
 	default:
 	  printf("mkmk: Unknown option %s\n", *argv);
-	  exit();
+	  exit(1);
 	}
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 'm':
       /* math */
@@ -301,7 +301,7 @@ main(argc, argv)
       LinkFuncNum++;
       if (LinkFuncNum == MaxLinkFunc) {
 	printf("mkmk: Too many foreign functions\n");
-	exit();
+	exit(1);
       }
       continue;
     case 'o':
@@ -331,7 +331,7 @@ main(argc, argv)
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 's':
       /* sgi_irix_5d2 */
@@ -350,7 +350,7 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       case 'u':
@@ -367,11 +367,11 @@ main(argc, argv)
 	  continue;
 	default:
 	  printf("mkmk: Unknown option %s\n", *argv);
-	  exit();
+	  exit(1);
 	}
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     case 't':
       /* timer */
@@ -383,7 +383,7 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       case 't':
@@ -392,16 +392,16 @@ main(argc, argv)
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
-	  exit();
+	  exit(1);
 	}
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
-	exit();
+	exit(1);
       }
     default:
       printf("mkmk: Unknown option %c\n", *argv);
-      exit();
+      exit(1);
     }
   }
   if (LinkFuncNum > 0) {
