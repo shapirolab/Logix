@@ -241,39 +241,47 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
 
  if (IsNil(*OpList)){
    if (!unify(Ref_Word(Value),Word(0,NilTag))){
-        return(False);
+     /*fprintf(stderr,"post 0\n");*/
+     return(False);
    }
    if (!unify(Ref_Word(Chosen),Word(0,IntTag))){
-       return(False);
+     /*fprintf(stderr,"post 1\n");*/
+     return(False);
    }
    return(set_reply_to("true",Reply));
  }
 
  if (!IsList(*OpList)) {
-  return(False);
-  }
+   /*fprintf(stderr,"post 2\n");*/
+   return(False);
+ }
   
  Pa=Pb=OpList;
  Pa=cdr_down_list(Pa); 
  if (!IsNil(*Pa)) { //if it's not end with a Nil
+   /*fprintf(stderr,"post 3\n");*/
    return(False);
  }
  do			/* Pass 0  */
    { 
      if ((OpEntry=set_opentry(OpList))==False){
+       /*fprintf(stderr,"post 4\n");*/
        return(False);
      }
      ChP=OpEntry+SPI_MS_CHANNEL;  // the channel 
      deref_ptr(ChP);
      if(!vctr_var_s(ChP, CHANNEL_SIZE)){
+       /*fprintf(stderr,"post 5\n");*/
        return(False);
      }
      MsType=which_mode(OpEntry+SPI_MS_TYPE);
      if (!channel_type(ChP, &ChannelType)){
+       /*fprintf(stderr,"post 6\n");*/
        return(False);
      }
      if ((ChannelType & SPI_TYPE_MASK) == SPI_UNKNOWN) {
        if (!update_channel_type(ChP, MsType, &ChannelType, Reply)){
+	 /*fprintf(stderr,"post 7\n");*/
 	 return(False);
        } 
      }
@@ -297,6 +305,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
      } /* End Switch */
 
    if (!positive_integer(*(OpEntry+SPI_MS_MULTIPLIER))) {
+     /*fprintf(stderr,"post 8\n");*/
      return(False);
    }
    
@@ -305,14 +314,17 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
 
    if (MsType==SPI_DIMER) {
      if (!IsTpl(*Tag)||(!(Arity_of(*Tag)==2))) {
-	 return(False);
+       /*fprintf(stderr,"post 9\n");*/
+       return(False);
      }
    }
    else {
      if ((MsType!=SPI_SEND) && (MsType!=SPI_RECEIVE)) {
+       /*fprintf(stderr,"post 10\n");*/
        return(False);
      }
      if(!IsInt(*Tag)) {
+       /*fprintf(stderr,"post 11\n");*/
        return(False);
      }
      if ((ChannelType & SPI_TYPE_MASK) == SPI_INSTANTANEOUS) {
@@ -387,6 +399,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  *HP++;
 
  if (!make_common_tuple(PId, MessageList, Value, Chosen)){
+   /*fprintf(stderr,"post 12\n");*/
    return(False);
  } 
  deref(KOutA,ComShTpl);
@@ -401,18 +414,22 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
        {
 	 if (!do_store_vector(Word(SPI_BLOCKED,IntTag),Word(False,IntTag),
 			      Ref_Word(ChP))){
+	   /*fprintf(stderr,"post 13\n");*/
 	   return(False);
 	 }
 	 if (!make_message_tuple(OpEntry,ChP,ComShTpl)){
+	   /*fprintf(stderr,"post 14\n");*/
 	   return(False);
 	 }
 	 deref(KOutA,Message);
 	 deref(KOutB,Link);
 	 Offset=set_offset(OpEntry);
 	 if (!set_new_weight(ChP,OpEntry,Offset,1)){
+	   /*fprintf(stderr,"post 15\n");*/
 	   return(False);
 	 }	  
 	 if (!insert_message_at_end_queue(ChP,Link,Message,Offset)){
+	   /*fprintf(stderr,"post 16\n");*/
 	   return(False);
 	 }  
 	 MessageTail=add_mess_to_messtail(Message,MessageTail);
@@ -422,7 +439,8 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
    }         /* End while(Pass 2) */
 
  if (!unify(Ref_Word(MessageList),Ref_Word(MessageTail))){
-     return(False);
+   /*fprintf(stderr,"post 17\n");*/
+   return(False);
  }
  return(set_reply_to("true",Reply));
  
@@ -494,7 +512,14 @@ int *ChannelType;
     }
     V = *P;
   }
-  *ChannelType = IsInt(V) ? Int_Val(V) : -1;
+  if(IsInt(V)) {
+    *ChannelType = Int_Val(V);
+    return(True);
+  }
+  else {
+    *ChannelType = -1;
+    return(False);
+  }
 }
 
 positive_integer(V)
@@ -576,7 +601,6 @@ heapP Reply;
     return(False);
   }
   return(True);
-
 }
 
 //*********************************************************************
@@ -625,7 +649,7 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
  heapP InAmbient = 0;
  heapP ThisMsAmbient;
 
- /*printf("transmit 0\n");*/
+ /*fprintf(stderr,"transmit 0\n");*/
  deref_ptr(OpEntry);
  MsType=which_mode(OpEntry+SPI_MS_TYPE);
  if (Arity_of(*OpEntry) == SPI_AMBIENT_MS_SIZE) {
@@ -637,7 +661,7 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
  if (MsType==SPI_SEND)
    {
      if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
-       /*printf("transmit 1\n");*/
+       /*fprintf(stderr,"transmit 1\n");*/
        return(False);
      }
      deref(KOutA,MessageAnchor);
@@ -647,7 +671,7 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
  else
    {
      if (!do_read_vector(Word(SPI_SEND_ANCHOR,IntTag),Ref_Word(ChP))){
-       /*printf("transmit 2\n");*/
+       /*fprintf(stderr,"transmit 2\n");*/
        return(False);
      }
      deref(KOutA,MessageAnchor);
@@ -659,12 +683,12 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
    int weight;
 
    if (!do_read_vector(Word(WeightIx,IntTag),Ref_Word(ChP))) {
-     /*printf("transmit 3\n");*/
+     /*fprintf(stderr,"transmit 3\n");*/
      return(False);
    }
    deref_val(KOutA);
    if (!IsInt(KOutA)) {
-     /*printf("transmit 4\n");*/
+     /*fprintf(stderr,"transmit 4\n");*/
      return(False);
    }
    weight = Int_Val(KOutA);
@@ -672,7 +696,7 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
      if (!choose_random_start(MessageAnchor,
 			      (random()/2147483647.0)*weight,
 			      &Start)) {
-       /*printf("transmit 5\n");*/
+       /*fprintf(stderr,"transmit 5\n");*/
        return(False);
      }
    }
@@ -684,19 +708,19 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
       Common=ThisMs+SPI_MS_COMMON;
      deref_ptr(Common);
      if (!IsTpl(*Common)){
-       /*printf("transmit 7\n");*/
+       /*fprintf(stderr,"transmit 7\n");*/
        return(False);
      }
      CmVal=Common+SPI_OP_VALUE;
      deref_ptr(CmVal);
      if (!IsWrt(*CmVal)){
-       /*printf("transmit 8\n");*/
+       /*fprintf(stderr,"transmit 8\n");*/
       return(False);
      }
      CmChos=Common+SPI_OP_CHOSEN;
      deref_ptr(CmChos);
      if (!IsWrt(*CmChos)){
-       /*printf("transmit 9\n");*/
+       /*fprintf(stderr,"transmit 9\n");*/
       return(False);
       }
      deref_ptr(Chosen);
@@ -709,22 +733,22 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
 	  (InAmbient != ThisMsAmbient)))
        {
 	 if (!unify(Ref_Word(CmChos),Ref_Word(ThisMs+Index))){
-	   /*printf("transmit 10\n");*/
+	   /*fprintf(stderr,"transmit 10\n");*/
           return(False);
 	 }
        	 if (!unify(Ref_Word(CmVal),Ref_Word(Value))){
-	   /*printf("transmit 11\n");*/
+	   /*fprintf(stderr,"transmit 11\n");*/
           return(False);
 	 }
        	 if (!unify(Ref_Word(Chosen),Ref_Word(OpEntry+SPI_MS_TAGS))) {
-	   /*printf("transmit 12\n");*/
+	   /*fprintf(stderr,"transmit 12\n");*/
           return(False);
 	 }
 	 if (!discount(Common+SPI_OP_MSLIST)){
-	   /*printf("transmit 13\n");*/
+	   /*fprintf(stderr,"transmit 13\n");*/
 	   return(False);
 	 }
-	 /*printf("transmit x\n");*/
+	 /*fprintf(stderr,"transmit x\n");*/
 	 return (Index == SPI_RECEIVE_TAG) ?
 
 	   set_reply_trans(
@@ -741,14 +765,14 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
    NextMs += SPI_MESSAGE_LINKS;
    deref_ptr(NextMs);
    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(NextMs))){
-     /*printf("transmit 14\n");*/
+     /*fprintf(stderr,"transmit 14\n");*/
      return(False);
    }
    deref(KOutA,NextMs);
    if (NextMs==ThisMs)
      break;
  } while (NextMs != Start);
- /*printf("transmit q\n");*/
+ /*fprintf(stderr,"transmit q\n");*/
  return(QUEUE);
 }
 
@@ -769,37 +793,45 @@ heapP MsList;
       set_to_car(V0);
       deref(V0,Mes);
       if (!IsTpl(*Mes)) {
+	/*fprintf(stderr,"discount 1\n");*/
 	return(False);
       }
       ChP=Mes+SPI_MS_CHANNEL;  // the channel 
       deref_ptr(ChP);
       
       if (!do_read_vector(Word(SPI_CHANNEL_RATE,IntTag),Ref_Word(ChP))){
+	/*fprintf(stderr,"discount 2\n");*/
 	return(False);
       } 
      deref(KOutA,Pa); 
      if (!IsReal(*Pa)||real_val((Pa+1))<0) {
      //set_reply_to("Error-Base Rate not a Positive Real Number",Reply);
+       /*fprintf(stderr,"discount 3\n");*/
        return(False);
      }
      Offset=set_offset(Mes);	
      if (!set_new_weight(ChP,Mes,Offset,0)){
+       /*fprintf(stderr,"discount 4\n");*/
        return(False);
      }
      Link=Mes+SPI_MESSAGE_LINKS;
      deref_ptr(Link); 
      if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(Link))){
+       /*fprintf(stderr,"discount 5\n");*/
        return(False);
      }
      deref(KOutA,Next); 
      if (!do_read_vector(Word(SPI_PREVIOUS_MS,IntTag),Ref_Word(Link))){
+       /*fprintf(stderr,"discount 6\n");*/
        return(False);
      }
      deref(KOutA,Previous);
      if (!IsTpl(*Next)||Arity_of(*Next)!=SPI_MESSAGE_SIZE) {
+       /*fprintf(stderr,"discount 7\n");*/
        return(False);
      } 
      if (!IsTpl(*Previous)||Arity_of(*Previous)!=SPI_MESSAGE_SIZE) {
+       /*fprintf(stderr,"discount 8\n");*/
        return(False);
      }
      NextLink=Next+SPI_MESSAGE_LINKS;
@@ -807,37 +839,43 @@ heapP MsList;
      PreviousLink=Previous+SPI_MESSAGE_LINKS;
      deref_ptr(PreviousLink);
      if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(PreviousLink))){
+       /*fprintf(stderr,"discount 9\n");*/
        return(False);
      }
      deref(KOutA,PreviousLinkNext); 
      if (!do_read_vector(Word(SPI_PREVIOUS_MS,IntTag),Ref_Word(NextLink))){
+       /*fprintf(stderr,"discount 10\n");*/
        return(False);
      }
      deref(KOutA,NextLinkPrevious);
      
      if (!IsTpl(*NextLinkPrevious)||
 	 Arity_of(*NextLinkPrevious)!=SPI_MESSAGE_SIZE) {
+       /*fprintf(stderr,"discount 11\n");*/
        return(False);
      } 
      if (!IsTpl(*PreviousLinkNext)||
 	 Arity_of(*PreviousLinkNext)!=SPI_MESSAGE_SIZE) {
+       /*fprintf(stderr,"discount 12\n");*/
        return(False);
      }
      
      if (!do_store_vector(Word(SPI_PREVIOUS_MS,IntTag),Ref_Word(Previous),
 			  Ref_Word(NextLink))){
+       /*fprintf(stderr,"discount 13\n");*/
        return(False);
      }
      
      if (!do_store_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(Next),
 			  Ref_Word(PreviousLink))){
+       /*fprintf(stderr,"discount 14\n");*/
        return(False);
      }
      
      MsList=Cdr(MsList);
      deref_ptr(MsList);
    }
-  
+  return(True);  
 }
 
 //*********************************************************************
@@ -997,11 +1035,11 @@ int Offset;
 		       ,Ref_Word(Pa))){
     return(False);
   }
-    if (!do_store_vector(Word(SPI_PREVIOUS_MS,IntTag),
-			 Ref_Word(Message),Ref_Word(LinkAnchor))){
-      return(False);
-    }
-    return(True);
+  if (!do_store_vector(Word(SPI_PREVIOUS_MS,IntTag),
+		       Ref_Word(Message),Ref_Word(LinkAnchor))){
+    return(False);
+  }
+  return(True);
 }
 
 //*********************************************************************
@@ -1075,7 +1113,7 @@ int *ChannelType;
     return(False);
   }
   *ChannelType = FinalType;
- return(True); 
+  return(True); 
 }
 
 //*********************************************************************
@@ -1395,10 +1433,10 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	     }
 	     else if (more_than_one_ms(ChP)) {
 	       Uniform2 = random()/2147483647.0;
-	       /*printf("transmit\n");*/
+	       /*fprintf(stderr,"transmit\n");*/
 	       Ret = transmit_homodimerized(ChP, Random, Uniform1, Uniform2,
 					    Reply);
-	       /*printf("reply = %i\n", Reply);*/
+	       /*fprintf(stderr,"reply = %i\n", Reply);*/
 	       TranS = True;
 	     }          /* End if more_than_one */
 	   }          /* End Selector <= 0  */
@@ -1444,27 +1482,27 @@ choose_random_start(OpEntry, select, Start)
  heapP OpEntry, *Start;
  double select;
 {
-  /*printf("choose 0 - Anchor = %x\n", OpEntry);*/
+  /*fprintf(stderr,"choose 0 - Anchor = %x\n", OpEntry);*/
   while (select > 0) {
     heapP multP;
 
     OpEntry += SPI_MESSAGE_LINKS;
     deref_ptr(OpEntry);
     if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),Ref_Word(OpEntry))){
-      /*printf("choose 1 - Entry = %x\n", OpEntry);*/
+      /*fprintf(stderr,"choose 1 - Entry = %x\n", OpEntry);*/
       return(False);
     }
     deref(KOutA,OpEntry);
     multP = OpEntry+SPI_MS_MULTIPLIER;
     deref_ptr(multP);
     if (!IsInt(*multP)) {
-      /*printf("choose 2\n");*/
+      /*fprintf(stderr,"choose 2\n");*/
       return(False);
     }
     select -= (Int_Val(*multP));
   }
   *Start = OpEntry;
-  /*printf("choose 1 - Start = %x\n", OpEntry);*/
+  /*fprintf(stderr,"choose 1 - Start = %x\n", OpEntry);*/
   return(True);
 }
 
@@ -1483,7 +1521,7 @@ heapP ChP;
      return(False);
    }  
    deref(KOutA,NextMs);
-return(MsAnchor!=NextMs); 
+   return(MsAnchor!=NextMs); 
 }
                
 //********************************************************************
@@ -1853,7 +1891,7 @@ double Uniform1, Uniform2;
     }
     deref(KOutA,ReceiveMessage);
   } while (ReceiveMessage != ReceiveStart);
- return (BLOCKED);
+  return (BLOCKED);
 }  
 
 //********************************************************************
@@ -1901,7 +1939,7 @@ double Uniform1, Uniform2;
        return(False);
      }
     DimerMessage = DimerStart;
-    /*printf("anchor = %x, receive = %x, start = %x\n",N
+    /*fprintf(stderr,"anchor = %x, receive = %x, start = %x\n",N
       DimerAnchor, ReceiveMessage, DimerStart);*/
   }
   else {
