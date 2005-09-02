@@ -5,7 +5,6 @@ CFLAGS = -c -DDEBUG -g -DSUNOS5d3
 
 INCLUDES = -I.
 
-BASICH = fcp.h codes.h global.h macros.h
 OFILES = concatenate.o ctl.o dist.o emulate.o externs.o fcp.o file.o \
 	 freeze_term.o freezer.o global.o heap.o interface.o kernels.o \
 	 link_static.o logix.o math.o notify.o spicomm.o spiweight.o \

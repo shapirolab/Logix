@@ -18,5 +18,4 @@ fcp: \
 	$(GCC) $(OFILES) $(LIBS) -o fcp
 
 spiweight.o: \
-	$(BASICH)
 	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) spiweight.c
