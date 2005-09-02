@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.7 2005/07/30 13:01:20 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.8 2005/09/02 04:53:59 bill Exp $ */
 /*
 **  fcp.c  -  emulator startup
 */
@@ -44,6 +44,8 @@ int	ReductionsDebug = 0;
 int	GCDebug = 0;
 #endif
 
+extern char *malloc(size_t);
+
 fcp(argc, argv)
      int	argc;
      char	*argv[];
@@ -55,8 +57,7 @@ fcp(argc, argv)
   char *Base;
   int Size, Reply;
 
-  extern char *malloc(size_t);
-#ifdef	LINUX
+#if (defined LINUX) || (defined MACOSX)
   extern int posix_memalign(void **, int, int);
 #else
   extern void *memalign();
@@ -116,7 +117,7 @@ fcp(argc, argv)
   if (BootType != WarmBoot) {
     Size = RsrvSize+LinkSize+HeapSize;
 
-#ifdef LINUX
+#if (defined LINUX) || (defined MACOSX)
     Reply = posix_memalign((void **)&PMem, HOPage, HOPage);
     if (Reply != 0) {
       Reply = posix_memalign((void **)&PMem, HOPage, Size);
@@ -271,7 +272,7 @@ fcp(argc, argv)
     }
 
     Size = RsrvSize+LinkSize+HeapSize;
-#ifdef LINUX
+#if (defined LINUX) || (defined MACOSX)
     Reply = posix_memalign((void **)&PMem, HOPage, HOPage);
     if (Reply != 0) {
       Reply = posix_memalign((void **)&PMem, HOPage, Size);
@@ -671,7 +672,7 @@ init_stats()
 void display_memory(char *Title)
 {
   fprintf(DbgFile, "\n** %s - %smemalign **\n", Title,
-#ifdef LINUX
+#if (defined LINUX) || (defined MACOSX)
 	  "posix_"
 #else
 	  ""
@@ -695,3 +696,20 @@ void display_memory(char *Title)
     fprintf(DbgFile, "\n");
   }
 }
+
+#if defined(MACOSX)
+int posix_memalign(void **memptr, int alignment, int size)
+{
+  char *lowptr;
+  int HIByte;
+
+  lowptr = malloc(alignment+size);
+  HIByte = HOByteMask & ((int) (lowptr - 1)) ;
+  if (lowptr == NULL || ((((int)(lowptr+size)) & HOByteMask) != HIByte)) {
+    *memptr = (void *) NULL;
+    return(-1);
+  }
+  *memptr = (char *) HIByte;
+  return(0);
+}
+#endif

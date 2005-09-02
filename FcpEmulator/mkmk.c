@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.10 2005/07/30 13:02:28 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.11 2005/09/02 04:54:00 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -30,6 +30,8 @@
      foreign function - operating system interface
    linux:
      builds makefile for linux kernel 2.2.12, redhat 6.1
+   macosx:
+     builds makefile for powerpc BSD kernel
    math:
      foreign function - mathematical functions
    opt:
@@ -58,6 +60,7 @@
 **
 */
 
+extern void exit(int);
 
 #include	<stdio.h>
 #include	<string.h>
@@ -86,6 +89,7 @@ static char *freeze_termS = "freeze_term";
 static char *interfaceS = "interface";
 static char *hpux_9d05S = "hppa1d1_hpux_9d05";
 static char *linux_6d1 = "linux_2d2d12_redhat_6d1";
+static char *macosx_10d4 = "macosx_BSD_10d4";
 static char *mathS = "math";
 static char *noptS = " ";
 static char *optS = "-O";
@@ -116,6 +120,7 @@ static char *hpux_9d05V = "";
 static char *interfaceV = "";
 static char *libsV = "";
 static char *linux_6d1V = "";
+static char *macosx_10d4V = "";
 static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
@@ -219,6 +224,7 @@ main(argc, argv)
 	  printf("mkmk: Unknown option %s\n", *argv);
 	  exit(1);
 	}
+	continue;
       case 'e':
 	/* dec */
 	decV = decS;
@@ -296,11 +302,28 @@ main(argc, argv)
 	exit(1);
       }
     case 'm':
-      /* math */
-      mathV = LinkFunc[LinkFuncNum] = mathS;
-      LinkFuncNum++;
-      if (LinkFuncNum == MaxLinkFunc) {
-	printf("mkmk: Too many foreign functions\n");
+      if (*S++ == 'a') {
+	switch (*S++) {
+	case 'c':
+	  /* macosx */
+	  macosx_10d4V = macosx_10d4;
+	  continue;
+	case 't':
+	  /* math */
+	  mathV = LinkFunc[LinkFuncNum] = mathS;
+	  LinkFuncNum++;
+	  if (LinkFuncNum == MaxLinkFunc) {
+	    printf("mkmk: Too many foreign functions\n");
+	    exit(1);
+	  }
+	  continue;
+	default:
+	  printf("mkmk: Unknown option %s\n", *argv);
+	  exit(1);
+	}
+      }
+      else {
+	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
       continue;
@@ -333,6 +356,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 's':
       /* sgi_irix_5d2 */
       /* sun4_solaris_2d3 */
@@ -446,6 +470,9 @@ main(argc, argv)
 
   if (strcmp(hpux_9d05V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DHPUX", "", "", Pos);
+  }
+  if (strcmp(macosx_10d4V, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DMACOSX", "", "", Pos);
   }
   if (strcmp(linux_6d1V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);

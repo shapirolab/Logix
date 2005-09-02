@@ -5,7 +5,7 @@ To prepare an emulator:
    This produces an executable, mkmk, which can be used to create
    a makefile.
 
-2. For machine <target> (e.g. sun4, solaris, sgi, hp, linux) execute
+2. For machine <target> (e.g. linux macosx solaris, sgi) execute
 
    do-<target>
 

@@ -1,6 +1,7 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/utility.c,v 1.1 1999/07/01 07:15:10 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/utility.c,v 1.2 2005/09/02 04:54:01 bill Exp $ */
 
 #include	<stdio.h>
+#include	<string.h>
 
 #include	"fcp.h"
 #include	"codes.h"

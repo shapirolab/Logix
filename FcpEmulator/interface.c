@@ -1,16 +1,21 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.7 2003/12/22 09:15:23 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.8 2005/09/02 04:54:00 bill Exp $ */
 /*
 **	interface.c - unix interface functions.
 **
 **	Michael Hirsch and Bill Silverman		February 1986
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2003/12/22 09:15:23 $
+**		       	     $Date: 2005/09/02 04:54:00 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.7 $
+**			     $Revision: 1.8 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
 **
 */
+
+#include <string.h>
+#ifdef MACOSX
+#define _XOPEN_SOURCE
+#endif
 
 /**********************************************************************
 			interface.c
@@ -195,8 +200,12 @@ interface(T)
       }
     case 'e' :
       {
-	extern int sys_nerr;
-#ifndef LINUX
+#if defined(MACOSX)
+	extern const int sys_nerr;
+#else
+	extern int sys_err;
+#endif
+#if !(defined(LINUX) || defined(MACOSX))
 	extern char *sys_errlist[];
 #endif
 
