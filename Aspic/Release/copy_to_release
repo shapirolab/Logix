@@ -12,6 +12,9 @@ cp -p Logix/install release/Logix
 rm -f release/Logix/LINUX/*
 cp -p Logix/LINUX/*.o release/Logix/LINUX
 cp -p Logix/LINUX/spiweight.c release/Logix/LINUX
+rm -f release/Logix/MACOSX/*
+cp -p Logix/MACOSX/*.o release/Logix/MACOSX
+cp -p Logix/MACOSX/spiweight.c release/Logix/MACOSX
 rm -f release/Logix/SGI/*
 cp -p Logix/SGI/*.o release/Logix/SGI
 cp -p Logix/SGI/spiweight.c release/Logix/SGI
@@ -21,6 +24,8 @@ cp -p Logix/SOLARIS/spiweight.c release/Logix/SOLARIS
 
 rm -f release/Logix/LINUX/makefile
 cp -p Emulator/LINUX/makefile release/Logix/LINUX
+rm -f release/Logix/MACOSX/makefile
+cp -p Emulator/MACOSX/makefile release/Logix/MACOSX
 rm -f release/Logix/SGI/makefile
 cp -p Emulator/SGI/makefile release/Logix/SGI
 rm -f release/Logix/SOLARIS/makefile
