@@ -1,17 +1,18 @@
-The Logix system may be installed on linux, sgi and solaris
-platforms.  To (re)install the Logix system (e.g. on a linux
-platform):
+The Logix system may be installed on linux, macosx, sgi and
+solaris platforms.  To (re)install the Logix system (e.g. on a
+linux platform):
 
     % cd Logix
     % ./install LINUX -h20000
 
-To install on an sgi or solaris platform, substitute SGI or
-SOLARIS for LINUX.
+To install on a macosx, sgi or solaris platform, substitute
+MACOSX, SGI or SOLARIS for LINUX.
 
 The generated file may be used to start a Logix session on the
 appropriate platform - e.g.s:
 
     % Logix/linux_logix
+    % Logix/macosxx_logix
     % Logix/sgi_logix
     % Logix/solaris_logix
 

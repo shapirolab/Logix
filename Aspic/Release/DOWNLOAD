@@ -14,7 +14,7 @@ To expand the release:
 A directory named Aspic-release and a system of sub-directories will be
 expanded in the current directory.
 
-A release includes emulators for linux, sgi and solaris platforms.
+A release includes emulators for linux, macosx sgi and solaris platforms.
 To install it on one or more of those processors, see the README file in
 Aspic-release.
 
