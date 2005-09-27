@@ -4,9 +4,9 @@ User Ambient list (replaces ambient_trace.cp)
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:47:03 $
+                        $Date: 2005/09/27 07:49:17 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.2 $
+                        $Revision: 1.3 $
                         $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_list.cp,v $
 
 Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,28 +14,28 @@ Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -language([evaluate,compound,colon]).
--mode(trust).
+-mode(failsafe).
 -export([run/2, run/3, run/4]).
 
 -include(spi_constants).
 
 run(Goal, File) :-
-	run(Goal, File, "1.0e100", "1.0").
+        run(Goal, File, "1.0e100", "1.0").
 
-run(Goal, File, Cutoff) + (Scale = "1.0") :-
+run(Goal, File, Limit) + (Scale = "1.0") :-
 
     Goal =?= _#_,
     string(File), File =\= "",
-    convert_to_real(Cutoff, Cutoff'),
-    0 =< Cutoff,
+    convert_to_real(Limit, Limit'),
+    0 =< Limit',
     convert_to_real(Scale, Scale'),
     0 < Scale' |
 	start_ambient;
 
     otherwise |
-	fail("Bad argument" - run(Goal, File, Cutoff, Scale)).
+	fail("Bad argument" - run(Goal, File, Limit, Scale)).
 
-start_ambient(Goal, File, Cutoff, Scale) :-
+start_ambient(Goal, File, Limit, Scale) :-
 
         /* Last N is the best we can do */
         computation # [shell(new_goal(_N, ambient_server#run(Goal, System?))),
@@ -44,7 +44,8 @@ start_ambient(Goal, File, Cutoff, Scale) :-
                                 System)
                       ],
         write_channel(record(Stream), S, S'),
-        write_channel(cutoff(Cutoff), S', Scheduler),
+        write_channel(cutoff(Limit, State), S', Scheduler),
+	computation#display(stream, State),
         file#put_file(File, Out?, write, Ok),
         filter_data + (Tree = [{system,[{public(1),[]}]}], Last = 0),
 	synchronize_start,
@@ -54,16 +55,18 @@ start_ambient(Goal, File, Cutoff, Scale) :-
     channel(Scheduler) :
       Goal = Start.
 
-  run_ok(Events, File, Ok) :-
+  run_ok(Events, File, State, Ok) :-
 
     Ok = true :
       Events = _,
-      File = _;
+      File = _,
+      State = _;
 
     otherwise :
       Events = _ |
 	fail(("
-		write"(File) - Ok));
+		write"(File) - Ok)),
+	unify_without_failure(State, []);
 
     Events ? Event,
     Event =\= aborted |
@@ -71,6 +74,17 @@ start_ambient(Goal, File, Cutoff, Scale) :-
 
     Events ? aborted :
       Events' = _,
+      File = _,
+      Ok = _ |
+	unify_without_failure(State, []);
+
+    Events =?= [] :
+      File = _,
+      Ok = _,
+      State = done;
+
+    known(State) :
+      Events = _,
       File = _,
       Ok = _.
 

@@ -4,14 +4,15 @@ SpiFcp Record channel activity from monitor record output
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:46:51 $
+                        $Date: 2005/09/27 07:48:52 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.10 $
+                        $Revision: 1.11 $
                         $Source: /home/qiana/Repository/Aspic/spi_record.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 */
+
 -language([evaluate,compound,colon]).
 -mode(trust).
 -export([run/2, run/3, run/4, run/5
@@ -21,35 +22,35 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 % Numeric arguments should be evaluated by convert_to_real.
 
-run(Goal, Cutoff) :-
+run(Goal, Limit) :-
 
     Goal =?= _#_,
-    convert_to_real(Cutoff, Cutoff'),
-    Cutoff' >= 0 |
+    convert_to_real(Limit, Limit'),
+    Limit' >= 0 |
 	spi_monitor#scheduler(Scheduler),
-	write_channel(cutoff(Cutoff'), Scheduler),
-	computation#Goal;
+	write_channel(cutoff(Limit', State), Scheduler),
+	computation#[Goal, display(stream, State)];
 
     otherwise |
-	fail(run(Goal, Cutoff)).
+	fail(run(Goal, Limit)).
 
-run(Goal, File, Cutoff) :-
+run(Goal, File, Limit) :-
 	runit + (Scale = 1, Format = none).
 
-run(Goal, File, Cutoff, Arg) :-
+run(Goal, File, Limit, Arg) :-
     convert_to_real(Arg, Scale) |
 	runit + (Format = none);
     otherwise |
 	format_arg + (Scale = 1, Format = Arg).
 
-run(Goal, File, Cutoff, Scale, Format) :-
+run(Goal, File, Limit, Scale, Format) :-
     convert_to_real(Scale, Scale') |
 	format_arg.
-run(Goal, File, Cutoff, Format, Scale) :-
+run(Goal, File, Limit, Format, Scale) :-
     convert_to_real(Scale, Scale') |
 	format_arg.
 
-format_arg(Goal, File, Cutoff, Scale, Format) :-
+format_arg(Goal, File, Limit, Scale, Format) :-
     Format =?= none |
 	runit;
     Format =?= process |
@@ -61,30 +62,30 @@ format_arg(Goal, File, Cutoff, Scale, Format) :-
     Format =?= ambient |
 	runit;
     otherwise :
-      Cutoff = _,
+      Limit = _,
       File = _,
       Goal = _,
       Scale = _ |
 	fail("Unrecognized format" - Format).
 
-runit(Goal, File, Cutoff, Scale, Format) :-
+runit(Goal, File, Limit, Scale, Format) :-
 
     Goal =?= _#_,
     string(File), File =\= "",
-    convert_to_real(Cutoff, Cutoff'),
-    0 =< Cutoff',
+    convert_to_real(Limit, Limit'),
+    0 =< Limit',
     convert_to_real(Scale, Scale'),
     0 < Scale' |
 	spi_monitor#scheduler(Scheduler),
 	write_channel(record(Stream), Scheduler, Scheduler'),
-	write_channel(cutoff(Cutoff'), Scheduler'),
-	computation#[Goal, events(Events)],
+	write_channel(cutoff(Limit', State), Scheduler'),
+	computation#[Goal, events(Events), display(stream, State)],
 	file#put_file(File, Out?, write, Ok),
 	filter_data,
 	run_ok;
 
     otherwise |
-	fail("Bad argument" - run(Goal, File, Cutoff, Scale, Format)).
+	fail("Bad argument" - run(Goal, File, Limit, Scale, Format)).
 
   run_ok(Events, File, Ok) :-
 

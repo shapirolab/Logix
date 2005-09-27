@@ -4,9 +4,9 @@ User Ambient trace (obsolescent)
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:47:04 $
+                        $Date: 2005/09/27 07:49:17 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.4 $
+                        $Revision: 1.5 $
                         $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_trace.cp,v $
 
 Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -19,19 +19,20 @@ Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
 -include(spi_constants).
 
 run(Goal, File) :-
-	tree + (Limit = status(_)).
+	tree + (Extra = status(_)).
 
 run(Goal, File, Limit) :-
-    convert_to_real(Limit, Cutoff),
-    Cutoff > 0 |
-	tree + (Limit = cutoff(Cutoff));
+    convert_to_real(Limit, Limit'),
+    Limit' >= 0 |
+	tree + (Extra = cutoff(Limit', State)),
+	computation#display(stream, State);
 
     otherwise :
       File = _,
       Goal = _ |
 	fail(limit_must_be_positive(Limit)).
 
-tree(Goal, File, Limit) :-
+tree(Goal, File, Extra) :-
 
     string(File),
     Goal =?= _ # _ |
@@ -41,13 +42,13 @@ tree(Goal, File, Limit) :-
 	start_ambient;
 
     Goal =?= _ # _,
-    otherwise :
-      Limit = _ |
+    otherwise |
+	unify_without_failure(Extra, _cutoff(_Limit, [])),
 	fail(illegal_file_name(File));
 
     otherwise :
-      File = _,
-      Limit = _ |
+      File = _ |
+	unify_without_failure(Extra, _cutoff(_Limit, [])),
 	fail(not_an_RPC(Goal)).
 
   append_or_display(Goal, File, Options) :-
@@ -92,7 +93,7 @@ tree(Goal, File, Limit) :-
     known(State) :
       Events = _.
 
-start_ambient(Goal, Limit, State, Options) :-
+start_ambient(Goal, Extra, State, Options) :-
 
 	/* Last N is the best we can do */
 	computation # shell(new_goal(_N, ambient_server#run(Goal, System?))),
@@ -100,7 +101,7 @@ start_ambient(Goal, Limit, State, Options) :-
 	    ambient_server#run([spi_monitor#scheduler(S),computation#Start?],
 				System),
 	write_channel(record(Record), S, S'),
-	write_channel(Limit, S', Scheduler),
+	write_channel(Extra, S', Scheduler),
 	synchronize_start,
 	output_trees(State, System, Record, 0, {[], []}, FileOut, Done),
 	write_files(Done?, State, Options, FileOut).
@@ -312,9 +313,8 @@ write_files(Done, State, Options, FileOut) :-
 
     FileOut =?= [] :
       Done = _,
-      State = _,
       Options = _ |
-	unify_without_failure(State, terminated);
+	unify_without_failure(State, "trace terminated");
 
     known(State) :
       Done = _,

@@ -4,9 +4,9 @@ SpiFcp Channel activity monitor
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:46:50 $
+                        $Date: 2005/09/27 07:48:52 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.25 $
+                        $Revision: 1.26 $
                         $Source: /home/qiana/Repository/Aspic/spi_monitor.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -113,7 +113,7 @@ initialize(In) :-
 **    debug(Debug?^)
 **    end_debug
 **
-** State
+** Monitor State
 **
 **   Options - for spi_utils functions
 **   Parameters - sorted (bounded) list of global parameters:
@@ -480,7 +480,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 				Scheduler, _Recording, _Debug,
 				Zero, false, _Wakeup,
 				DefaultWeighter, Randomize,
-				MaxTime, Start_real_time,
+				{MaxTime, _State}, Start_real_time,
 				BasedAnchor, InstantaneousAnchor).
 
   make_channel_anchor(Name, Anchor) :-
@@ -516,7 +516,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 **
 **    close(ChannelTuple)
 **    close(ChannelTuple, Reply)
-**    cutoff(Now')
+**    cutoff(Now', State^)
 **    default_weighter(NewWeighter)
 **    input(Schedule?^, Schedule')
 **    new_channel(ChannelName, Channel^, BaseRate)
@@ -542,7 +542,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 **    step
 **    step(Resume)
 **
-** State:
+** Scheduler State:
 **
 **   DefaultWeighter - assigned to new Channel, unless Weighter provide
 **   Ordinal - Unique index assigned to a non - public file
@@ -552,10 +552,12 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 ** Status:
 **
 **   BasedAnchor - anchor for (circular) chain of based-rate Channels
-**   Cutoff - least upper bound of internal timer (:Now) - initially large
+**   Cutoff - {Limit, State}
+**       Limit - least upper bound of internal timer (:Now) - initially large
+**       State - Variable set to Now time when Limit exceeded (see below)
 **   InstantaneousAnchor - anchor for (circular) list of infinite rate Channels
 **   Now - 0-based internal clock
-**   Start_real_time - real time when Cutoff set (Now = 0) - not in statuslist
+**   Start_real_time - real time when Cutoff set (Now = 0) - not in status list
 **   Waiting - waiting for Wakeup signal = true/false
 **
 ** Signal:
@@ -584,7 +586,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 */
 
 STATUS => [anchors([BasedAnchor, InstantaneousAnchor]),
-	   cutoff(Cutoff), debug(Debug?), ordinal(Ordinal),
+	   cutoff(Limit, State?), debug(Debug?), ordinal(Ordinal),
 	   weighter(DefaultWeighter), randomize(Randomize),
 	   now(Now), record(Record?), waiting(Waiting)].
 
@@ -597,7 +599,6 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		BasedAnchor, InstantaneousAnchor) :-
 
     Schedule =?= [] :
-      Cutoff = _,
       BasedAnchor = _,
       DefaultWeighter = _,
       InstantaneousAnchor = _,
@@ -612,7 +613,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Wakeup = _,
       Waiter = [],
       Record = [],
-      Debug = [];
+      Debug = [] |
+	unify_without_failure(Cutoff, {_, []});
 
     /* Close channels - i.e. decrement counts and release when unreferenced. */
     Schedule ? close(Channels),
@@ -648,10 +650,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     /* Set the time limit - maximum value for Now */
-    Schedule ? cutoff(Cutoff'), Cutoff' >= 0,
+    Schedule ? cutoff(Limit, State), Limit >= 0, State = State'?,
     info(REALTIME, Start_real_time') :
-      Cutoff = _,
-      Start_real_time = _ |
+      Start_real_time = _,
+      Cutoff' = {Limit, State'} |
+	unify_without_failure(Cutoff, {_Limit, []}),
 	continue_waiting + (Reply = true);
 
     Schedule ? default_weighter(Weighter),
@@ -899,7 +902,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Schedule ? state(DefaultWeighter^, Randomize^, SpiOffsets^, Ordinal^) |
 	self;		
 
-    Schedule ? status(Status) :
+    Schedule ? status(Status),
+    Cutoff = {Limit, State} :
       Status = STATUS |
 	self;		
 
@@ -1001,7 +1005,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Debug ! Idle |
 	self;
 
-    Now >= Cutoff,
+    Cutoff = {Limit, State},
+    Now >= Limit,
     info(REALTIME, End_real_time),
     Real_time := End_real_time - Start_real_time  :
       BasedAnchor = _,
@@ -1013,9 +1018,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Wakeup = _,
       Waiter = [machine(idle_wait(Done), _Ok)],
       Record = [],
-      Debug = [] |
-	computation#display((done @ Now:
-		seconds = Real_time)),
+      Debug = [],
+      State =(done @ Now: seconds = Real_time) |
 	wait_done.
 
   /* 
