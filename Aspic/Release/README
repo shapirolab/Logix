@@ -12,7 +12,7 @@ The generated file may be used to start a Logix session on the
 appropriate platform - e.g.s:
 
     % Logix/linux_logix
-    % Logix/macosxx_logix
+    % Logix/macosx_logix
     % Logix/sgi_logix
     % Logix/solaris_logix
 
@@ -41,9 +41,15 @@ The BioSpi sub-directory supports applications written in dialect
 biospi of Ambient Stochastic Pi Calculus, including examples in its
 sub-directory, Examples.  It also has a sub-directory, Documentation,
 which contains the BNF of Ambient Stochastic Pi Calculus and other
-notes specific to it.
+notes specific to it.  When running programs which have been written
+in language(biospi), if the current (UNIX) directory is outside of
+the scope of Aspic-release/BioSpi, copy or link the file
+Aspic-release/BioSpi/Bin/user_macros.bin to the current directory
+or to a directory which contains it, or to the Bin sub-directory of
+either.
 
 The files in bin are used to extract tabular information from a
 (Ambient) Stochastic Pi Calculus application session (see record.txt
-in sub-directory SpiFcp/Documentation).
+in sub-directory SpiFcp/Documentation).  You may find it useful to
+copy or to link them to your ~/bin directory.
 
