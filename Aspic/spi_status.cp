@@ -4,9 +4,9 @@ SpiFcp Return monitor status
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:46:51 $
+                        $Date: 2005/10/27 17:05:11 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.2 $
+                        $Revision: 1.3 $
                         $Source: /home/qiana/Repository/Aspic/spi_status.cp,v $
 
 Copyright (C) 2004, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,26 +14,22 @@ Copyright (C) 2004, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 -language(compound).
 -mode(interrupt).
--export([now/1, cutoff/1, debug/1, ordinal/1, record/1, get_status/2,
-	 extract/3]).
+-export([now/1, debug/1, ordinal/1, record/1, get_status/2, extract/3]).
 
 /*
-** now, cutoff, ordinal: return the value of the corresponding named
-** BioSpi parameter.
+** now, ordinal: return the value of the corresponding named BioSpi parameter.
 **
 ** debug, record: return the output stream corresponding to the named
 ** BioSpi parameter.
 **
-** get_status: return the value of the named BioSpi parameter.
+** get_status: return the value of the named BioSpi parameter;
+**             use to get cutoff_limit, cutoff_status or any other.
 **
 ** extract: return the named item from the Status list.
 */
 
 /* Return Value = current internal time. */
 now(Value?^):- get_status(now, Value).
-
-/* Return Value = limit on internal time. */
-cutoff(Value?^) :- get_status(cutoff, Value).
 
 /* Return the private ordinal value which is next to be assigned. */
 ordinal(Value?^) :- get_status(ordinal, Value).
