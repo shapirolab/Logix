@@ -1,0 +1,125 @@
+The process multiple may be used to run sequential processes with
+a single command.
+
+For the definition of bracketed items (e.g. <declarations>), see
+multiple-bnf.txt.
+
+The call to multiple has two arguments:
+
+    multiple#run(Declarations, Reports)
+
+1.The first argument declares the multiple runs:
+
+   a. a text file name - the data of the file is a <run_declarations> ;
+
+   b. an immediate quoted string - a <declarations> .
+
+2. The second arguments is A stream of status reports, giving the state
+   of each run at termination; the stream is closed after the last run.
+
+The <run_declarations> are parsed, and a list of runs is prepared.
+
+For each <process_declarations> N runs are prepared, where the number
+of arguments in each <tell> is a multiplier in the product N.
+
+For each run:
+
+1. Initialization:
+
+   a. The spi_monitor is reset;
+
+   b. For each <public_variable_name> defined for the run, its corresponding
+      <expression> is compiled.  When the expression is not simply a
+      <public_variable_name>, the value of any <public_variable_name>
+      which it includes, should have been previously defined.
+
+   c. Each <public_variable_name> defined for the run is un-bound.
+
+   d. Each <public_variable_name>  defined for the run, is bound to the
+      corresponding compiled <expression>.
+      When the <expression> is a <public_variable_name> the value of the
+      (re)bound <public_variable_name> may be:
+
+        (1) conserved from the previous run (e.g. A(A));
+
+        (2) unified with some other <public_variable_name> (e.g. A(B));
+
+        (3) or undefined (e.g.A(_)).
+
+      In those three cases, the <expression> is NOT evaluated
+      (see 2.b. below).
+
+   e. The <run_parameters> are compiled:
+
+      (1) in limit(<expression>) or in scale(<expression>), the
+          <expression> is evaluated;
+
+      (2) the name of the file on which the output data is recorded
+          is derived from the <file_name> by concatenation of the
+          <string>, the character "_" and the run index;
+
+      (3) the <file_name> or the <format> in a <named_constraint>
+          may be a <public_variable_name>.
+      
+   f. The <call_program> is compiled.
+
+2. Execution:
+
+   a. The evaluated <run_parameters> are applied, preparing to run
+      or record the <call_program> (see SpiFcp/Documentation/record.txt).
+
+   b. The compiled <call_programs> is executed.  This includes evaluation
+      of any compiled <expression> (see 1.f. above) which is not itself a
+      <public_variable_name>.
+
+3. Termination:
+
+   a. When the run terminates, its termination outcome is added to the
+      status reports - this may be:
+
+      (1) done
+          normal termination;
+
+      (2) done @ <internal time> : seconds = <elapsed time>
+          internal run <limit> exceeded.
+
+      (3) idle(<internal_time>)
+          run is blocked and cannot continue.
+
+      (4) aborted_run
+          the multiple run was aborted.
+
+      (5) failed(<reason for failure>)
+          failure termination.
+
+   b. The user may suspend or abort the multiple run at any time.
+
+
+Examples of <declarations> files
+--------------------------------
+
+1. X([]):1|utils#integer_to_dlist(69,List,X)
+
+   The single process terminates with "done".
+
+2. E(_,2) : limit(10) | E := 1
+
+   The first process terminates "idle(0.0)" since E is initially
+   uninstantiated.
+   The second process terminates "failed(utils # evaluate, 1 =\= 2)".
+   Note that the first process "records" in the file named record,
+   while the second "records" in record_1.
+
+3. Base(10),L(2,3,4):limit(L*Base)|circadian#go
+
+   The first process terminates "done @ 20.001186 : seconds = 12".
+   The second process terminates "done @ 30.00204 : seconds = 22".
+   The third process terminates "done @ 30.00204 : seconds = 22".
+
+4. To execute all of the modules in Aspic-release/BioSpi/Examples:
+
+   Module(eg1,eg3):10|Module#"Cytoplasm".
+   Module(porin,symporter_comm,complex_merge,receptor_endo,vesicle_merge,
+          complex,vesicle):10|Module#"System".
+
+Note that multiple works for both languages, spifcp and biospi.

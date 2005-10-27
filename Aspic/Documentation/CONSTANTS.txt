@@ -1,0 +1,75 @@
+Below is a BNF description of the constants of the Logix languages.
+
+<constant> ::= <string>
+               <signed_numeric_constant>
+               []
+
+<string> ::= <unquoted_string>
+             <quoted_string>
+
+<unquoted_string> ::= <lower_case_alphabetic_character>
+                      <unquoted_string><alpha_numeric_character>
+                      <unquoted_string>_
+
+<quoted_string> ::= <double_quoted_string>
+                    <single_quoted_string>
+
+<double_quoted_string> ::= ""
+                           "<character_string>"
+
+<single_quoted_string> ::= ''
+                           '<character_string>'
+
+<character_string> ::= <character>
+                       <character><character_string>
+
+<alpha_numeric_character> ::= <alphabetic_character>
+                              <numeric_character>
+
+<alphabetic_character> ::= <lower_case_alphabetic_character>
+                           <upper_case_alphabetic_character>
+
+<lower_case_alphabetic_character> ::= a b ... z
+
+<upper_case_alphabetic_character> ::= A B ... Z
+
+<numeric_character> ::= 0 1 ... 9
+
+<signed_numeric_constant> ::= <numeric_constant>
+                              +<numeric_constant>
+                              -<numeric_constant>
+
+<numeric_constant> ::= <integer_constant>
+                       <real_constant>
+
+<integer_constant> ::= <numeric_character>
+                       <numeric_character><integer_constant>
+
+<numeric_constant> ::= <integer_constant>
+                       <real_constant>
+
+<integer_constant> ::= <numeric_character>
+                       <numeric_character><integer_constant>
+
+<real_constant> ::= <fixed_point_constant>
+                    <fixed_point_constant><exponent>
+
+<fixed_pont_constant> ::= <integer_constant>.<integer_constant>
+
+<exponent> ::= e<signed_integer>
+	       E<signed_integer>
+
+<signed_integer> ::= <integer_constant>
+		     +<integer_constant>
+		     -<integer_constant>
+
+
+Notes:
+
+A <character> is any single Ascii character, except for a single-quote
+(') within a <single_quoted_string> or for a double-quote (") within a
+<double_quoted_string>.
+
+When it is necessary to include a single-quote character within a
+<single_quoted_string>, it can be represented by the digraph  '' .
+Similarly for a double-quote character within a <double_quoted_string>.

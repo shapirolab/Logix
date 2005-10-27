@@ -1,0 +1,138 @@
+BNF for calls to multiple#run(<declarations>,<status>) .
+
+
+<declarations> ::= <file_name>
+                   "<run_declarations>"
+                   '<run_declarations>'
+
+<run_declarations> ::= <process_declaration>
+		       <process_declaration> . <run_declarations>
+
+<process_declaration> ::= <variable_list> : <run_parameters> | <call_list>
+
+<variable_list> ::= <variable_list_element>
+                    <variable_list_element> , <variable_list>
+
+<variable_list_element> ::= <public_variable_name>(<expression_list>)
+
+<expression_list> ::= <expression_list_element>
+		      <expression_list_element> , <expression_list>
+
+<expression_list_element> ::= <constant>
+                              <list>
+                              <expression>
+
+<run_parameters> ::= <named_run_parameters>
+                     <simple_run_parameters>
+
+<named_run_parameters> ::= <named_parameter>
+                           <named_parameter> , <named_run_parameters>
+
+<named_parameter> ::= limit(<expression>)
+                      file(<file_name>)
+                      scale(<expression>)
+                      format(<format>)
+
+<simple_run_parameters> ::= <limit>
+			    <limit> , <scale>
+			    <limit> , <file_name>
+			    <limit> , <file_name> , <scale>
+			    <limit> , <file_name> , <scale>, <format>
+
+<limit> ::= <numeric_constant>
+            <expression>
+
+<scale> ::= <numeric_constant>
+            <expression>
+
+<file_name> ::= <string>
+                <public_variable_name>
+
+<format> ::= none
+	     process
+	     creator
+	     full
+             <public_variable_name>
+
+<call_list> ::= <quantified_process_set>
+
+<evaluation> ::= <public_variable_name> := <expression>
+
+<integer_expresion> ::= <expression>
+
+<expression> ::= <additive_expression>
+                 "<real_value>"
+
+<additive_expression> ::= <multiplicative_expression>
+                          <additive_expression> + <multiplicative_expression>
+                          <additive_expression> - <multiplicative_expression>
+
+<multiplicative_expression> ::=
+                          <bitwise_or_expression>
+                          <multiplicative_expression> * <bitwise_or_expression>
+                          <multiplicative_expression> / <bitwise_or_expression>
+                          <multiplicative_expression> \ <bitwise_or_expression>
+
+<bitwise_or_expression> ::=
+                          <bitwise_and_expression>
+                          <bitwise_or_expression> \/ <bitwise_and_expression>
+
+<bitwise_and_expression> ::=
+                          <unary_expression>
+                          <bitwise_and_expression> /\ <unary_expression>
+
+<unary_expression> ::= <primary_expression>
+                       + <primary_expression>
+                       - <primary_expression>
+                       ~ <primary_expression>
+
+<primary_expression> ::= <public_variable_name>
+                         <signed_numeric_constant>
+                         <function_call>
+                         ( <additive_expression> )
+
+<function_call> ::= max(<expression>, <expression>)
+                    min(<expression>, <expression>)
+                    pow(<expression>, <expression>)
+                    log(<expression>, <expression>)
+                    abs(<expression>)
+                    integer(<expression>)
+                    round(<expression>)
+                    real(<expression>)
+                    sin(<expression>)
+                    cos(<expression>)
+                    tan(<expression>)
+                    sqrt(<expression>)
+                    asin(<expression>)
+                    acos(<expression>)
+                    atan(<expression>)
+                    exp(<expression>)
+                    ln(<expression>)
+                    random
+                    length(<string>)
+		    length(<public_variable_name>)
+
+<status> ::= [<outcome> | <status>]
+             []
+
+<outcome> ::= done
+              done @ <fixed_point_constant> : seconds = <integer_constant>
+              false(<reason for failure>)
+              idle(<fixed_point_constant>)
+
+<public_variable_name> ::= <upper_case_alphabetic_character>
+                           <public_variable_name><alpha_numeric_character>
+                           <public_variable_name>_
+
+Notes:
+
+See SpiFcp/Documentation/CONSTANTS.txt for <signed_numeric_constant> and
+<numeric_constant> .
+
+See SpiFcp/Documentation/repeat.txt for <quantified_process_set> .
+
+The ambiguity between <scale> and <file_name> in the second form of
+<simple_run_parameters> is resolved by preferring <file_name> whenever,
+the second argument is a <string> or a <public_variable_name>.  When you
+need a <scale> in that form whose value is a <public_variable_name> (say
+PV), write PV+0 .
