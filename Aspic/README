@@ -10,12 +10,15 @@ which is included and evaluated in many modules.  See chapter 7
 of supplement.mss for further information about dialects of FCP.
 
 The module user_macros.cp defines the user macros of SpiFcp.
+These user macros apply to modules written in language(spifcp).
 See user_macros.txt in sub-directory Documentation for details
 about the user macros.
 
-The files in Bin are the compiled forms of the source.  Those
-.bin files which are linked to Aspic-release/Logix/system/Bin,
-should not be recompiled here without breaking the link.
+The modules in Bin are the compiled forms of the source.  Those
+.bin modules which are linked to Aspic-release/Logix/system/Bin,
+should not be recompiled here without breaking the link, unless
+you intend to replace the version of that module which may be
+accessed from outside the scope of this directory.
 
 Some examples of Stochastic Pi Calculus programs are included in
 sub-directory, Examples.
