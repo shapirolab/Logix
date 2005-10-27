@@ -764,6 +764,10 @@ bind_variables_expressions(VariablesSet, Evaluated)
 			    {A,B}, Binding',
 			    evaluate(Binding', Variable), Kind);
 
+    VariablesSet ? {Name, `"_"} :
+      List ! undefined(Name, _) |
+	self;
+
     VariablesSet ? {Name, Binding},
     otherwise :
       List ! Kind?(Name, Binding') |
