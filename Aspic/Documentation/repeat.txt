@@ -7,7 +7,7 @@ processes.
 where:
 
     <quantified process set> ::=
-    <remote procedure call>
+        <remote procedure call>
         <repetition> * <remote procedure call>
         [<process set>]
         <repetition> * [<process set>]
