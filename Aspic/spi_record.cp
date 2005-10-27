@@ -4,9 +4,9 @@ SpiFcp Record channel activity from monitor record output
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/09/27 07:48:52 $
+                        $Date: 2005/10/27 17:08:31 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.11 $
+                        $Revision: 1.12 $
                         $Source: /home/qiana/Repository/Aspic/spi_record.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -28,8 +28,8 @@ run(Goal, Limit) :-
     convert_to_real(Limit, Limit'),
     Limit' >= 0 |
 	spi_monitor#scheduler(Scheduler),
-	write_channel(cutoff(Limit', State), Scheduler),
-	computation#[Goal, display(stream, State)];
+	write_channel(cutoff(Limit', _State), Scheduler),
+	computation#Goal;
 
     otherwise |
 	fail(run(Goal, Limit)).
@@ -78,8 +78,8 @@ runit(Goal, File, Limit, Scale, Format) :-
     0 < Scale' |
 	spi_monitor#scheduler(Scheduler),
 	write_channel(record(Stream), Scheduler, Scheduler'),
-	write_channel(cutoff(Limit', State), Scheduler'),
-	computation#[Goal, events(Events), display(stream, State)],
+	write_channel(cutoff(Limit', _State), Scheduler'),
+	computation#[Goal, events(Events)],
 	file#put_file(File, Out?, write, Ok),
 	filter_data,
 	run_ok;
