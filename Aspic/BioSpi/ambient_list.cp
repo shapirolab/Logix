@@ -4,9 +4,9 @@ User Ambient list (replaces ambient_trace.cp)
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/09/27 07:49:17 $
+                        $Date: 2005/10/27 17:15:05 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.3 $
+                        $Revision: 1.4 $
                         $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_list.cp,v $
 
 Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -45,7 +45,6 @@ start_ambient(Goal, File, Limit, Scale) :-
                       ],
         write_channel(record(Stream), S, S'),
         write_channel(cutoff(Limit, State), S', Scheduler),
-	computation#display(stream, State),
         file#put_file(File, Out?, write, Ok),
         filter_data + (Tree = [{system,[{public(1),[]}]}], Last = 0),
 	synchronize_start,
@@ -63,10 +62,10 @@ start_ambient(Goal, File, Limit, Scale) :-
       State = _;
 
     otherwise :
-      Events = _ |
+      Events = _,
+      State = _ |
 	fail(("
-		write"(File) - Ok)),
-	unify_without_failure(State, []);
+		write"(File) - Ok));
 
     Events ? Event,
     Event =\= aborted |
@@ -75,13 +74,13 @@ start_ambient(Goal, File, Limit, Scale) :-
     Events ? aborted :
       Events' = _,
       File = _,
-      Ok = _ |
-	unify_without_failure(State, []);
+      Ok = _,
+      State = _;
 
     Events =?= [] :
       File = _,
       Ok = _,
-      State = done;
+      State = _;
 
     known(State) :
       Events = _,

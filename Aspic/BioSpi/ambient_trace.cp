@@ -4,9 +4,9 @@ User Ambient trace (obsolescent)
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/09/27 07:49:17 $
+                        $Date: 2005/10/27 17:15:05 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.5 $
+                        $Revision: 1.6 $
                         $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_trace.cp,v $
 
 Copyright (C) 2005, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -24,8 +24,7 @@ run(Goal, File) :-
 run(Goal, File, Limit) :-
     convert_to_real(Limit, Limit'),
     Limit' >= 0 |
-	tree + (Extra = cutoff(Limit', State)),
-	computation#display(stream, State);
+	tree + (Extra = cutoff(Limit', _State));
 
     otherwise :
       File = _,
