@@ -3,11 +3,11 @@
 User Ambient server
 William Silverman
 
-Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:47:04 $
+Last update by		$Author: bill $
+			$Date: 2005/10/27 17:15:05 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.27 $
-                        $Source: /home/qiana/Repository/Aspic/BioSpi/ambient_server.cp,v $
+			$Revision: 1.28 $
+			$Source: /home/qiana/Repository/Aspic/BioSpi/ambient_server.cp,v $
 
 Copyright (C) 2001, Weizmann Institute of Science - Rehovot, ISRAEL
 
@@ -175,7 +175,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
-	record_ambient_item(Really, Children', Scheduler),
+	record_ambient_item(_Done, Really, Children', Scheduler),
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
@@ -184,8 +184,8 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/4 + self(Kind, AddRefs) + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(SharedChannels, SC1s),
-	        format_channel_list(SharedChannels, SC2s)
+		format_channel_list(SharedChannels, SC1s),
+		format_channel_list(SharedChannels, SC2s)
 	       )
 	),
 	lookup(Kind(Name), PrivateChannel, SharedChannel, AddRefs,
@@ -220,11 +220,11 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
 /**************************** Serve Capability ******************************/
 
     In ? withdraw(Child, Removed) |
-        DEBUG(withdraw(Removed), ChildId),
-        TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
-        remove_shared_communications(Child, SharedChannels, Scheduler,
-                                        Removed),
-        self;
+	DEBUG(withdraw(Removed), ChildId),
+	TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
+	remove_shared_communications(Child, SharedChannels, Scheduler,
+					Removed),
+	self;
 
 /**************************** External Signals ******************************/
 
@@ -293,7 +293,7 @@ serve_system(In, Events, Children, UniqueId, Status, SharedChannels,
       Status = _,
       UniqueId = _,
       close_vector(AMBIENT_CONTROL, Ambient) |
-	record_ambient_item(terminated(Ambient,Ambient), done, Scheduler),
+	record_ambient_item(_Done, terminated(Ambient,Ambient), done, Scheduler),
 	close_debug;
 
     Events ? aborted :
@@ -381,7 +381,7 @@ ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
 	request_commands(Commands, Requests, Requests'),
 	computation # events(RelayEvents),
 	watcher + (Done = AmbientDone),
-	record_ambient_item(new(Ambient, Parent), AmbientId?, Scheduler),
+	record_ambient_item(Done, new(Ambient, Parent), AmbientId?, Scheduler),
 	serve_ambient0.
 
   make_ambient_id(AmbientName, UniqueId, ParentId, AmbientId, Scheduler) :-
@@ -529,7 +529,7 @@ serve_ambient(In, Events, FromSub, Done,
 	DEBUG(done/1, children),
 	remove_child(Child, Children, Children'),
 	remove_shared_communications(Child, SharedChannels, Scheduler, Reply),
-	record_ambient_item(Really, Children', Scheduler),
+	record_ambient_item(Done, Really, Children', Scheduler),
 	self;
 
     In ? NewId, NewId =?= new_id(_Id) :
@@ -584,10 +584,10 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/3 + private + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(PrivateChannels, SC1s),
-	        format_channel_list(PrivateChannels', SC2s)
+		format_channel_list(PrivateChannels, SC1s),
+		format_channel_list(PrivateChannels', SC2s)
 	       )
-        ),
+	),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
 	       PrivateChannels, PrivateChannels', Scheduler, Ambient, Debug),
 	ambient_lookup;
@@ -597,8 +597,8 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/4 + private(AddRefs) + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(PrivateChannels, SC1s),
-	        format_channel_list(PrivateChannels', SC2s)
+		format_channel_list(PrivateChannels, SC1s),
+		format_channel_list(PrivateChannels', SC2s)
 	      )
 	),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs,
@@ -610,10 +610,10 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/3 + public + PC + SC1s + SC2s, search ,
 	       (format_channel(PrivateChannel, PC),
-	        copy_public_channels(PublicChannels, GCsBefore),
-	        format_channel_list(GCsBefore, SC1s),
-	        copy_public_channels(PublicChannels', GCsAfter),
-	        format_channel_list(GCsAfter, SC2s)
+		copy_public_channels(PublicChannels, GCsBefore),
+		format_channel_list(GCsBefore, SC1s),
+		copy_public_channels(PublicChannels', GCsAfter),
+		format_channel_list(GCsAfter, SC2s)
 	       )
 	),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
@@ -625,8 +625,8 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(SPI_CHANNEL_NAME, PrivateChannel, Name) |
 	DEBUGT(lookup/3 + Locus + PC + SC1s + SC2s, search,
 	       (format_channel(PrivateChannel, PC),
-	        format_channel_list(SharedChannels, SC1s),
-	        format_channel_list(SharedChannels', SC2s)
+		format_channel_list(SharedChannels, SC1s),
+		format_channel_list(SharedChannels', SC2s)
 	       )
 	),
 	lookup(Kind(Name), PrivateChannel, SharedChannel, 1,
@@ -669,8 +669,8 @@ serve_ambient(In, Events, FromSub, Done,
     In ? new_locals(Locals, NewLocals) |
 	DEBUGT(new_locals(Ls), NLs,
 	       (format_channel_tuple(Locals, Ls),
-	        format_channel_tuple(NewLocals, NLs)
-              )
+		format_channel_tuple(NewLocals, NLs)
+	      )
 	),
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
 	copy_local_channels(Idle, Locals, NewLocals, Ambient, In'', In'),
@@ -687,7 +687,7 @@ serve_ambient(In, Events, FromSub, Done,
       write_channel(Start', Scheduler) |
 	DEBUGT(Start, Ch-scheduler,
 	       (Operations? = [Op | _],arg(SPI_MS_CHANNEL,Op,SCh),
-	        format_channel(SCh,Ch)
+		format_channel(SCh,Ch)
 	       )
 	),
 	self;
@@ -703,8 +703,8 @@ serve_ambient(In, Events, FromSub, Done,
       SubAmbient = _ |			% Only used for debugging.
 	DEBUGT(remove_channels + CT + SubAmbient + SC1s + SC2s, scheduler,
 	       (format_channel_tuple(ChannelTuple, CT),
-	        format_channel_list(SharedChannels, SC1s),
-	        format_channel_list(SharedChannels', SC2s)
+		format_channel_list(SharedChannels, SC1s),
+		format_channel_list(SharedChannels', SC2s)
 	       )
 	),
 	remove_shared_channels(ChannelTuple,
@@ -754,7 +754,7 @@ serve_ambient(In, Events, FromSub, Done,
 
     In ? withdraw(Child, Removed) |
 	DEBUG(withdraw(Removed), ChildId),
-        TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
+	TERMS(read_vector(AMBIENT_ID, Child, ChildId)),
 	remove_shared_communications(Child, SharedChannels, Scheduler,
 					Removed),
 	self;
@@ -769,7 +769,7 @@ serve_ambient(In, Events, FromSub, Done,
 	DEBUG("enter"(Removed, Ready), move - EntererId - into - MyId),
 	TERMS((read_vector(AMBIENT_ID, Enterer, EntererId),
 	       read_vector(AMBIENT_ID, Ambient, MyId))),
-	record_ambient_item(enter(Enterer, Ambient), Ready, Scheduler),
+	record_ambient_item(Done, enter(Enterer, Ambient), Ready, Scheduler),
 	self;
 
     In ? exit(Exiter, Ready) :
@@ -781,7 +781,7 @@ serve_ambient(In, Events, FromSub, Done,
 	       read_vector(AMBIENT_ID, Ambient, MyId))),
 	remove_shared_communications(Exiter, SharedChannels, Scheduler,
 					Removed),
-	record_ambient_item(exit(Exiter, Parent), Ready, Scheduler),
+	record_ambient_item(Done, exit(Exiter, Parent), Ready, Scheduler),
 	self;
 
     In ? merge(MergingAmbient, Ready),
@@ -795,8 +795,8 @@ serve_ambient(In, Events, FromSub, Done,
 	processor # machine(idle_queue(Idle, AMBIENT_IDLE_PRIORITY), _Ok),
 	merge_local_channels(Idle, Goals, MergedGoals, pass,
 			     MergingAmbient', Ambient, In'', In'),
-	add_merged_goals(MergedGoals?, Requests, Requests', Ready),
-	record_ambient_item(merge(MergingAmbient, Ambient), Ready, Scheduler),
+	add_merged_goals(MergedGoals?, Requests, Requests', Ready, In'),
+	record_ambient_item(Done, merge(MergingAmbient, Ambient), Ready, Scheduler),
 	self;
 
 /* Capability Services */
@@ -806,7 +806,7 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Ready = true |
 	DEBUG(change_parent, NewParentId-"no_remove"),
-        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
+	TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	self;
 
     In ? change_parent(Parent', true, Ready),
@@ -816,7 +816,7 @@ serve_ambient(In, Events, FromSub, Done,
       write_vector(AMBIENT_CONTROL, new_child(Ambient), Parent', Parent''),
       Controls ! suspend |
 	DEBUG(change_parent, NewParentId-"remove p2c & all local communications"),
-        TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
+	TERMS(read_vector(AMBIENT_ID,Parent'',NewParentId)),
 	remove_shared_communications(Ambient, SharedChannels, Scheduler,
 					Reply1),
 	copy_public_channels,
@@ -972,13 +972,22 @@ serve_ambient(In, Events, FromSub, Done,
       Parent = _.
 
 
-  add_merged_goals(Goals, Requests, NewRequests, Ready) :-
+  add_merged_goals(Goals, Requests, NewRequests, Ready, Watch) :-
+
+    Watch ? Command, Command =\= abort |
+	self;
+
+    Watch =?= [abort | _] :
+      Goals = _,
+      NewRequests = Requests,
+      Ready = true;
 
     Goals ? Goal :
       Requests ! Goal |
 	self;
 
     Goals =?= [] :
+      Watch = _,
       NewRequests = Requests,
       Ready = true.
 
@@ -1056,7 +1065,7 @@ serve_ambient(In, Events, FromSub, Done,
 	utils#list_to_tuple(Unremoved, ChannelTuple),
 	serve_ambient.
 
-  record_ambient_item(Really, Wait, Scheduler) :-
+  record_ambient_item(Done, Really, Wait, Scheduler) :-
 
     Really =?= Action(A1, A2),	/* the Action might be "false" */
     known(Wait),
@@ -1064,9 +1073,16 @@ serve_ambient(In, Events, FromSub, Done,
     read_vector(AMBIENT_ID, A1, Id1),
     vector(A2),
     read_vector(AMBIENT_ID, A2, Id2) :
+      Done = _,
       write_channel(record_item(ambient(Action(Id1, Id2))), Scheduler);
 
     otherwise :		/* the scheduler might be closed */
+      Really = _,
+      Scheduler = _,
+      Wait = _ ,
+      Done = _;
+
+    Done =?= done :
       Really = _,
       Scheduler = _,
       Wait = _.
@@ -1151,7 +1167,7 @@ serve_ambient(In, Events, FromSub, Done,
 		   change_parent(MergedAmbient, Removed, _Ready),
 		   Child) |
 	DEBUG("merge"(Removed, Ready), move - ChildId - into - NewParentId),
-        TERMS((read_vector(AMBIENT_ID, Child, ChildId),
+	TERMS((read_vector(AMBIENT_ID, Child, ChildId),
 	       read_vector(AMBIENT_ID, MergedAmbient, NewParentId))),
 	remove_shared_communications(Child, SharedChannels, Scheduler,
 					Removed),
@@ -1549,7 +1565,19 @@ copy_local_channels(Idle, Locals, NewLocals, Ambient, In, NextIn) :-
       Locals = _.
 
 merge_local_channels(Idle, Argument, NewArgument, Action,
-			FromAmbient, ToAmbient, In, NextIn) :-
+		     FromAmbient, ToAmbient, In, NextIn) + (Watch = NextIn) :-
+
+    Watch ? Command, Command =\= abort |
+	self;
+
+    Watch =?= [abort|_] :
+    Action = _,
+    FromAmbient = _,
+    Idle = _,
+    ToAmbient = _,
+    NewArgument = Argument,
+    NextIn = In;
+
     known(Idle),
     freeze(Argument, FrozenArgument, FrozenAtoms) :
       melt(FrozenArgument, MeltedArgument, MeltedAtoms) |
@@ -2058,6 +2086,16 @@ resume_ambient_when_ready(In, Events, FromSub, Done,
 			  Scheduler, Debug,
 			  Ready) :-
 
+
+    Events =?= [abort | _] :
+      Ready = _,
+      Controls ! resume |
+        DEBUG(resume_when_ready-done, detach(PrivateChannels, Channels)),
+        detach_channel_list(PrivateChannels, Scheduler),
+        copy_public_channels,
+        detach_channel_list(Channels, Scheduler),
+        serve_ambient0;
+
     known(Ready) :
       Controls ! resume |
 	DEBUG(resume_when_ready, detach(PrivateChannels, Channels)),
@@ -2084,6 +2122,10 @@ send_to_scheduler(Ms, Scheduler, Scheduler') :-
       Scheduler' = Scheduler.
 
 server_failed(Server, Failure) :-
+
+    Failure =?= change_parent(Parent, _Removed, false^),
+    vector(Parent) :
+      Server = _;
 
     Failure =?= lookup(_Locus, [], []^) :
       Server = _;
@@ -2112,9 +2154,10 @@ server_failed(Server, Failure) :-
       Server = _;
 
     otherwise |
-        self#service_id(Scope),
-        service_id_path(Server, Scope, RPC),
-        computation # failed(RPC, Failure).
+	self#service_id(Scope),
+	service_id_path(Server, Scope, RPC),
+	computation # failed(RPC, Failure).
+
 
 /***************************** formatting ***********************************/
 /*
