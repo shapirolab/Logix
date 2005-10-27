@@ -3,18 +3,31 @@ It includes the source of the additions to aspic which implement
 Ambients.
 
 The "executables" of the source are in sub-directory Bin.  If you
-need to use another directory for development, soft link the sub-
-directory Bin, or copy the Bin to it or to one of its enclosing
-directories which is within your home directory,
+need to use another directory for development, link or copy the
+module Bin/user_macros.bin to that directory (or its Bin sub-directory),
+or to a directory which is between the scopes of that directory
+and your home directory,
 
 The module user_macros.cp defines the user macros of BioSpi.  Try
-command "ph" for a list of user macros.  For further information
-about the user macros see the documents named user_macros.txt in
-the Documentation sub-directories.
+command "ph" for a list of user macros.  These user macros apply to
+source files written in language(biospi).  For further information
+about the user macros see the documents named user_macros.txt in the
+Documentation sub-directories.
 
-The files in Bin are the "executable" forms of the source.  Two are
-linked to files of the same name in Aspic-release/Logix/system/Bin,
-and they should not be recompiled here without breaking the link.
-The file ambient_server.bin implements the ambient management process.
-The file ambient_trace.bin implements the user macro "atrace" - see
+The modules in Bin are the "executable" forms of the source.  Three are
+linked to modules of the same name in Aspic-release/Logix/system/Bin,
+and they should not be recompiled here without breaking the link,
+unless you intend to replace the version of that module which may be
+accessed from outside the scope of this directory.
+
+The module ambient_server.bin implements the ambient management process.
+
+The module ambient_list.bin implements the user macro "atrace" - see
 Documentation/trace.txt for details.
+
+The module ambient_trace.bin is an obsolescent form of ambient_list.bin.
+
+
+Some examples of Ambient Stochastic Pi Calculus programs are included in
+sub-directory, Examples.
+

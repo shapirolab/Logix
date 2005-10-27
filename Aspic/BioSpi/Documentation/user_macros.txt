@@ -193,9 +193,12 @@ The most general form of the macro call is:
     atrace(<quantified process set>, <file_name>, <limit>, <scale>)
 
 similar to the user macro, record  (see
-Aspic-release/SpiFcp/Documentation/user_macros.txt)
+Aspic-release/SpiFcp/Documentation/user_macros.txt).
+If the <limit> argument is omitted, the program runs until it terminates
+or is aborted.  The scale element (default 1.0) multiplies the recorded
+time at which an ambient tree is created or changes.
 
-The trees are written a file, one line per tree.  Each line is a
+The trees are written to the file, one line per tree.  Each line is a
 fully parenthesized tree - the line is like a LISP description of a 
 tree, except that when a node of the tree had sub-trees (children),
 they are represented in a list delimited by square brackets - e.g.
