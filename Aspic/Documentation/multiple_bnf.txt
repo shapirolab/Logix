@@ -52,6 +52,8 @@ BNF for calls to multiple#run(<declarations>,<status>) .
 	     process
 	     creator
 	     full
+             ambient
+             atrace
              <public_variable_name>
 
 <call_list> ::= <quantified_process_set>
