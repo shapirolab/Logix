@@ -87,3 +87,9 @@ Version Aspic-release.2005-07-17.tar.gz
 Revised documents for restructured release; binary up-to-date; added
 ambient_list, and revised atrace; fixed some minor bugs; fixed bug in send
 channel code generation (spifcp/servers.cp).
+
+Version Aspic-release.2005-10-27.tar.gz
+
+Added support for Macintosh OSX BSD 10.4 and forward; fixed some minor bugs;
+added module multiple.cp; added documents CONSTANTS.txt, multiple.txt,
+multiple_bnf.txt; updated and edited various other documents.
