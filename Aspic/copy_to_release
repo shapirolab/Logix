@@ -31,64 +31,51 @@ rm -f release/SpiFcp/spifcp/*.cp
 cp -p spifcp/*.cp release/SpiFcp/spifcp
 
 rm -f release/BioSpi/*.cp
-cp -p BioSpi/*.cp release/BioSpi
+cp -p BioSpi/ambient_list.cp release/BioSpi
+cp -p BioSpi/ambient_server.cp release/BioSpi
+cp -p BioSpi/user_macros.cp release/BioSpi
 
 rm -f release/BioSpi/Bin/*.bin
-cp -p BioSpi/Bin/*.bin release/BioSpi/Bin
+cp -p BioSpi/Bin/ambient_list.bin release/BioSpi/Bin
+cp -p BioSpi/Bin/ambient_server.bin release/BioSpi/Bin
+cp -p BioSpi/Bin/user_macros.bin release/BioSpi/Bin
 rm -f system/Bin/ambient_*.bin
-ln    release/BioSpi/Bin/ambient_*.bin system/Bin
+ln    release/BioSpi/Bin/ambient_list.bin system/Bin
+ln    release/BioSpi/Bin/ambient_server.bin system/Bin
 
 rm -f release/SpiFcp/spifcp/*.cp
 cp -p spifcp/*.cp release/SpiFcp/spifcp
 
-rm -f system/transform/spifcp/Bin/self.bin
+rm -f system/transform/spifcp/Bin/*.bin
 cp -p spifcp/Bin/self.bin system/transform/spifcp/Bin
 
 rm -f release/BioSpi/biospi/*.cp
 cp -p BioSpi/biospi/*.cp release/BioSpi/biospi
 
-rm -f system/transform/biospi/Bin/self.bin
+rm -f system/transform/biospi/Bin/*.bin
 cp -p BioSpi/biospi/Bin/self.bin system/transform/biospi/Bin
 
-rm -f release/SpiFcp/Documentation/BNF.txt
+rm -f release/SpiFcp/Documentation/*.txt
 cp -p Documentation/BNF.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/CONSTANTS.txt
 cp -p Documentation/CONSTANTS.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/attributes.txt
 cp -p Documentation/attributes.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/public.txt
-cp -p Documentation/public.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/multiple.txt
 cp -p Documentation/multiple.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/multiple_bnf.txt
 cp -p Documentation/multiple_bnf.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/program_macros.txt
 cp -p Documentation/program_macros.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/public_variables.txt
+cp -p Documentation/public.txt release/SpiFcp/Documentation
 cp -p Documentation/public_variables.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/record.txt
 cp -p Documentation/record.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/repeat.txt
 cp -p Documentation/repeat.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/stochastic.txt
 cp -p Documentation/stochastic.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/trace.txt
 cp -p Documentation/trace.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/user_macros.txt
 cp -p Documentation/user_macros.txt release/SpiFcp/Documentation
-rm -f release/SpiFcp/Documentation/weighter.txt
 cp -p Documentation/weighter.txt release/SpiFcp/Documentation
 
-rm -f release/BioSpi/Documentation/BNF.txt
+rm -f release/BioSpi/Documentation/*.txt
 cp -p BioSpi/Documentation/BNF.txt release/BioSpi/Documentation
-rm -f release/BioSpi/Documentation/user_macros.txt
-cp -p BioSpi/Documentation/user_macros.txt release/BioSpi/Documentation
-rm -f release/BioSpi/Documentation/attributes.txt
 cp -p BioSpi/Documentation/attributes.txt release/BioSpi/Documentation
-rm -f release/BioSpi/Documentation/record.txt
 cp -p BioSpi/Documentation/record.txt release/BioSpi/Documentation
-rm -f release/BioSpi/Documentation/trace.txt
-cp -p BioSpi/Documentation/trace.txt release/BioSpi/Documentation
+cp -p BioSpi/Documentation/user_macros.txt release/BioSpi/Documentation
 
 rm -f release/SpiFcp/Examples/boolean/*.cp
 cp -p Examples/boolean/*.cp release/SpiFcp/Examples/boolean
@@ -111,19 +98,15 @@ cp -p BioSpi/Examples/vesicle/*.cp release/BioSpi/Examples/vesicle
 rm -f release/BioSpi/Examples/complex/*.cp
 cp -p BioSpi/Examples/complex/*.cp release/BioSpi/Examples/complex
 
-rm -f release/Tutorial/bland.cp
-cp -p Tutorial/bland.cp release/Tutorial/bland.cp
-rm -f release/Tutorial/hello.cp
-cp -p Tutorial/hello.cp release/Tutorial/hello.cp
-rm -f release/Tutorial/public_which.cp
-cp -p Tutorial/public_which.cp release/Tutorial/public_which.cp
-rm -f release/Tutorial/sender.cp
-cp -p Tutorial/sender.cp release/Tutorial/sender.cp
-rm -f release/Tutorial/tryer.cp
-cp -p Tutorial/tryer.cp release/Tutorial/tryer.cp
 rm -f release/Tutorial/tutorial.ps
 cp -p Tutorial/tutorial.ps release/Tutorial/tutorial.ps
-rm -f release/Tutorial/which.cp
+
+rm -f release/Tutorial/*.cp
+cp -p Tutorial/bland.cp release/Tutorial/bland.cp
+cp -p Tutorial/hello.cp release/Tutorial/hello.cp
+cp -p Tutorial/public_which.cp release/Tutorial/public_which.cp
+cp -p Tutorial/sender.cp release/Tutorial/sender.cp
+cp -p Tutorial/tryer.cp release/Tutorial/tryer.cp
 cp -p Tutorial/which.cp release/Tutorial/which.cp
 
 cd Release
