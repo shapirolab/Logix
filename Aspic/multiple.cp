@@ -102,21 +102,19 @@ transform_term(Term, Declarations, NextDeclarations, PartialResult, Result) :-
 
     Errors =?= [] :
       Term = _,
-      Declaration = _,
       Declarations = [Declaration | NextDeclarations],
       Result = PartialResult;
 
     Errors =\= [] :
+      Declaration = _,
       PartialResult = _,
       Declarations = NextDeclarations |
         screen#display(Term, [prefix(input), type(unparse),
-				depth(50), close(Done,ng)]),
+			      depth(50), close(Done,ng)]),
         screen#display_stream(Errors,
-                                [wait(Done), prefix(error), type(unparse),
-				 close(Done1, Done)]),
-/**/	screen#display(Declaration, [wait(Done1), prefix(" out "),
-/**/					type(unparse), close(Result, Done1)])
-.
+			      [wait(Done), prefix(error), type(unparse),
+			       depth(50),close(Result, Done)]).
+
 
 transform_parameters(RunParameters, Limit, Scale, File, Format,
 		     Errors, NextErrors) :-
@@ -148,10 +146,7 @@ transform_parameter_list(RunParameters, ParameterList,
       RunParameters = _ |
 	transform_named_parameter_list.
 
-/*
-** Revise to validate <expression>, and permit <pi_variable> for
-** <file> and <format> .
-*/
+
 transform_named_parameter_list(ParameterList, Limit, Scale, File, Format,
 			       Errors, NextErrors) :-
 
@@ -191,6 +186,14 @@ transform_named_parameter_list(ParameterList, Limit, Scale, File, Format,
 
     ParameterList ? format(full) :
       Format = full |
+	self;
+
+    ParameterList ? format(ambient) :
+      Format = ambient |
+	self;
+
+    ParameterList ? format(atrace) :
+      Format = atrace |
 	self;
 
     ParameterList ? format(Variable), Variable =?= `_ :
@@ -577,49 +580,53 @@ format_goals(CompiledGoals, FormattedGoals) :-
 format_call(RunOrRecord, FormattedGoals, FormattedCall) :-
 
     RunOrRecord =?= run(_, Limit),
-    real(Limit) =:= real(DEFAULT_LIMIT) :
+    real(Limit) >= real(DEFAULT_LIMIT) :
       FormattedCall = run(FormattedGoals);
 
     RunOrRecord =?= run(_, Limit),
     otherwise :
       FormattedCall = run(FormattedGoals, Limit);
 
-    RunOrRecord =?= run(_, Limit, Scale, FileName, DEFAULT_FORMAT) |
-	format_record;
+    RunOrRecord =?= run(_, FileName, Limit, Scale, DEFAULT_FORMAT) |
+	format_record + (Functor = record);
 
-    RunOrRecord =?= run(_, Limit, Scale, FileName, Format),
-    Format =\= DEFAULT_FORMAT :
+    RunOrRecord =?= run(_, FileName, Limit, Scale, atrace) |
+	format_record + (Functor = list);
+
+    RunOrRecord =?= run(_, FileName, Limit, Scale, Format),
+    Format =\= DEFAULT_FORMAT, Format =\= atrace :
       FormattedCall = run(FormattedGoals, FileName, FormattedLimit, Scale,
 			     Format) |
 	format_limit.
 
-  format_record(FormattedGoals, Limit, Scale, FileName, FormattedCall) :-
+  format_record(Functor, FormattedGoals, FileName, Limit, Scale,
+		FormattedCall) :-
 
     real(Limit) =:= real(DEFAULT_LIMIT),
     real(Scale) =:= real(DEFAULT_SCALE) :
-      FormattedCall = record(FormattedGoals, FileName);
+      FormattedCall = Functor(FormattedGoals, FileName);
 
     L := real(Limit),
     DL := real(DEFAULT_LIMIT),
     L =\= DL,
     real(Scale) =:= real(DEFAULT_SCALE) :
-      FormattedCall = record(FormattedGoals, FileName, Limit);
+      FormattedCall = Functor(FormattedGoals, FileName, Limit);
 
-    real(Limit) =:= real(DEFAULT_LIMIT),
+    real(Limit) >= real(DEFAULT_LIMIT),
     S := real(Scale),
     DS := real(DEFAULT_SCALE),
     S =\= DS :
-      FormattedCall = record(FormattedGoals, FileName, "DEFAULT_LIMIT", Scale);
+      FormattedCall = Functor(FormattedGoals, FileName, "*", Scale);
 
     otherwise :
-      FormattedCall = record(FormattedGoals, FileName, Limit, Scale).
+      FormattedCall = Functor(FormattedGoals, FileName, Limit, Scale).
 
   format_limit(Limit, FormattedLimit) :-
 
     L := real(Limit),
     DL := real(DEFAULT_LIMIT),
-    L =\= DL :
-      FormattedLimit = "DEFAULT_LIMIT";
+    L =?= DL :
+      FormattedLimit = "*";
 
     otherwise :
       Limit = FormattedLimit.
@@ -650,13 +657,27 @@ check_run_outcome(Declarations, Stream, Hash, VarSets,
 run_or_record_goals(VPOutcome, Parameters, CallGoals,
 		    Index, RunOrRecord, Status, Outcome) :-
 
-    VPOutcome =?= done :
+    VPOutcome =?= done,
+    Parameters =?= {Limit, Scale, _FileName, atrace} :
+      Run = _,
+      RunOrRecord = run(CallGoals, IndexedFile, Limit, Scale, atrace) |
+	run_or_record,
+	computation#events(ExternalEvents),
+	computation # self # service_id(SId),
+	start_computation([ambient_list#run(repeat#run(CallGoals),
+					    IndexedFile?, Limit, Scale)
+			  | Requests?], Events, FromSub, SId),
+	monitor_run(Events?, FromSub?, Status?, ExternalEvents?,
+		    Requests, Outcome);
+
+    VPOutcome =?= done,
+    arg(4, Parameters, Format), Format =\= atrace :
       Run = repeat#run(CallGoals) |
 	run_or_record,
 	start_run(spi_record#RunOrRecord, Status, Outcome);
 
-    known(CallGoals),
-    VPOutcome =\= done :
+    VPOutcome =\= done,
+    known(CallGoals) :	% avoid conflicting use of 
       Index = _,
       Parameters = _,
       RunOrRecord = _,
@@ -684,7 +705,7 @@ prepare_parameters(VOutcome, RunParameters, Parameters, FileName, VPOutcome) :-
     VOutcome =?= done :
       Parameters = {L?, S?, FileName?, Format?} |
 	goal_compiler#term(RunParameters, {Limit, Scale, File, Format}),
-	file_is_string_or_nil(File, FileName, E1, E2),
+	file_is_string_or_none(Format, File, FileName, E1, E2),
 	validate_format(Format, E2, []),
 	evaluate_parameters;
 
@@ -694,16 +715,25 @@ prepare_parameters(VOutcome, RunParameters, Parameters, FileName, VPOutcome) :-
       Parameters = {0.0, 1.0, NO_FILE, none},
       VPOutcome = VOutcome.
 
-  file_is_string_or_nil(File, FileName, E, NE) :-
+  file_is_string_or_none(Format, File, FileName, E, NE) :-
 
-    File =?= [] :
-      FileName = [],
+    File =?= NO_FILE,
+    Format =?= atrace :
+      FileName = DEFAULT_FILE,
       E = NE;
 
+    File =?= NO_FILE,
+    Format =\= atrace :
+      FileName = NO_FILE,
+      E = NE;
+
+    File =\= NO_FILE,
     convert_to_string(File, FileName^) :
+      Format = _,
       E = NE;
 
     otherwise :
+      Format = _,
       FileName = File,
       E = [file_name_must_be_string(File) | NE].
 
@@ -735,7 +765,7 @@ bind_variables_expressions(VariablesSet, Evaluated)
 			+ (List = Triples, Triples) :-
 
 	/* loop over {V, E}
-		compile(E -> Vt)
+		compile(E -> Et)
 		if E is `_ or E is ?_, or E is constant =\= "random", 
 			then unify Vt = Et
 			else produce utils#evaluate(Et, Vt) 
@@ -1092,6 +1122,12 @@ validate_expression(Expression, ValidExpression, Errors, NextErrors) :-
     Format =?= full :
       Errors = NextErrors;
 
+    Format =?= ambient :
+      Errors = NextErrors;
+
+    Format =?= atrace :
+      Errors = NextErrors;
+
     otherwise :
       Errors = [invalid_format(Format) | NextErrors].
 
@@ -1150,10 +1186,10 @@ start_run(Run, Status, Outcome) :-
 
 	computation#events(ExternalEvents),
 	computation # self # service_id(SId),
-	start_computation([ambient_server#run(Run, AmbientCH) | Requests?],
+	start_computation([ambient_server#run(Run) | Requests?],
 			  Events, FromSub, SId),
-	monitor_run(AmbientCH, Events?, FromSub?, Status?,
-		    ExternalEvents?, Requests, Outcome).
+	monitor_run(Events?, FromSub?, Status?, ExternalEvents?,
+		    Requests, Outcome).
 
 start_computation(Requests0, Events, FromSub, SId) :-
 
@@ -1164,16 +1200,9 @@ start_computation(Requests0, Events, FromSub, SId) :-
       Requests' = Requests0 |
 	computation # "_domain"(domain_channel(Domain)),
 	computation_server # computation(Requests?, CCC, Domain?, Events).
-/*
-  computation_controls(CCIn, FromSubCH, CCOut, SuperCHOut) :-
 
-    CCIn = {Ss, L, R, SuperCH} |
-	CCOut = {Ss, L, R, FromSubCH},
-	SuperCHOut = SuperCH .
-*/
 
-monitor_run(AmbientCH, Events, FromSub, Status, ExternalEvents,
-	    Requests, Outcome) :-
+monitor_run(Events, FromSub, Status, ExternalEvents, Requests, Outcome) :-
 
     unknown(Events),
     known(Status) :
@@ -1238,14 +1267,8 @@ monitor_run(AmbientCH, Events, FromSub, Status, ExternalEvents,
     Status =\= [_ | _], Status =\= [] :
       Outcome = Status.
 
-/*
-  monitor_wait(Unknown, Which, Run) :-
-    known(Unknown) :
-      Which = _,
-      Run = _.
-*/
 
-handle_computation_event(AmbientCH, Events, FromSub, Status, ExternalEvents,
+handle_computation_event(Events, FromSub, Status, ExternalEvents,
 			 Requests, Outcome, Event) :-
 
     Event =?= failed(Where, What) :
@@ -1260,7 +1283,6 @@ handle_computation_event(AmbientCH, Events, FromSub, Status, ExternalEvents,
 	abort_run;	% fix to post-analyze
 
     Event =?= terminated :
-      AmbientCH = _,
       Events = _,
       ExternalEvents = _,
       FromSub = _,
@@ -1318,17 +1340,7 @@ handle_computation_event(AmbientCH, Events, FromSub, Status, ExternalEvents,
     otherwise :
       Outcome = failed(EditedWhere, What).
 
-abort_run(AmbientCH, Requests) :-
-
-    channel(AmbientCH) :
-%     close_vector(AMBIENT_CONTROL, AmbientCH),
-      AmbientCH = _,
+abort_run(Requests) :-
       Requests = [abort].
-/*
-      write_vector(AMBIENT_CONTROL, abort, AmbientCH);
 
-    otherwise :		% Channel has been closed
-      AmbientCH = _.
-*/
-
-% wait(A,B) :- A =?= B | screen#display(bye).
+wait(A,B) :- A =?= B | wait(_, ok-B).
