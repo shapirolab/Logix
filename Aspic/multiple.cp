@@ -10,6 +10,11 @@ DEFAULT_FILE   => record .
 DEFAULT_FORMAT => none .
 NO_FILE => "".
 
+DEFAULT_VARIABLES => [] .
+DEFAULT_RUN => {NO_FILE, DEFAULT_LIMIT, DEFAULT_SCALE, DEFAULT_FORMAT} .
+DEFAULT_RECORD =>
+	       {DEFAULT_FILE, DEFAULT_LIMIT, DEFAULT_SCALE, DEFAULT_FORMAT} .
+
 CHAR_0  =>  48 .
 CHAR_9  =>  57 .
 CHAR_A  =>  65 .
@@ -69,274 +74,333 @@ parsing_errors(Parameters, Stream, Terms, Errors, Status) :-
 	stream#hash_table(Hash),
 	run_declarations.
 
-transform_terms(Terms, Declarations, Result) + (PartialResult = ok) :-
+transform_terms(Terms, Declarations, Result) +
+	(PartialResult = ok,
+	 Defaults = {DEFAULT_VARIABLES, DEFAULT_RUN}) :-
 
-    known(PartialResult),
-    Terms ? Term |
-	transform_term(Term, Declarations, Declarations',
-			PartialResult, PartialResult'),
+  known(PartialResult),
+  Terms ? Term :
+    Declarations ! Declaration? |
+	classify_term,
+	transform_term(Term, Type?, Defaults, Defaults', Declaration, Errors),
+	term_errors(Term, Errors?, PartialResult, PartialResult'),
 	self;
 
     Terms =?= [] :
+      Defaults = _,
       Declarations = [],
       Result = PartialResult.
 
-transform_term(Term, Declarations, NextDeclarations, PartialResult, Result) :-
 
-    Term =?= (VariableList : RunParameters | CallList) :
-      Declaration = {{Limit?, Scale?, File?, Format?}, VarList?, GoalList?} |
-	transform_parameters(RunParameters, Limit, Scale, File, Format,
-					 Errors, VarErrors),
-	transform_variables(VariableList, VarList, VarErrors, CallErrors),
-	transform_calls(CallList, GoalList, CallErrors, []),
-	term_errors;
-
-    otherwise :
-      PartialResult = _,
-      Declaration = [],
-      Errors = [not_a_process_declaration] |
-	term_errors.
-
-  term_errors(Term, Declarations, NextDeclarations, PartialResult, Result,
-		Errors, Declaration) :-
+  term_errors(Term, Errors, PartialResult, Result) :-
 
     Errors =?= [] :
       Term = _,
-      Declarations = [Declaration | NextDeclarations],
       Result = PartialResult;
 
     Errors =\= [] :
-      Declaration = _,
-      PartialResult = _,
-      Declarations = NextDeclarations |
+      PartialResult = _ |
         screen#display(Term, [prefix(input), type(unparse),
 			      depth(50), close(Done,ng)]),
         screen#display_stream(Errors,
 			      [wait(Done), prefix(error), type(unparse),
-			       depth(50),close(Result, Done)]).
+			       depth(50), close(Result, Done)]).
 
 
-transform_parameters(RunParameters, Limit, Scale, File, Format,
-		     Errors, NextErrors) :-
+  classify_term(Term, Type) :-
 
-	comma_list_to_list(RunParameters, ParameterList),
-	transform_parameter_list.
+    string(Term) :
+      Type = reset;
 
-transform_parameter_list(RunParameters, ParameterList,
-			 Limit, Scale, File, Format,
-			 Errors, NextErrors) :-
+    Term =?= (PreProcess | _) |
+	classify_process_declaration;
 
-    ParameterList =?= [Name(_) | _],
-    /* "ln" is the shortest function name. */
-    string_length(Name) > 1 |
-	validate_expression(Name(`"A"), _, E, []),
-	maybe_named_parameter_list;
+    Term =?= (Term' , _) |
+	classify_element,
+	complete_default_classification(Type', Type);
 
     otherwise |
-	transform_simple_parameters.
+	classify_element,
+	complete_default_classification(Type', Type).
 
-  maybe_named_parameter_list(RunParameters, ParameterList,
-			     Limit, Scale, File, Format,
-			     Errors, NextErrors, E) :-
+    complete_default_classification(reset, error^).
+    complete_default_classification(Type, Type^) :-
+      otherwise | true.
 
-    E =?= [] |
-        transform_simple_parameters;
+  classify_process_declaration(PreProcess, Type) :-
 
-    E =\= [] :
-      RunParameters = _ |
-	transform_named_parameter_list.
+    PreProcess =?= (_ : _) :
+      Type = full;
+
+    PreProcess =?= (Term , _) |
+	classify_element,
+	complete_process_classification(Type', Type);
+
+    otherwise |
+	classify_element + (Term = PreProcess),
+        complete_process_classification(Type', Type).
+
+    complete_process_classification(variables, vcall^).
+    complete_process_classification(arguments, acall^).
+    complete_process_classification(_, error^) :-
+      otherwise |
+	true.
+
+  classify_element(Term, Type) :-
+
+    string(Term) :
+      Type = reset;
+
+    tuple(Term),
+    arg(1, Term, `_) :
+      Type = variables;
+
+    tuple(Term),
+    arg(1, Term, Functor), string(Functor),
+    string_length(Functor) > 2 : % not * nor # nor := nor variable
+      Type = arguments;
+
+    tuple(Term),
+    otherwise :
+      Type = call.
 
 
-transform_named_parameter_list(ParameterList, Limit, Scale, File, Format,
-			       Errors, NextErrors) :-
+transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
 
-    ParameterList = [] |
-	Errors = NextErrors,
-	unify_without_failure(Limit, DEFAULT_LIMIT),
-	unify_without_failure(Scale, DEFAULT_SCALE),
-	unify_without_failure(File, DEFAULT_FILE),
-	unify_without_failure(Format, DEFAULT_FORMAT);
+    Type =?= full,
+    Term =?= (VariableList : RunArguments | CallList) :
+      Declaration = {VarList?, {File?, Limit?, Scale?, Format?}, GoalList?},
+      Defaults = NewDefaults |
+	transform_variables(VariableList, VarList, Errors, ArgErrors),
+	transform_arguments + (Errors = ArgErrors, NextErrors = CallErrors),
+	transform_calls(CallList, GoalList, CallErrors, []);
 
-    ParameterList ? limit(Expression),
-    ground(Expression) :
-      Limit = Expression |
-	self;
+    Type =?= vcall,
+    Term =?= (VariableList | CallList),
+    Defaults =?= {_VarList, ArgumentTuple} :
+      Declaration = {VarList?, ArgumentTuple, GoalList?},
+      Defaults = NewDefaults |
+	transform_variables + (NextErrors = CallErrors),
+	transform_calls(CallList, GoalList, CallErrors, []);
 
-    ParameterList ? file(Name),
+    Type =?= acall,
+    Term =?= (RunArguments | CallList),
+    Defaults =?= {VarList, _ArgumentTuple} :
+      Declaration = {VarList, {File?, Limit?, Scale?, Format?}, GoalList?},
+      Defaults = NewDefaults |
+	transform_arguments + (NextErrors = CallErrors),
+	transform_calls(CallList, GoalList, CallErrors, []);
+
+    Type =?= call,
+    Defaults =?= {VarList, ArgumentTuple} :
+      Declaration = {VarList, ArgumentTuple, GoalList?},
+      Defaults = NewDefaults |
+	transform_calls + (CallList = Term, NextErrors = []);
+
+    otherwise :
+      Declaration = [] |
+	update_defaults.
+
+  update_defaults(Term, Type, Defaults, NewDefaults, Errors) :-
+
+    Type =?= variables,
+    Defaults =?= {_VarList, ArgumentTuple} :
+      NewDefaults = {VarList?, ArgumentTuple} |
+	comma_list_to_list(Term, VariableList),
+	transform_variables(VariableList, VarList, Errors, []);
+
+    Type = arguments,
+    Defaults =?= {VarList, _ArgumentTuple} :
+      ArgumentTuple = {File?, Limit?, Scale?, Format?},
+      NewDefaults = {VarList, ArgumentTuple} |
+	transform_arguments + (RunArguments = Term, NextErrors = []);
+
+    Type = reset |
+	reset_default;
+
+    Type = error :
+      Term = _,
+      Defaults = NewDefaults,
+      Errors = invalid_declaration.
+
+  reset_default(Term, Defaults, NewDefaults, Errors) :-
+
+    Term = run,
+    Defaults =?= {VarList, _ArgumentTuple} :
+      Errors = [],
+      NewDefaults = {VarList, DEFAULT_RUN};
+
+    Term = record,
+    Defaults =?= {VarList, _ArgumentTuple} :
+      Errors = [],
+      NewDefaults = {VarList, DEFAULT_RECORD};
+
+    Term = variables,
+    Defaults =?= {_VarList, ArgumentTuple} :
+      Errors = [],
+      NewDefaults = {DEFAULT_VARIABLES, ArgumentTuple};
+
+    otherwise :
+      Term = _,
+      Defaults = NewDefaults,
+      Errors = invalid_reset.
+
+
+transform_arguments(RunArguments, Defaults, File, Limit, Scale, Format,
+		     Errors, NextErrors) :-
+
+    RunArguments =?= run(Expression),
+    Defaults =?= {_VarList, {File^, _Limit, Scale^, Format^}} |
+	validate_expression + (ValidExpression = Limit);
+
+    arg(1, RunArguments, record) |
+	utils#tuple_to_dlist(RunArguments, [_record | ArgumentList], []),
+	transform_simple_arguments;
+
+    otherwise :
+      RunArguments = _ |
+	comma_list_to_list(RunArguments, ArgumentList),
+	transform_named_argument_list.
+
+
+transform_named_argument_list(ArgumentList, Defaults,
+			      File, Limit, Scale, Format,
+			      Errors, NextErrors) :-
+
+    ArgumentList = [],
+    Defaults =?= {_VarList, {DFile, DLimit, DScale, DFormat}} :
+      Errors = NextErrors |
+	unify_without_failure(File, DFile?),
+	unify_without_failure(Limit, DLimit?),
+	unify_without_failure(Scale, DScale?),
+	unify_without_failure(Format, DFormat);
+
+    ArgumentList ? file(Name),
     ground(Name) :
       File = Name |
 	self;
 
-    ParameterList ? scale(Expression),
+    ArgumentList ? limit(Expression),
+    ground(Expression) :
+      Limit = Expression |
+	self;
+
+    ArgumentList ? scale(Expression),
     ground(Expression) :
       Scale = Expression |
 	self;
 
-    ParameterList ? format(none) :
+    ArgumentList ? format(none) :
       Format = none |
 	self;
 
-    ParameterList ? format(process) :
+    ArgumentList ? format(process) :
       Format = process |
 	self;
 
-    ParameterList ? format(creator) :
+    ArgumentList ? format(creator) :
       Format = creator |
 	self;
 
-    ParameterList ? format(full) :
+    ArgumentList ? format(full) :
       Format = full |
 	self;
 
-    ParameterList ? format(ambient) :
+    ArgumentList ? format(ambient) :
       Format = ambient |
 	self;
 
-    ParameterList ? format(atrace) :
+    ArgumentList ? format(atrace) :
       Format = atrace |
 	self;
 
-    ParameterList ? format(Variable), Variable =?= `_ :
+    ArgumentList ? format(Variable), Variable =?= `_ :
       Format = Variable |
 	self;
 
-    ParameterList ? limit(Conflict),
-    otherwise :
-      Errors ! conflicting_limit(Limit, Conflict) |
-	self;
-
-    ParameterList ? scale(Conflict),
-    otherwise :
-      Errors ! conflicting_scale(Scale, Conflict) |
-	self;
-
-    ParameterList ? file(Conflict),
+    ArgumentList ? file(Conflict),
     otherwise :
       Errors ! conflicting_file(File, Conflict) |
 	self;
 
-    ParameterList ? format(Conflict),
+    ArgumentList ? limit(Conflict),
+    otherwise :
+      Errors ! conflicting_limit(Limit, Conflict) |
+	self;
+
+    ArgumentList ? scale(Conflict),
+    otherwise :
+      Errors ! conflicting_scale(Scale, Conflict) |
+	self;
+
+    ArgumentList ? format(Conflict),
     otherwise :
       Errors ! conflicting_format(Format, Conflict) |
 	self;
 
-    ParameterList ? format(Other),
+    ArgumentList ? format(Other),
     otherwise :
       Errors ! invalid_format(Other) |
         self;
 
-    ParameterList ? Other :
-      Errors ! invalid_named_parameter(Other) |
+    ArgumentList ? Other :
+      Errors ! invalid_named_argument(Other) |
 	self.
 
-transform_simple_parameters(RunParameters, ParameterList,
-			    Limit, Scale, File, Format,
+transform_simple_arguments(RunArguments, Defaults, ArgumentList,
+			    File, Limit, Scale, Format,
 			    Errors, NextErrors) :-
 
-    ParameterList =?= [L] :
-      RunParameters = _,
-      Limit = L,
-      Scale = DEFAULT_SCALE,
-      File = NO_FILE,
-      Format = DEFAULT_FORMAT,
-      Errors = NextErrors;
-
-    ParameterList =?= [L, S],
-    number(S) :
-      RunParameters = _,
-      Limit = L,
-      Scale = S,
-      File = DEFAULT_FILE,
-      Format = DEFAULT_FORMAT,
-      Errors = NextErrors;
-
-    ParameterList =?= [L, S],
-    tuple(S), S =\= `_ :
-      RunParameters = _,
-      Limit = L,
-      Scale = S,
-      File = DEFAULT_FILE,
-      Format = DEFAULT_FORMAT,
-      Errors = NextErrors;
-
-    ParameterList =?= [L, S, F] :
-      RunParameters = _,
-      Limit = L,
+    Defaults =?= {_VarList, {_File, Limit^, Scale^, Format^}},
+    ArgumentList =?= [F] :
+      RunArguments = _,
       File = F,
-      Scale = S,
-      Format = DEFAULT_FORMAT,
       Errors = NextErrors;
 
-    ParameterList =?= [L, S, F, O] :
-      RunParameters = _,
+    Defaults =?= {_VarList, {_DFile, _DLimit, DScale, DFormat}},
+    ArgumentList =?= [F, L] :
+      RunArguments = _,
+      File = F,
+      Limit = L,
+      Scale = DScale,
+      Format = DFormat,
+      Errors = NextErrors;
+
+    Defaults =?= {_VarList, {_DFile, _DLimit, _DScale, DFormat}},
+    ArgumentList =?= [F, L, S] :
+      RunArguments = _,
+      File = F,
       Limit = L,
       Scale = S,
+      Format = DFormat,
+      Errors = NextErrors;
+
+    ArgumentList =?= [F, L, S, O] :
+      Defaults = _,
+      RunArguments = _,
       File = F,
+      Limit = L,
+      Scale = S,
       Format = O,
       Errors = NextErrors;
 
-    otherwise |
-	transform_simple_parameters1.
-
-  transform_simple_parameters1(RunParameters, ParameterList,
-			       Limit, Scale, File, Format,
-			       Errors, NextErrors) :-
-
-    ParameterList =?= [L, F],
-    string(F) :
-      RunParameters = _,
-      Limit = L,
-      File = F,
-      Scale = DEFAULT_SCALE,
-      Format = DEFAULT_FORMAT |
-        simple_real_parameters + (S = DEFAULT_SCALE);
-
-    ParameterList =?= [L, F],
-    F =?= `Name, Name =\= "_" :
-      RunParameters = _,
-      Limit = L,
-      File = F,
-      Scale = DEFAULT_SCALE,
-      Format = DEFAULT_FORMAT |      
-	simple_real_parameters + (S = DEFAULT_SCALE);
-
-    ParameterList =\= [_,_] :
-      Limit = DEFAULT_LIMIT,
-      File = NO_FILE,
-      Scale = DEFAULT_SCALE,
-      Format = DEFAULT_FORMAT,
-      Errors = [invalid_simple_parameter(RunParameters) | NextErrors];
-
+    Defaults =?= {_VarList, {File^, Limit^, Scale^, Format^}},
     otherwise :
-      ParameterList = _,
-      Limit = DEFAULT_LIMIT,
-      File = NO_FILE,
-      Scale = DEFAULT_SCALE,
-      Format = DEFAULT_FORMAT,
-      Errors = [invalid_parameters(RunParameters) | NextErrors].
-
-  simple_real_parameters(L, S, Errors, NextErrors) :-
-
-    convert_to_real(L, RL), RL > 0.0,
-    convert_to_real(S, RS), RS > 0.0 :
-      Errors = NextErrors;
-
-    convert_to_real(L, RL), RL =< 0.0,
-    convert_to_real(S, RS), RS > 0.0 :
-      Errors = [negative_limit(L) | NextErrors];
-
-    convert_to_real(L, RL), RL > 0.0,
-    convert_to_real(S, RS), RS =< 0.0 :
-      Errors = [negative_scale(S) | NextErrors];
-
-    convert_to_real(L, RL), RL =< 0.0,
-    convert_to_real(S, RS), RS =< 0.0 :
-      Errors = [negative_limit(L), negative_scale(S) | NextErrors].
+      ArgumentList = _,
+      Errors = [invalid_arguments(RunArguments) | NextErrors].
 
 /******************************************************************/
 
 transform_variables(VariableList, VarList, Errors, NextErrors) :-
 
+    VariableList =?= [] :
+      VarList = [],
+      Errors = NextErrors;
+
+    list(VariableList) |
+	transform_variable_list + (Names = []);
+
+    otherwise |
 	comma_list_to_list(VariableList, VariableList'),
 	transform_variable_list + (Names = []).
 
@@ -357,7 +421,19 @@ transform_variables(VariableList, VarList, Errors, NextErrors) :-
 	validate_expression_list(ExpressionList, ValidExpressionList,
 				 Errors'', Errors'''),
 	self;
-
+/*
+    VariableList ? Element,
+    tuple(Element), Element =\= `_,
+    arity(Element) > 1, arg(1, Element, Name),
+    string(Name) :
+      VarList ! UniqueName?(ValidExpressionList?) |
+	validate_variable_name(Name, ValidName, Errors, Errors'),
+	unique_name(ValidName, UniqueName, Names, Names', Errors', Errors''),
+	utils#tuple_to_dlist(Element, [_ | ExpressionList], []),
+	validate_expression_list(ExpressionList, ValidExpressionList,
+				 Errors'', Errors'''),
+	self;
+*/
     VariableList ? Element,
     otherwise :
       Errors ! improper_variable_list_element(Element) |
@@ -425,13 +501,7 @@ transform_call_list(CallList, GoalList, Errors, NextErrors) :-
       Repeat = Call,
       Errors = NextErrors;
 
-    /** elaborate to allow Integer or Name to be a <pi_variable> **/
-    Call = Integer*Name#_Goal, integer(Integer), string(Name) :
-      Repeat = Call,
-      Errors = NextErrors;
-    /*************************************************************/
-
-    Call = Integer*Other, integer(Integer) :
+    Call = Integer*Other :
       Repeat = Integer*Repeated |
 	comma_list_to_list(Other, RepeatList),
 	transform_repeat_list;
@@ -455,9 +525,13 @@ transform_call_list(CallList, GoalList, Errors, NextErrors) :-
 run_declarations(Declarations, Stream, Hash, Result) :-
 
     Result =?= ok,
-    Declarations =?= [{_, VarList, _} | _] |
+    Declarations =?= [{VarList, _, _} | _] |
 	extract_variables_sets(VarList, [], VarSets, []),
 	prepare_run(Declarations, Stream, Hash, VarSets);
+
+    Result =?= ok,
+    Declarations ? [] |
+	self;
 	
     Result =?= ok,
     Declarations = [] :
@@ -497,7 +571,7 @@ extract_variables_sets(VarList, SetStack, StackLeft, StackRight) :-
 prepare_run(Declarations, Stream, Hash, VarSets) :-
 
     VarSets ? VariablesSet,
-    Declarations = [{RunParameters, _, Goals} | _] :
+    Declarations = [{_, ArgumentTuple, Goals} | _] :
       Hash ! lookup(FileName?, Index, OldIndex, HashReply) |
 	bind_variables_expressions(VariablesSet, Triples),
 	complete_variable_bindings(Triples, Requests, Evaluates),
@@ -506,12 +580,12 @@ prepare_run(Declarations, Stream, Hash, VarSets) :-
 	get_file_index,
 	run_evaluates,
 %		(Done, Evaluates, VOutcome)
-	prepare_parameters,
-%		(VOutcome, RunParameters, Parameters, FileName, VPOutcome),
+	prepare_arguments,
+%		(VOutcome, ArgumentTuple, Arguments, FileName, VPOutcome),
 	prepare_goals,
 %		(VPOutcome, Goals, CompiledGoals, CallGoals, Status),
 	run_or_record_goals,
-%		(VPOutcome, Parameters, CallGoals, Index,
+%		(VPOutcome, Arguments, CallGoals, Index,
 %		 RunOrRecord, Status, Outcome)
 	format_goals,
 %		(CompiledGoals, FormattedGoals)
@@ -521,7 +595,7 @@ prepare_run(Declarations, Stream, Hash, VarSets) :-
 %		(Declarations, Stream, Hash, VarSets, FormattedCall, Outcome)
 
     VarSets =?= [],
-    Declarations ? _DoneWithIt :
+    Declarations ? _Declaration :
       Result = ok |
 	run_declarations.
     
@@ -654,11 +728,11 @@ check_run_outcome(Declarations, Stream, Hash, VarSets,
 	prepare_run.
 
 
-run_or_record_goals(VPOutcome, Parameters, CallGoals,
+run_or_record_goals(VPOutcome, Arguments, CallGoals,
 		    Index, RunOrRecord, Status, Outcome) :-
 
     VPOutcome =?= done,
-    Parameters =?= {Limit, Scale, _FileName, atrace} :
+    Arguments =?= {_FileName, Limit, Scale, atrace} :
       Run = _,
       RunOrRecord = run(CallGoals, IndexedFile, Limit, Scale, atrace) |
 	run_or_record,
@@ -671,7 +745,7 @@ run_or_record_goals(VPOutcome, Parameters, CallGoals,
 		    Requests, Outcome);
 
     VPOutcome =?= done,
-    arg(4, Parameters, Format), Format =\= atrace :
+    arg(4, Arguments, Format), Format =\= atrace :
       Run = repeat#run(CallGoals) |
 	run_or_record,
 	start_run(spi_record#RunOrRecord, Status, Outcome);
@@ -679,72 +753,74 @@ run_or_record_goals(VPOutcome, Parameters, CallGoals,
     VPOutcome =\= done,
     known(CallGoals) :	% avoid conflicting use of 
       Index = _,
-      Parameters = _,
+      Arguments = _,
       RunOrRecord = _,
       Status = _,
       Outcome = VPOutcome.
 
-  run_or_record(Run, Parameters, Index, RunOrRecord) :-
+  run_or_record(Run, Arguments, Index, RunOrRecord) :-
 
-    Parameters = {Limit, _Scale, NO_FILE, _Format} :
+    Arguments = {NO_FILE, Limit, _Scale, _Format} :
       Index = _,
       RunOrRecord = run(Run, Limit);
 
     Index = 0, 
-    Parameters = {Limit, Scale, File, Format}, File =\= NO_FILE :
+    Arguments = {File, Limit, Scale, Format}, File =\= NO_FILE :
       RunOrRecord = run(Run, File, Limit, Scale, Format);
 
     Index > 0, 
-    Parameters = {Limit, Scale, File, Format}, File =\= NO_FILE :
+    Arguments = {File, Limit, Scale, Format}, File =\= NO_FILE :
       RunOrRecord = run(Run, IndexedFile?, Limit, Scale, Format) |
 	utils#append_strings([File,"_",Index], IndexedFile).
 
 
-prepare_parameters(VOutcome, RunParameters, Parameters, FileName, VPOutcome) :-
+prepare_arguments(VOutcome, ArgumentTuple, Arguments, FileName, VPOutcome) :-
 
     VOutcome =?= done :
-      Parameters = {L?, S?, FileName?, Format?} |
-	goal_compiler#term(RunParameters, {Limit, Scale, File, Format}),
-	file_is_string_or_none(Format, File, FileName, E1, E2),
+      Arguments = {FileName?, L?, S?, Format?} |
+	goal_compiler#term(ArgumentTuple, {File, Limit, Scale, Format}),
+	file_is_string_or_none(ArgumentTuple, File, FileName, E1, E2),
 	validate_format(Format, E2, []),
-	evaluate_parameters;
+	evaluate_arguments;
 
     VOutcome =\= done :
-      RunParameters = _,
+      ArgumentTuple = _,
       FileName = "",
-      Parameters = {0.0, 1.0, NO_FILE, none},
+      Arguments = {NO_FILE, 0.0, 1.0, none},
       VPOutcome = VOutcome.
 
-  file_is_string_or_none(Format, File, FileName, E, NE) :-
-
-    File =?= NO_FILE,
-    Format =?= atrace :
-      FileName = DEFAULT_FILE,
-      E = NE;
-
-    File =?= NO_FILE,
-    Format =\= atrace :
-      FileName = NO_FILE,
-      E = NE;
+  file_is_string_or_none(ArgumentTuple, File, FileName, E, NE) :-
 
     File =\= NO_FILE,
     convert_to_string(File, FileName^) :
-      Format = _,
+      ArgumentTuple = _,
+      E = NE;
+
+    File =?= NO_FILE,
+    arg(3, ArgumentTuple, DEFAULT_SCALE),
+    arg(4, ArgumentTuple, DEFAULT_FORMAT) :
+      FileName = NO_FILE,
+      E = NE;
+
+    File =?= NO_FILE,
+    otherwise :
+      ArgumentTuple = _,
+      FileName = DEFAULT_FILE,
       E = NE;
 
     otherwise :
-      Format = _,
+      ArgumentTuple = _,
       FileName = File,
       E = [file_name_must_be_string(File) | NE].
 
-  evaluate_parameters(E1, Limit, L, Scale, S, VPOutcome) :-
+  evaluate_arguments(E1, Limit, L, Scale, S, VPOutcome) :-
 
     E1 =\= [] :
       Limit = _,
       Scale = _,
       L = DEFAULT_LIMIT,
       S = DEFAULT_SCALE,
-      VPOutcome = failed(parameter_error(E1));
+      VPOutcome = failed(argument_error(E1));
 
     E1 = [],
     convert_to_real(Limit, Limit'),
@@ -1202,13 +1278,12 @@ start_computation(Requests0, Events, FromSub, SId) :-
 	computation_server # computation(Requests?, CCC, Domain?, Events).
 
 
-monitor_run(Events, FromSub, Status, ExternalEvents, Requests, Outcome) :-
+monitor_run(Events, FromSub, Status, ExternalEvents, Requests, Outcome)
+		+ (Idle = _, Timeout = _) :-
 
     unknown(Events),
     known(Status) :
-      ExternalEvents = _,
-      FromSub = _ |
-	abort_run,
+      Timeout = _ |
 	handle_status;
 
 % Ignore requests from subordinate computation.
@@ -1232,16 +1307,19 @@ monitor_run(Events, FromSub, Status, ExternalEvents, Requests, Outcome) :-
 
 % Do not accept links from subordinate computation.
 %    FromSub ? Link,
+%    Link =?= link(Name, _, _)
 
 % Do not accept linked from subordinate computation.
 %    FromSub ? Linked,
-%    Linked = linked(_, _, _) |                  /* from sub-computation */
+%    Linked = linked(_, _, _)
 
     ExternalEvents ? aborted :
       Events = _,
       ExternalEvents' = _,
-      Status = _,
       FromSub = _,
+      Idle = _,
+      Status = _,
+      Timeout = _,
       Outcome = ng(aborted_run) |
 	abort_run;
 
@@ -1254,30 +1332,54 @@ monitor_run(Events, FromSub, Status, ExternalEvents, Requests, Outcome) :-
 
     Events =?= [] :
       Events' = _ |
-	self.
+	self;
 
-  handle_status(Status, Outcome) :-
+    known(Timeout) :
+      Events = _,
+      ExternalEvents = _,
+      FromSub = _,
+      Status = _,
+	Outcome = Idle |
+	abort_run.
 
-    Status =?= [] :
-      Outcome = done;
+handle_status(Events, FromSub, Status, ExternalEvents, Requests, Outcome,
+		Idle) :-
 
-    Status =?= [Done | _] :
-      Outcome = Done;
+    Status = [] :
+      Events = _,
+      ExternalEvents = _,
+      FromSub = _,
+      Idle = _,
+      Outcome = done |
+	abort_run;
+
+    Status ? Idle', Idle' =?= idle(_) :
+      Idle = _ |
+	processor # machine(idle_wait(Timeout), _Ok),
+	monitor_run;
+
+    Status =?= [Status' | _], Status' =\= idle(_) |
+	self;
 
     Status =\= [_ | _], Status =\= [] :
-      Outcome = Status.
-
+      Events = _,
+      ExternalEvents = _,
+      FromSub = _,
+      Idle = _,
+      Outcome = Status |
+	abort_run.
 
 handle_computation_event(Events, FromSub, Status, ExternalEvents,
-			 Requests, Outcome, Event) :-
+			 Requests, Outcome, Event, Timeout, Idle) :-
 
     Event =?= failed(Where, What) :
       Events = _,
       ExternalEvents = _,
       FromSub = _,
       FromSub = _,
-      Requests = _,
-      Status = _ |
+      Idle = _,
+      Status = _,
+      Timeout = _ |
 	edit_where,
 	edit_what,
 	abort_run;	% fix to post-analyze
@@ -1287,8 +1389,9 @@ handle_computation_event(Events, FromSub, Status, ExternalEvents,
       ExternalEvents = _,
       FromSub = _,
       FromSub = _,
-      Requests = _,
+      Idle = _,
       Status = _,
+      Timeout = _,
       Outcome = done |
 	abort_run;
 
