@@ -4,9 +4,9 @@ FCP tokenizer
 Michael Hirsch, Marc Rosen, Muli Safra, Bill Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:03:08 $
+		       	$Date: 2006/01/12 21:46:28 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/system/parse/tokenize.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -14,7 +14,6 @@ Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
 */
 
 -export([characters/2]).
--mode(trust).
 -language([evaluate, compound, colon]).
 
 procedure characters([Integer], [Token]).
@@ -25,7 +24,6 @@ Token ::= Number ; String ; Nil ;
 	  overflow(String).
 Functor ::= Variable ; String.
 Variable ::= {`"`", String} ; {`"?", String}.
-
 
 characters(Chars,Tokens) :-
 	monitor_functions # monitor_events(Done, Abort),
@@ -141,7 +139,10 @@ tokenizer(Cs, Tokens, Done, Abort) :-
 
     Compound("-");
 
-    Simple(".");
+    Cs ? C, C =:= ascii(".") :
+      Tokens ! Token? |
+	leading_point(Cs', Cs'', Token),
+	tokenizer;
 
     Cs ? C, C =:= ascii("/"),
     Cs' ? Asterisk |			% "/*"
@@ -574,45 +575,145 @@ construct_q_symbol(Next, Q, SymCs, Result) :-
       Result = string('', Q) .
 
 
+leading_point(Cs1, Cs2, Token) :-
+
+    Cs1 ? C,
+    ascii("0") =< C, C =< ascii("9") |		% C in "0" ... "9"
+ 	get_number([Period, C | Cs1'], Cs2, Tail, Tail, Token);
+
+    otherwise :
+      Cs1 = Cs2,
+      Token = ".".
+
 get_number(Cs1, Cs2, Head, Tail, Number) :-
 
     Cs1 ? Period,
     Cs1' ? C,
     ascii("0") =< C, C =< ascii("9") :		% C in "0" ... "9"
-      Tail = [Period, C | Tail''] |
-	get_digits(Cs1'', Cs2, Tail'' ,[]),
-	convert_fraction(Cs2, Head, Number);
+      Tail = [Period, C | Tail'] |
+	get_digits(Cs1'', Cs1''', Tail', []),
+	list_to_string(Head, String),
+	convert_real(String, Fraction),
+	get_exponent(Cs1''', Cs2, EList),
+	convert_float(String, Fraction, EList, Number);
+
+    otherwise :
+      Tail = [] |
+	list_to_string(Head, String),
+	convert_integer(String, Integer),
+	get_exponent(Cs1, Cs2, EList),
+	convert_float(String, Integer, EList, Number).	
+
+
+get_exponent(Cs1, Cs2, EList) :-
+
+    Cs1 ? E, E =:= ascii("e") :
+      EList ! E |
+	get_signed_exponent(Cs1', Cs2, EList');
+
+    Cs1 ? E, E =:= ascii("E") :
+      EList ! E |
+	get_signed_exponent(Cs1', Cs2, EList');
 
     otherwise :
       Cs1 = Cs2,
-      Tail = [] |
-	convert_integer(Head, Number).
+      EList = [].
+
+  get_signed_exponent(Cs1, Cs2, EList) :-
+
+    Cs1 ? C,
+    ascii("0") =< C, C =< ascii("9") :		% C in "0" ... "9"
+      EList = [C | Tail] |
+	get_digits(Cs1', Cs2, Tail, []);
+
+    Cs1 ? Minus, Minus =:= ascii("-"),
+    Cs1' ? C,
+    ascii("0") =< C, C =< ascii("9") :		% C in "0" ... "9"
+      EList = [Minus, C | Tail] |
+	get_digits(Cs1'', Cs2, Tail, []);
+
+    Cs1 ? Plus, Plus =:= ascii("+"),
+    Cs1' ? C,
+    ascii("0") =< C, C =< ascii("9") :		% C in "0" ... "9"
+      EList = [Plus, C | Tail] |
+	get_digits(Cs1'', Cs2, Tail, []);
+
+    otherwise :
+      Cs1 = Cs2,
+      EList = [].
 
 
-convert_integer(List, Result) :-
+convert_integer(String, Result) :-
 
-    list_to_string(List, String),
-    convert_to_integer(String, Result^) |
-	true;
+    convert_to_integer(String, Integer) :
+      Result = Integer;
+
+    String =?= "" :
+      Result = 0;
 
     otherwise |
-	numeric_overflow(List, Result).
+	numeric_overflow(String, Result).
+
+    
+convert_real(String, Result) :-
+
+    convert_to_real(String, Real) :
+      Result = Real;
+
+    otherwise |
+	numeric_overflow(String, Result).
 
 
-convert_fraction(Next, List, Result) :-
+convert_float(VString, Value, EList, Number) :-
 
-    known(Next),
-    list_to_string(List, String),
-    convert_to_real(String, Result^) |
-	true;
+    Value =?= overflow(_String) |
+	real_overflow(VString, EList, Number);
 
-    otherwise : Next = _ |
-	numeric_overflow(List, Result).
+    Value =\= overflow(_),
+    EList = [] :
+      VString = _,
+      Value = Number;
+
+    Value =\= overflow(_),
+    EList ? _E |
+	list_to_string(EList', EString),
+	convert_integer(EString?, EValue),
+	compute_scaled_value(VString, Value, EList, Number, EValue).
 
 
-numeric_overflow(List, Result) :-
-    list_to_string(List, String) :
+compute_scaled_value(VString, Value, EList, Number, EValue) :-
+
+    EValue =?= overflow(_) :		% strange case!
+      Value = _ |
+	real_overflow(VString, EList, Number);
+      
+    EValue =\= overflow(_),
+    convert_to_real(10, Ten) |
+	Scaled := Value*pow(Ten, EValue),
+	check_scaled_value(VString, Scaled, EList, Number).
+
+  check_scaled_value(VString, Scaled, EList, Number) :-
+
+    convert_to_string(Scaled, String),
+    String =\= "inf" :
+      EList = _,
+      VString = _,
+      Scaled = Number;
+      
+    otherwise :
+      Scaled = _ |
+	real_overflow(VString, EList, Number).
+
+
+numeric_overflow(String, Result) :-
+    true :
       Result = overflow(String) .
+
+
+real_overflow(String, List, Result) :-
+    string_to_dlist(String, List', List) :
+      Result = overflow(String'?) |
+	list_to_string(List', String').
 
 
 get_digits(Cs1, Cs2, NumberCs, Tail) :-
