@@ -6,9 +6,9 @@ Stream server
  Added distributor, Ehud Shapiro, 15-09-85
 
 Last update by		$Author: bill $
-		       	$Date: 1999/07/09 07:02:50 $
+		       	$Date: 2006/01/22 10:28:49 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.1 $
+			$Revision: 1.2 $
 			$Source: /home/qiana/Repository/Logix/stream.cp,v $
 
 Copyright (C) 1985, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -252,6 +252,10 @@ key_index(Key, N, Index) :-
     Key < 1,
     Index^ := integer(1-Key) \ N + 1 |
 	true;
+
+    real(Key),
+    convert_to_string(Key, Key') |
+	self;
 
     Key = S(I), I < 1,
     Index^ := (string_hash(S) + integer(1-I)) \ N + 1 |
