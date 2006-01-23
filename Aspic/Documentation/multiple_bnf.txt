@@ -2,139 +2,169 @@ BNF for calls to multiple#run(<declarations>,<status>) .
 
 
 <declarations> ::= <file_name>
-                   "<run_declarations>"
-                   '<run_declarations>'
+		   "<run_declarations>"
+		   '<run_declarations>'
 
-<run_declarations> ::= <process_declaration>
-		       <process_declaration> . <run_declarations>
+<run_declarations> ::= <run_declaration>
+		       <run_declaration> . <run_declarations>
 
-<process_declaration> ::= <variable_list> : <run_parameters> | <call_list>
+<run_declaration> ::= <default_variables>
+		      <default_arguments>
+		      <process_declaration>
+
+<default_variables> ::= variables
+			<variable_list>
+
+<default_arguments> ::= <run_arguments>
+
+<process_declaration> ::= <call_list>
+                          run | <call_list>
+			  <variable_list> | <call_list>
+			  <run_arguments> | <call_list>
+			  <variable_list> : <run_arguments> | <call_list>
 
 <variable_list> ::= <variable_list_element>
-                    <variable_list_element> , <variable_list>
+		    <variable_list_element> , <variable_list>
 
-<variable_list_element> ::= <public_variable_name>(<expression_list>)
+<variable_list_element> ::= <public_variable_name> = <expression>
+			    <public_variable_name>(<expression_list>)
 
 <expression_list> ::= <expression_list_element>
 		      <expression_list_element> , <expression_list>
 
 <expression_list_element> ::= <constant>
-                              <list>
-                              <expression>
+			      <list>
+			      <expression>
 
-<run_parameters> ::= <named_run_parameters>
-                     <simple_run_parameters>
+<run_arguments> ::= <named_run_arguments>
+		    <simple_run_arguments>
 
-<named_run_parameters> ::= <named_parameter>
-                           <named_parameter> , <named_run_parameters>
+<named_run_arguments> ::= <named_argument>
+			  <named_argument> , <named_run_arguments>
 
-<named_parameter> ::= limit(<expression>)
-                      file(<file_name>)
-                      scale(<expression>)
-                      format(<format>)
+<named_argument> ::= limit(<limit>)
+		     file(<file_name>)
+		     scale(<scale>)
+		     format(<format>)
 
-<simple_run_parameters> ::= <limit>
-			    <limit> , <scale>
-			    <limit> , <file_name>
-			    <limit> , <file_name> , <scale>
-			    <limit> , <file_name> , <scale>, <format>
+<simple_run_arguments> ::= run
+			   run(<limit>)
+			   record
+			   record(<file_name>)
+			   record(<file_name>, <limit>)
+			   record(<file_name>, <limit>, <scale>)
+			   record(<file_name>, <limit>, <scale>, <format>)
 
-<limit> ::= <numeric_constant>
-            <expression>
+<limit> ::= <expression>
 
-<scale> ::= <numeric_constant>
-            <expression>
+<scale> ::= <expression>
 
 <file_name> ::= <string>
-                <public_variable_name>
+		<public_variable_name>
 
 <format> ::= none
 	     process
 	     creator
 	     full
-             ambient
-             atrace
-             <public_variable_name>
+	     ambient
+	     atrace
+	     <public_variable_name>
 
-<call_list> ::= <quantified_process_set>
+<call_list> ::= <call_list_element>
+		<call_list> , <call_list_element>
 
-<evaluation> ::= <public_variable_name> := <expression>
+<call_list_element> ::= <quantified_process_set>
+		        <public_variable_name> := <expression>
 
-<integer_expresion> ::= <expression>
 
 <expression> ::= <additive_expression>
-                 "<real_value>"
 
 <additive_expression> ::= <multiplicative_expression>
-                          <additive_expression> + <multiplicative_expression>
-                          <additive_expression> - <multiplicative_expression>
+			  <additive_expression> + <multiplicative_expression>
+			  <additive_expression> - <multiplicative_expression>
 
 <multiplicative_expression> ::=
-                          <bitwise_or_expression>
-                          <multiplicative_expression> * <bitwise_or_expression>
-                          <multiplicative_expression> / <bitwise_or_expression>
-                          <multiplicative_expression> \ <bitwise_or_expression>
+			  <bitwise_or_expression>
+			  <multiplicative_expression> * <bitwise_or_unary>
+			  <multiplicative_expression> / <bitwise_or_unary>
+			  <multiplicative_expression> \ <bitwise_or_unary>
+			  <unary_expression>
+
+<bitwise_or_unary> ::= <integer_expression>
+		       <unary_expression>
+
+<integer_expression> ::= <bitwise_or_expression>
 
 <bitwise_or_expression> ::=
-                          <bitwise_and_expression>
-                          <bitwise_or_expression> \/ <bitwise_and_expression>
+			  <bitwise_and_expression>
+			  <bitwise_or_expression> \/ <bitwise_and_expression>
 
 <bitwise_and_expression> ::=
-                          <unary_expression>
-                          <bitwise_and_expression> /\ <unary_expression>
+			  <integer_expression>
+			  <bitwise_and_expression> /\ <integer_unary>
+
+<integer_unary>      ::= ~<integer_expression>
+			 +<integer_expression>
+			 -<integer_expression>
+
+<integer_expression> ::= <signed_integer_constant>
+			 (<bitwise_or_expression>)
+			 <integer_valued_function>
+
+<integer_valued_function> ::=
+			 abs(<integer_valued_expression>)
+			 integer(<expression>)
+			 length(<string>)
+			 length(<public_variable_name>)
+			 max(<integer_expression>, <integer_expression>)
+			 min(<integer_expression>, <integer_expression>)
+			 mod(<integer_expression>, <integer_expression>)
+			 pow(<integer_expression>, <integer_expression>)
+			 round(<expression>)
 
 <unary_expression> ::= <primary_expression>
-                       + <primary_expression>
-                       - <primary_expression>
-                       ~ <primary_expression>
+		       + <primary_expression>
+		       - <primary_expression>
 
 <primary_expression> ::= <public_variable_name>
-                         <signed_numeric_constant>
-                         <function_call>
-                         ( <additive_expression> )
+			 <numeric_constant>
+			 <function_call>
+			 (<additive_expression>)
 
-<function_call> ::= max(<expression>, <expression>)
-                    min(<expression>, <expression>)
-                    pow(<expression>, <expression>)
-                    log(<expression>, <expression>)
-                    abs(<expression>)
-                    integer(<expression>)
-                    round(<expression>)
-                    real(<expression>)
-                    sin(<expression>)
-                    cos(<expression>)
-                    tan(<expression>)
-                    sqrt(<expression>)
-                    asin(<expression>)
-                    acos(<expression>)
-                    atan(<expression>)
-                    exp(<expression>)
-                    ln(<expression>)
-                    random
-                    length(<string>)
-		    length(<public_variable_name>)
+<function_call> ::= <integer_valued_function>
+		    max(<expression>, <expression>)
+		    min(<expression>, <expression>)
+		    pow(<expression>, <expression>)
+		    log(<expression>, <expression>)
+		    abs(<expression>)
+		    real(<expression>)
+		    cos(<expression>)
+		    sin(<expression>)
+		    tan(<expression>)
+		    sqrt(<expression>)
+		    acos(<expression>)
+		    asin(<expression>)
+		    atan(<expression>)
+		    exp(<expression>)
+		    ln(<expression>)
+		    random
 
 <status> ::= [<outcome> | <status>]
-             []
+	     []
 
 <outcome> ::= done
-              done @ <fixed_point_constant> : seconds = <integer_constant>
-              false(<reason for failure>)
-              idle(<fixed_point_constant>)
+	      done @ <fixed_point_constant> : seconds = <integer_constant>
+	      false(<reason for failure>)
+	      idle(<fixed_point_constant>)
 
 <public_variable_name> ::= <upper_case_alphabetic_character>
-                           <public_variable_name><alpha_numeric_character>
-                           <public_variable_name>_
+			   <public_variable_name><alpha_numeric_character>
+			   <public_variable_name>_
 
 Notes:
 
-See SpiFcp/Documentation/CONSTANTS.txt for <signed_numeric_constant> and
-<numeric_constant> .
+See SpiFcp/Documentation/CONSTANTS.txt for <signed_numeric_constant>,
+<signed_integer_constant>, <numeric_constant>, <fixed_point_constant>,
+<integer_constant> and <constant> .
 
 See SpiFcp/Documentation/repeat.txt for <quantified_process_set> .
-
-The ambiguity between <scale> and <file_name> in the second form of
-<simple_run_parameters> is resolved by preferring <file_name> whenever,
-the second argument is a <string> or a <public_variable_name>.  When you
-need a <scale> in that form whose value is a <public_variable_name> (say
-PV), write PV+0 .

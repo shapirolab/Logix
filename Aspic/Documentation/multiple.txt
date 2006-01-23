@@ -1,26 +1,54 @@
 The process multiple may be used to run sequential processes with
 a single command.
 
-For the definition of bracketed items (e.g. <declarations>), see
-multiple-bnf.txt.
+For the syntax of bracketed items (e.g. <declarations>), see multiple-bnf.txt.
+
+
+Calling multiple
+----------------
 
 The call to multiple has two arguments:
 
     multiple#run(Declarations, Reports)
 
-1.The first argument declares the multiple runs:
+1.The first argument, a <declarations>, declares the multiple runs:
 
    a. a text file name - the data of the file is a <run_declarations> ;
 
-   b. an immediate quoted string - a <declarations> .
+   b. an immediate quoted string.
 
-2. The second arguments is A stream of status reports, giving the state
+2. The second argument is a stream of status reports, giving the state
    of each run at termination; the stream is closed after the last run.
+
+A <run_declaration> may specify <default_variables> or <default_arguments> .
+When the corresponding term is omitted from a <process_declaration>, the
+last previously defined default is used instead (see example 3 below).
+
+When the <run_arguments> of a <process_declaration> does not specify
+some argument, its default term is used:
+
+  * the initial <default_variables> is nil - no variables are defined;
+  * the initial <default_arguments> are:
+    * no file,
+    * a very large <limit> (32000000),
+    * <scale> = 1,
+    * <format> = none.
+
+The initial defaults may be reset by a <process_declaration> which is
+<default_variables> or <default_arguments> .
+Note that the <process_declaration>  run  resets the initial state of the
+<default_arguments>, while the <process_declaration>  record  has the same
+effect, except that the default <file_name> is set to "record".
+
+
+The multiple algorithm
+----------------------
 
 The <run_declarations> are parsed, and a list of runs is prepared.
 
-For each <process_declarations> N runs are prepared, where the number
-of arguments in each <tell> is a multiplier in the product N.
+For each <process_declaration> N runs are prepared, where the number of
+<expression>s in the <expression_list> for each <variable_list_element> is
+a multiplier in the product N.
 
 For each run:
 
@@ -32,8 +60,9 @@ For each run:
       <expression> is compiled.
 
       When the expression involves an operator or function, it is evaluated
-      - this may result in failure, when the <expression> includes a 
-      <public_variable_name>.
+      - this may result in failure, when the <expression> includes a
+      <public_variable_name> which is  uninstantiated or improperly
+      instantiated.
 
    c. Each <public_variable_name> defined for the run is un-bound.
 
@@ -45,15 +74,16 @@ For each run:
 
         (1) conserved from the previous run (e.g. A(A));
 
-        (2) unified with some other <public_variable_name> (e.g. A(B));
+        (2) unified with some other, previously defined
+            <public_variable_name> (e.g. A(B));
 
         (3) or undefined (e.g.A(_)).
 
       In those three cases, the <expression> is NOT evaluated.
 
-   e. The <run_parameters> are compiled:
+   e. The <run_arguments> are compiled:
 
-      (1) The <expression>s for the <limit> and <scale> paremeters are 
+      (1) The <expression>s for the <limit> and <scale> parameters are 
           evaluated when the <expression> involves an  operator or a
           function - this may result in failure, when the <expression>
           includes a <public_variable_name> which is uninstantiated or
@@ -85,7 +115,7 @@ For each run:
 
 2. Execution:
 
-   a. The evaluated <run_parameters> are applied, preparing to run
+   a. The evaluated <run_arguments> are applied, preparing to run
       or record the <call_list> (see SpiFcp/Documentation/record.txt).
 
    b. The compiled <call_list> is executed.
@@ -116,7 +146,7 @@ For each run:
 Examples of <declarations> files
 --------------------------------
 
-1. X([]):1|utils#integer_to_dlist(69,List,X)
+1. X([]):run(1)|utils#integer_to_dlist(69,List,X)
 
    The single process terminates with "done".
 
@@ -125,19 +155,29 @@ Examples of <declarations> files
    The first process terminates "idle(0.0)" since E is initially
    uninstantiated.
    The second process terminates "failed(utils # evaluate, 1 =\= 2)".
-   Note that the first process "records" in the file named record,
-   while the second "records" in record_1.
 
-3. Base(10),L(2,3,4):limit(L*Base)|circadian#go
+3. Base=10, L(2,3,4) : record(ff, L*Base) | circadian#go
+
+   or
+
+   Base(10), L(2,3,4) . limit(L*Base) , file(ff) | circadian#go
+
+   or
+
+   Base(10), L(2,3,4) . record(ff) . limit(L*Base) | circadian#go
+
+   etc.
 
    The first process terminates "done @ 20.001186 : seconds = 12".
    The second process terminates "done @ 30.00204 : seconds = 22".
    The third process terminates "done @ 40.003322 : seconds = 38".
 
+   The records are in files, ff, ff_1, ff_2, respectively.
+
 4. To execute all of the modules in Aspic-release/BioSpi/Examples:
 
-   Module(eg1,eg3):10|Module#"Cytoplasm".
+   Module(eg1,eg3):run(10)|Module#"Cytoplasm".
    Module(porin,symporter_comm,complex_merge,receptor_endo,vesicle_merge,
-          complex,vesicle):10|Module#"System".
+          complex,vesicle):run(10)|Module#"System".
 
 Note that multiple works for both languages, spifcp and biospi.
