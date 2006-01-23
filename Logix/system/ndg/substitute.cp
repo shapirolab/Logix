@@ -1,5 +1,5 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/substitute.cp,v 1.1 1999/07/09 07:02:58 bill Exp $ */
--export([substitute/3]).
+/* $Header: /home/qiana/Repository/Logix/system/ndg/substitute.cp,v 1.2 2006/01/23 11:47:07 bill Exp $ */
+-export([substitute/3, replace_reals/6]).
 -language(compound).
 -mode(trust).
 
@@ -133,3 +133,78 @@ rep_tuple(Rep, Ar, Tuple, TupleOut) :-
 
     Ar = 0 : Rep = _, Tuple = _, TupleOut = _ .
 
+
+replace_reals(AIn, TIn, BIn, AOut, TOut, BOut) :-
+
+	stream#hash_table(Hash?),
+	wrap_requests(AIn, AOut, Requests?, Hash),
+	convert_reals(TIn, TOut, Requests, BRequests),
+	convert_reals(BIn, BOut, BRequests, []).
+
+wrap_requests(AIn, AOut, Requests, Hash) + (Index = 0) :-
+
+    Requests ? {Real, Variable} :
+      Hash ! lookup(Real, NewValue, OldValue, Reply),
+      Variable = `ndg_real(NewValue?) |
+	insert_converts(Real, Reply, OldValue, NewValue,
+			Index, Index', AOut, AOut'),
+	self;
+
+    Requests =?= [] :
+      Index = _,
+      Hash = [],
+      AOut = AIn.
+
+insert_converts(Real, Reply, OldValue, NewValue,
+		Index, NewIndex, AOut, NewAOut) :-
+
+    Reply = old :
+      Real = _,
+      AOut = NewAOut,
+      Index = NewIndex,
+      OldValue = NewValue;
+
+    Reply = new,
+    Index++,
+    convert_to_string(Real, String) :
+      OldValue = _,
+      AOut = [convert_to_real(String, `(ndg_real(Index))) | NewAOut],
+      NewIndex = Index',
+      NewValue = Index.
+
+
+convert_reals(TIn, TOut, Requests, NewRequests) :-
+
+    TIn ? Tell :
+      TOut ! Tell' |
+	convert_reals(Tell, Tell', Requests, Requests'),
+	convert_reals;
+
+    tuple(TIn),
+    Arity := arity(TIn),
+    make_tuple(Arity, TIn') :
+      TIn' = TOut |
+	replace_tuple(TIn, TOut, Requests, NewRequests, Arity);
+
+    real(TIn) :
+      Requests ! {TIn, Variable},
+      Requests' = NewRequests,
+      TOut = Variable? ;
+
+    otherwise :
+      TIn = TOut,
+      Requests = NewRequests.
+
+
+replace_tuple(TIn, TOut, Requests, NewRequests, Arity) :-
+
+    Arity-- > 0,
+    arg(Arity, TIn, Argument),
+    arg(Arity, TOut, NewArgument) |
+	convert_reals(Argument, NewArgument, NewRequests', NewRequests),
+	self;
+
+    Arity =< 0 :
+      TIn = _,
+      TOut = _,
+      Requests = NewRequests.
