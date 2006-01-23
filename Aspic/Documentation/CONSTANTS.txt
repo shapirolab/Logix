@@ -40,28 +40,25 @@ Below is a BNF description of the constants of the Logix languages.
                               -<numeric_constant>
 
 <numeric_constant> ::= <integer_constant>
-                       <real_constant>
+		       <real_constant>
 
 <integer_constant> ::= <numeric_character>
                        <numeric_character><integer_constant>
 
-<numeric_constant> ::= <integer_constant>
-                       <real_constant>
-
-<integer_constant> ::= <numeric_character>
-                       <numeric_character><integer_constant>
+<fixed_point_constant> ::= <integer_constant>.<integer_constant>
 
 <real_constant> ::= <fixed_point_constant>
-                    <fixed_point_constant><exponent>
+		    <fixed_point_constant><exponent>
 
-<fixed_pont_constant> ::= <integer_constant>.<integer_constant>
+<exponent> ::= <exponent_letter>
+               <exponent_letter><signed_integer_constant>
 
-<exponent> ::= e<signed_integer>
-	       E<signed_integer>
+<exponent_letter> ::= E
+                      e
 
-<signed_integer> ::= <integer_constant>
-		     +<integer_constant>
-		     -<integer_constant>
+<signed_integer_constant> ::= <integer_constant>
+			      +<integer_constant>
+			      -<integer_constant>
 
 
 Notes:
