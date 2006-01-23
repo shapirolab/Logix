@@ -1,52 +1,75 @@
-The repeat process can run a quantified set of Stochastic Pi Calculus
-(spifcp)
-processes.
+The repeat process can run a quantified set of repeated goals, including
+Ambient Stochastic Pi Calculus (biospi, spifcp) processes.
 
-    repeat#run(<quantified process set>)
+    repeat#run(<quantified_process_set>)
 
 where:
 
-    <quantified process set> ::=
-        <remote procedure call>
-        <repetition> * <remote procedure call>
-        [<process set>]
-        <repetition> * [<process set>]
-
-    <process set> ::=
-        <quantified process set>
-        <process set> , <quantified process set>
-
-    <remote procedure call> ::=
-        <service name> # <goal>
-	<service name> # [<goal list>]
-        <service name> # <remote_procedure_call>
-	
-    <goal list> ::=
+    <quantified_process_set> ::=
         <repeated goal>
-        <repeated goal> , <goal list>
+        <repeated goal> , <quantified_process_set>
 
     <repeated goal> ::=
         <goal>
-        <repetition> * <goal>
+        <repetition>*<goal>
+
+    <goal> ::=
+        <remote procedure call>
+        (<quantified_process_set>)
+        [<quantified_process_set>]
+        <predicate>
+
+    <remote procedure call> ::=
+        <service name> # <repeated goal>
+        <service name> # (<quantified_process_set>)
+	<service name> # [<quantified_process_set>]
 
     <repetition> ::= <integer>
 
+    <predicate> ::=
+        <string>
+        <string>(<argument_list>)
+
+    <argument_list> ::=
+        <logix_term>
+        <logix_term> , <argument_list>
+
+
+Notes:
+-----
+
 A negative <repetition> is treated as zero.
+
+The logix system provides several standard predicates.  These include:
+
+    true
+    string_length(<string>, <positive_integer>)
+    string_to_dlist(<string>, <character_list>, <logix_term>)
+    list_to_string(<character_list>, <string>)
+    nth_char(<string>, <character>)
+
+    all of the standard functions, where the fuction reply is an
+    additional argument - e.g. cos(<number>, Cosine_of_number).
+
+For a complete list, in a logix session enter:
+
+    attributes(system)
 
 
 Examples:
+--------
 
 1. repeat#run(64*dimerization#"A_PROTEIN")
 
-2. repeat#run([6*activator#"A_PROTEIN",activator#"A_GENE",
-                  repressor#"R_GENE"])
+2. repeat#run([activator#6*("A_PROTEIN","A_GENE"),
+               repressor#"R_GENE"])
 
-3. repeat#run([2*[activator#"A_GENE",3*repressor#"R_GENE"],
+3. repeat#run([2*(activator#"A_GENE",3*repressor#"R_GENE"),
                hysteresis#"MODULE"])
 
 This process is used by the run, record and trace macros (see record.txt).
 
-4. atrace(porinN#[4*"Mole", 2*"Cell"], file, 10)
+4. atrace(porinN#(4*"Mole", 2*"Cell"), file, 10)
 
    (See BioSpi/Examples, BioSpi/Documentation/user_macros.txt).
 
