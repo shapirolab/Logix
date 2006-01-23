@@ -4,9 +4,9 @@ SpiFcp Channel activity monitor
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/10/27 17:03:02 $
+                        $Date: 2006/01/23 12:06:37 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.27 $
+                        $Revision: 1.28 $
                         $Source: /home/qiana/Repository/Aspic/spi_monitor.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -469,9 +469,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 	fail(math_offset(OkMath));
 
     OkMath =?= true,
-    info(REALTIME, Start_real_time),
-    convert_to_real(0, Zero),
-    convert_to_real(MAXTIME, MaxTime) :
+    info(REALTIME, Start_real_time) :
       Waiter ! machine(idle_wait(Wakeup), _Ok),
       make_channel(Scheduler, Schedule) |
 	make_channel_anchor(based, BasedAnchor),
@@ -479,18 +477,18 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 	processor#Waiter?,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter',
 				Scheduler, _Recording, _Debug,
-				Zero, true, Wakeup,
+				0.0, true, Wakeup,
 				DefaultWeighter, Randomize,
-				{MaxTime, _State}, Start_real_time,
+				{MAXTIME, _State}, Start_real_time,
 				BasedAnchor, InstantaneousAnchor).
 
   make_channel_anchor(Name, Anchor) :-
 
-    convert_to_real(0, Zero) :
+    true :
       make_vector(CHANNEL_SIZE, Anchor, _),
       store_vector(SPI_BLOCKED, FALSE, Anchor),
       store_vector(SPI_CHANNEL_TYPE, SPI_CHANNEL_ANCHOR, Anchor),
-      store_vector(SPI_CHANNEL_RATE, Zero, Anchor),
+      store_vector(SPI_CHANNEL_RATE, 0.0, Anchor),
       store_vector(SPI_CHANNEL_REFS, 1, Anchor),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Anchor),
        make_vector(2, LinksS, _),
@@ -718,7 +716,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     /* Close the recording stream, and start a new one. */
     Schedule ? end_record(Stream),
-    convert_to_real(0, Now') :
+    Now' := 0.0 :
       Now = _,
       Record = [],
       Stream = Record'? |
@@ -1294,14 +1292,13 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
 
     we(Channel),
     bitwise_or(SPI_UNKNOWN, Randomize, ChannelType),
-    convert_to_real(0, Zero),
     arg(SPI_INDEX, SpiOffsets, SpiOffset), SpiOffset =\= unbound,
     arg(1, ComputeWeight, WeighterName) :
       execute(SpiOffset, {SPI_INDEX, WeighterName, WeighterIndex, Result}),
       make_vector(CHANNEL_SIZE, Channel, _),
       store_vector(SPI_BLOCKED, FALSE, Channel),
       store_vector(SPI_CHANNEL_TYPE, ChannelType, Channel),
-      store_vector(SPI_CHANNEL_RATE, Zero, Channel),
+      store_vector(SPI_CHANNEL_RATE, 0.0, Channel),
       store_vector(SPI_CHANNEL_REFS, 1, Channel),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Channel),
        make_vector(2, LinksS, _),
@@ -1325,13 +1322,12 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
 
     we(Channel),
     bitwise_or(SPI_UNKNOWN, Randomize, ChannelType),
-    convert_to_real(0, Zero),
     arg(SPI_INDEX, SpiOffsets, unbound),
     ComputeWeight =?= SPI_DEFAULT_WEIGHT_NAME(_) :
       make_vector(CHANNEL_SIZE, Channel, _),
       store_vector(SPI_BLOCKED, FALSE, Channel),
       store_vector(SPI_CHANNEL_TYPE, ChannelType, Channel),
-      store_vector(SPI_CHANNEL_RATE, Zero, Channel),
+      store_vector(SPI_CHANNEL_RATE, 0.0, Channel),
       store_vector(SPI_CHANNEL_REFS, 1, Channel),
       store_vector(SPI_SEND_ANCHOR, SendAnchor, Channel),
        make_vector(2, LinksS, _),
@@ -1373,7 +1369,7 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
 
     Result =?= true,
     convert_to_real(BaseRate, RealRate),
-    RealRate =< 0 :
+    RealRate =< 0.0 :
       BasedAnchor = _,
       InstantaneousAnchor = _,
       store_vector(SPI_CHANNEL_TYPE, SPI_SINK, Channel),
@@ -1382,7 +1378,7 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
 
     Result =?= true,
     convert_to_real(BaseRate, RealRate),
-    RealRate > 0 :
+    RealRate > 0.0 :
       InstantaneousAnchor = _,
       store_vector(SPI_CHANNEL_RATE, RealRate, Channel),
       Reply = Result,

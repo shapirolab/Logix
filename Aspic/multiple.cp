@@ -1,6 +1,6 @@
 -language([evaluate,compound,colon]).
 -export([run/2]).
--mode(trust).
+-mode(failsafe).
 
 AMBIENT_CONTROL => 1.
 
@@ -109,7 +109,10 @@ transform_terms(Terms, Declarations, Result) +
 
   classify_term(Term, Type) :-
 
-    string(Term) :
+    string(Term), Term =?= true :
+      Type = call;
+
+    string(Term),  Term =\= true :
       Type = reset;
 
     Term =?= (PreProcess | _) |
@@ -129,6 +132,9 @@ transform_terms(Terms, Declarations, Result) +
 
   classify_process_declaration(PreProcess, Type) :-
 
+    PreProcess =?= true :
+      Type = tcall;
+
     PreProcess =?= (_ : _) :
       Type = full;
 
@@ -141,8 +147,7 @@ transform_terms(Terms, Declarations, Result) +
         complete_process_classification(Type', Type).
 
     complete_process_classification(variables, vcall^).
-    complete_process_classification(arguments, acall^).
-    complete_process_classification(_, error^) :-
+    complete_process_classification(arguments, acall^) :-
       otherwise |
 	true.
 
@@ -156,13 +161,20 @@ transform_terms(Terms, Declarations, Result) +
       Type = variables;
 
     tuple(Term),
-    arg(1, Term, Functor), string(Functor),
-    string_length(Functor) > 2 : % not * nor # nor := nor variable
-      Type = arguments;
+    arg(1, Term, Functor), Functor =\= `_,
+    Functor =\= "=",
+    Functor =\= run, Functor =\= record, Functor =\= file,
+    Functor =\= limit, Functor =\= scale, Functor =\= format :
+      Type = call;
+
+    tuple(Term),
+    Term =?= (Name = Value) :
+      Term' = Name(Value) |
+	self;
 
     tuple(Term),
     otherwise :
-      Type = call.
+      Type = arguments.
 
 
 transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
@@ -173,7 +185,7 @@ transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
       Defaults = NewDefaults |
 	transform_variables(VariableList, VarList, Errors, ArgErrors),
 	transform_arguments + (Errors = ArgErrors, NextErrors = CallErrors),
-	transform_calls(CallList, GoalList, CallErrors, []);
+	transform_calls + (Errors = CallErrors);
 
     Type =?= vcall,
     Term =?= (VariableList | CallList),
@@ -181,7 +193,7 @@ transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
       Declaration = {VarList?, ArgumentTuple, GoalList?},
       Defaults = NewDefaults |
 	transform_variables + (NextErrors = CallErrors),
-	transform_calls(CallList, GoalList, CallErrors, []);
+	transform_calls + (Errors = CallErrors);
 
     Type =?= acall,
     Term =?= (RunArguments | CallList),
@@ -189,13 +201,18 @@ transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
       Declaration = {VarList, {File?, Limit?, Scale?, Format?}, GoalList?},
       Defaults = NewDefaults |
 	transform_arguments + (NextErrors = CallErrors),
-	transform_calls(CallList, GoalList, CallErrors, []);
+	transform_calls + (Errors =  CallErrors);
+
+    Type =?= tcall,
+    Term = (true | Term') :
+      Type' = call |
+	self;
 
     Type =?= call,
     Defaults =?= {VarList, ArgumentTuple} :
       Declaration = {VarList, ArgumentTuple, GoalList?},
       Defaults = NewDefaults |
-	transform_calls + (CallList = Term, NextErrors = []);
+	transform_calls + (CallList = Term);
 
     otherwise :
       Declaration = [] |
@@ -209,33 +226,38 @@ transform_term(Term, Type, Defaults, NewDefaults, Declaration, Errors) :-
 	comma_list_to_list(Term, VariableList),
 	transform_variables(VariableList, VarList, Errors, []);
 
-    Type = arguments,
+    Type =?= arguments,
     Defaults =?= {VarList, _ArgumentTuple} :
       ArgumentTuple = {File?, Limit?, Scale?, Format?},
       NewDefaults = {VarList, ArgumentTuple} |
 	transform_arguments + (RunArguments = Term, NextErrors = []);
 
-    Type = reset |
+    Type =?= reset |
 	reset_default;
 
-    Type = error :
+    Type =?= error :
       Term = _,
       Defaults = NewDefaults,
       Errors = invalid_declaration.
 
   reset_default(Term, Defaults, NewDefaults, Errors) :-
 
-    Term = run,
+    Term =?= all :
+      Defaults = _,
+      Errors = [],
+      NewDefaults = {DEFAULT_VARIABLES, DEFAULT_RUN};
+
+    Term =?= run,
     Defaults =?= {VarList, _ArgumentTuple} :
       Errors = [],
       NewDefaults = {VarList, DEFAULT_RUN};
 
-    Term = record,
+    Term =?= record,
     Defaults =?= {VarList, _ArgumentTuple} :
       Errors = [],
       NewDefaults = {VarList, DEFAULT_RECORD};
 
-    Term = variables,
+    Term =?= variables,
     Defaults =?= {_VarList, ArgumentTuple} :
       Errors = [],
       NewDefaults = {DEFAULT_VARIABLES, ArgumentTuple};
@@ -276,12 +298,12 @@ transform_named_argument_list(ArgumentList, Defaults,
 	unify_without_failure(Format, DFormat);
 
     ArgumentList ? file(Name),
-    ground(Name) :
+    known(Name) :
       File = Name |
 	self;
 
     ArgumentList ? limit(Expression),
-    ground(Expression) :
+    known(Expression) :
       Limit = Expression |
 	self;
 
@@ -343,7 +365,8 @@ transform_named_argument_list(ArgumentList, Defaults,
       Errors ! invalid_format(Other) |
         self;
 
-    ArgumentList ? Other :
+    ArgumentList ? Other,
+    otherwise :
       Errors ! invalid_named_argument(Other) |
 	self.
 
@@ -421,19 +444,7 @@ transform_variables(VariableList, VarList, Errors, NextErrors) :-
 	validate_expression_list(ExpressionList, ValidExpressionList,
 				 Errors'', Errors'''),
 	self;
-/*
-    VariableList ? Element,
-    tuple(Element), Element =\= `_,
-    arity(Element) > 1, arg(1, Element, Name),
-    string(Name) :
-      VarList ! UniqueName?(ValidExpressionList?) |
-	validate_variable_name(Name, ValidName, Errors, Errors'),
-	unique_name(ValidName, UniqueName, Names, Names', Errors', Errors''),
-	utils#tuple_to_dlist(Element, [_ | ExpressionList], []),
-	validate_expression_list(ExpressionList, ValidExpressionList,
-				 Errors'', Errors'''),
-	self;
-*/
+
     VariableList ? Element,
     otherwise :
       Errors ! improper_variable_list_element(Element) |
@@ -445,27 +456,32 @@ transform_variables(VariableList, VarList, Errors, NextErrors) :-
     Names ? Other, Other =\= Name |
 	self;
 
-    Names ? Name :
+    Names ? Name,
+    Name =\= "_" :
       UniqueName = "_",
       Names' = _,
       NewNames = OldNames,
       Errors = [duplicate_variable_name(Name) | NextErrors];
+
+    Names ? Name,
+    Name =?= "_" |
+      self;
 
     Names =?= [] :
       UniqueName = Name,
       NewNames = [Name | OldNames],
       Errors = NextErrors.
 
-transform_calls(CallList, GoalList, Errors, NextErrors) :-
+transform_calls(CallList, GoalList, Errors) :-
 
         comma_list_to_list(CallList, CallList'),
         transform_call_list.
 
-transform_call_list(CallList, GoalList, Errors, NextErrors) :-
+transform_call_list(CallList, GoalList, Errors) :-
 
     CallList = [] :
       GoalList = [],
-      Errors = NextErrors;
+      Errors = [];
 
     CallList ? Evaluation,
     Evaluation =?= (Variable := Expression),
@@ -486,40 +502,8 @@ transform_call_list(CallList, GoalList, Errors, NextErrors) :-
     CallList ? Other,
     Other =\= (_ := _),
     otherwise :
-      GoalList ! Repeat |
-	transform_repeat_call(Other, Repeat, Errors, Errors'),
-	self;
-	
-    CallList ? BadCall,
-    otherwise :
-      Errors ! improper_call(BadCall) |
+      GoalList ! Other |
 	self.
-
-  transform_repeat_call(Call, Repeat, Errors, NextErrors) :-
-
-    Call =?= _#_ :
-      Repeat = Call,
-      Errors = NextErrors;
-
-    Call = Integer*Other :
-      Repeat = Integer*Repeated |
-	comma_list_to_list(Other, RepeatList),
-	transform_repeat_list;
-
-    otherwise :
-      Errors = [improper_call(Call) | NextErrors],
-      Repeat = [].
-
-  transform_repeat_list(RepeatList, Repeated, Errors, NextErrors) :-
-
-    RepeatList ? Goals :
-      Repeated ! RepeatCall |
-	transform_repeat_call(Goals, RepeatCall, Errors, Errors'),
-	self;
-
-    RepeatList =?= [] :
-      Repeated = [],
-      Errors = NextErrors.
 
 	
 run_declarations(Declarations, Stream, Hash, Result) :-
@@ -534,7 +518,7 @@ run_declarations(Declarations, Stream, Hash, Result) :-
 	self;
 	
     Result =?= ok,
-    Declarations = [] :
+    Declarations =?= [] :
       Hash = [],
       Stream = [];
 
@@ -571,13 +555,15 @@ extract_variables_sets(VarList, SetStack, StackLeft, StackRight) :-
 prepare_run(Declarations, Stream, Hash, VarSets) :-
 
     VarSets ? VariablesSet,
-    Declarations = [{_, ArgumentTuple, Goals} | _] :
+    Declarations =?= [{_, ArgumentTuple, Goals} | _] :
       Hash ! lookup(FileName?, Index, OldIndex, HashReply) |
 	bind_variables_expressions(VariablesSet, Triples),
 	complete_variable_bindings(Triples, Requests, Evaluates),
 	wrap_requests,
+%		(Requests, DictReqs, Done)
 	computation # DictReqs?,
 	get_file_index,
+%		(HashReply, Index, OldIndex)
 	run_evaluates,
 %		(Done, Evaluates, VOutcome)
 	prepare_arguments,
@@ -610,19 +596,28 @@ run_evaluates(Done, Evaluates, VOutcome) :-
     Evaluates =\= [] |
 	start_run([utils#Evaluates, 
 		   spi_status#get_status(cutoff_status,Status)],
-		  Status, VOutcome).
+		  Status, Outcome),
+	evaluates_outcome(Outcome, Evaluates, VOutcome).
+
+  evaluates_outcome(done, _, done^).
+  evaluates_outcome(Other, [Evaluates], ng(incomplete(Evaluates))^) :-
+    Other =\= done | true.
+  evaluates_outcome(_Other, Evaluates, ng(incomplete(Evaluates))^) :-
+    otherwise | true.
+
 
 prepare_goals(VPOutcome, Goals, CompiledGoals, CallGoals, Status) :-
 
     VPOutcome =?= done :
-      CallGoals = [spi_status#get_status(cutoff_status,Status) | CompiledGoals?] |
+      CallGoals = [spi_status#get_status(cutoff_status,Status)
+		  | CompiledGoals?] |
 	goal_compiler#term(Goals, CompiledGoals);
 
     VPOutcome =\= done :
       Goals = _,
       CallGoals = [],
-      CompiledGoals = [],
-      Status = VPOutcome .
+      Status = VPOutcome |
+	goal_compiler#term(Goals, CompiledGoals).
 
   get_file_index(HashReply, Index, OldIndex) :-
 
@@ -751,12 +746,12 @@ run_or_record_goals(VPOutcome, Arguments, CallGoals,
 	start_run(spi_record#RunOrRecord, Status, Outcome);
 
     VPOutcome =\= done,
-    known(CallGoals) :	% avoid conflicting use of 
+    known(CallGoals) :
       Index = _,
       Arguments = _,
-      RunOrRecord = _,
       Status = _,
-      Outcome = VPOutcome.
+      Outcome = VPOutcome,
+      RunOrRecord = run(CallGoals, DEFAULT_LIMIT).
 
   run_or_record(Run, Arguments, Index, RunOrRecord) :-
 
@@ -785,7 +780,7 @@ prepare_arguments(VOutcome, ArgumentTuple, Arguments, FileName, VPOutcome) :-
 
     VOutcome =\= done :
       ArgumentTuple = _,
-      FileName = "",
+      FileName = NO_FILE,
       Arguments = {NO_FILE, 0.0, 1.0, none},
       VPOutcome = VOutcome.
 
@@ -914,11 +909,21 @@ complete_variable_bindings(VariablesSet, Requests, Evaluates) :-
 comma_list_to_list(Items, List) :-
 
     Items = (Item, Items') :
-      List ! Item |
+      List ! Element? |
+	item_to_element,
 	self;
 
     otherwise :
-      List = [Items].
+      List = [Element?] |
+	item_to_element(Items, Element).
+
+  item_to_element(Item, Element) :-
+
+    Item =?= (Name = Value) :
+      Element = Name(Value);
+
+    otherwise :
+      Element = Item.
 
 validate_expression_list(Expressions, ValidExpressions, Errors, NextErrors) :-
 
@@ -1090,8 +1095,6 @@ validate_expression(Expression, ValidExpression, Errors, NextErrors) :-
       ValidExpression = Expression,
       Errors = NextErrors;
 
-/************************/
-
     otherwise :
       ValidExpression = `"_",
       Errors = [invalid_expression(Expression) |NextErrors].
@@ -1256,7 +1259,7 @@ validate_variable_name(Name, ValidName, Errors, NextErrors) :-
       ValidName = "_",
       Errors = [invalid_variable_name_character(N, in(Name)) | NextErrors].
 
-/*************************************************************************/
+/****************************** Computations *******************************/
 
 start_run(Run, Status, Outcome) :-
 
