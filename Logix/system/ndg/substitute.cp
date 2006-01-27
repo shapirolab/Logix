@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/Logix/system/ndg/substitute.cp,v 1.2 2006/01/23 11:47:07 bill Exp $ */
+/* $Header: /home/qiana/Repository/Logix/system/ndg/substitute.cp,v 1.3 2006/01/27 10:22:15 bill Exp $ */
 -export([substitute/3, replace_reals/6]).
 -language(compound).
 -mode(trust).
@@ -173,38 +173,38 @@ insert_converts(Real, Reply, OldValue, NewValue,
       NewValue = Index.
 
 
-convert_reals(TIn, TOut, Requests, NewRequests) :-
+convert_reals(In, Out, Requests, NewRequests) :-
 
-    TIn ? Tell :
-      TOut ! Tell' |
-	convert_reals(Tell, Tell', Requests, Requests'),
-	convert_reals;
+    In ? Predicate :
+      Out ! Predicate' |
+	convert_reals(Predicate, Predicate', Requests, Requests'),
+	self;
 
-    tuple(TIn),
-    Arity := arity(TIn),
-    make_tuple(Arity, TIn') :
-      TIn' = TOut |
-	replace_tuple(TIn, TOut, Requests, NewRequests, Arity);
+    tuple(In),
+    Arity := arity(In),
+    make_tuple(Arity, In') :
+      In' = Out |
+	replace_tuple(In, Out, Requests, NewRequests, Arity);
 
-    real(TIn) :
-      Requests ! {TIn, Variable},
+    real(In) :
+      Requests ! {In, Variable},
       Requests' = NewRequests,
-      TOut = Variable? ;
+      Out = Variable? ;
 
     otherwise :
-      TIn = TOut,
+      In = Out,
       Requests = NewRequests.
 
 
-replace_tuple(TIn, TOut, Requests, NewRequests, Arity) :-
+replace_tuple(In, Out, Requests, NewRequests, Arity) :-
 
     Arity-- > 0,
-    arg(Arity, TIn, Argument),
-    arg(Arity, TOut, NewArgument) |
+    arg(Arity, In, Argument),
+    arg(Arity, Out, NewArgument) |
 	convert_reals(Argument, NewArgument, NewRequests', NewRequests),
 	self;
 
     Arity =< 0 :
-      TIn = _,
-      TOut = _,
+      In = _,
+      Out = _,
       Requests = NewRequests.
