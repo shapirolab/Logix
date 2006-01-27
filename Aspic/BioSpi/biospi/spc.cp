@@ -4,9 +4,9 @@ Precompiler for Biological Stochastic Pi Calculus procedures - Output Phase.
 Bill Silverman, February 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/05 10:56:39 $
+		       	$Date: 2006/01/27 10:38:24 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/spc.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -85,17 +85,16 @@ output(BlockPrefix, In, ProcessTable, SignatureTable, Terms) :-
       Terms ! (Atom'? :- NewRHSS?) |
 	utilities#tuple_to_atom(Atom, Atom'),
 	/* Eliminate unused public channels for this export. */
-	update_publics(RHSS, RHSS', ProcessTable, ProcessTable'?),
-	kluge_publics,
+	update_publics(RHSS, NewRHSS, ProcessTable, ProcessTable'?),
 	self;
 
     In ? outer(Atom, RHSS, _Procedure),
     arg(1, Atom, Name),
     RHSS =?= (Asks : Tells | Body) :
       ProcessTable ! member(Body, Channels, Ok),
-      Terms ! (Atom :- NewAsks? : NewTells? | Body),
+      Terms ! (Atom :- Asks : NewTells? | Body),
       SignatureTable ! lookup(Name, Atom, Atom, _Status) |
-	kluge_news,
+	remove_redundant_news,
 	self;
 
     In ? Mode(Atom, RHSS, Procedure),
@@ -1140,19 +1139,15 @@ extract_spi_channels(Variables, Channels) :-
       Channels = [].
 
 
-kluge_news(Asks, Tells, Channels, Ok, NewAsks, NewTells) :-
+remove_redundant_news(Tells, Channels, Ok, NewTells) :-
 
     Ok =?= true |
-	utilities#untuple_predicate_list(",", Asks, Asks', NewConvert?),
 	utilities#untuple_predicate_list(",", Tells, Tells'),
-	ignore_redundant_news(Channels, Tells'?, Tells''),
-	kluge_new_channels + (Convert = []),
-	utilities#make_predicate_list(",", Asks'?, NewAsks),
+	ignore_redundant_news(Channels, Tells'?, NewTells'),
 	utilities#make_predicate_list(",", NewTells'?, NewTells);
 
     Ok =\= true :
       Channels = _,
-      NewAsks = Asks,
       NewTells = Tells.
 
   ignore_redundant_news(Channels, Tells, NewTells) :-
@@ -1188,116 +1183,3 @@ kluge_news(Asks, Tells, Channels, Ok, NewAsks, NewTells) :-
       Channel = _,
       Write = _,
       Tells = NewTells.
-
-  kluge_new_channels(Tells, Convert, NewTells, NewConvert) :-
-
-    Tells ? write_channel(new_channel(Name, Channel, ComputeWeight, BaseRate),
-				Scheduler),
-    tuple(ComputeWeight), ComputeWeight =\= `_,
-    arity(ComputeWeight, A),
-    make_tuple(A, ComputeWeight') :
-      NewTells ! write_channel(
-			new_channel(Name, Channel, ComputeWeight'?, BaseRate),
-			Scheduler) |
-	kluge_real_parameters(ComputeWeight, Convert, 0,
-				ComputeWeight', Convert'),
-	self;
-
-    Tells ? Tell,
-    otherwise :
-      NewTells ! Tell |
-	self;
-
-    Tells =?= [] :
-      NewTells = [],
-      NewConvert = Convert.
-
-	
-kluge_publics(RHSS, NewRHSS) :-
-
-    RHSS =?= (computation # public_channels(Publics, Scheduler), Goals) :
-      NewRHSS =
-	(Ask? | computation # event(public_channels(NewPublics?, Scheduler)),
-		Goals) |
-	kluge_public_channels + (Convert = []),
-	utilities#make_predicate_list(",", NewConvert?, Ask);
-
-    otherwise :
-      NewRHSS = RHSS.
-
-
-  kluge_public_channels(Publics, Convert, NewPublics, NewConvert) :-
-
-    Publics ? Public, Public =?= Name(Channel, ComputeWeight, BaseRate),
-    tuple(ComputeWeight), ComputeWeight =\= `_,
-    arity(ComputeWeight, A),
-    make_tuple(A, ComputeWeight') :
-      NewPublics ! Name(Channel, ComputeWeight'?, BaseRate) |
-	kluge_real_parameters(ComputeWeight, Convert, 0,
-				ComputeWeight', Convert'),
-	self;
-
-    Publics ? Public,
-    otherwise :
-      NewPublics ! Public |
-	self;
-
-    Publics =?= [] :
-      NewConvert = Convert,
-      NewPublics = [].
-
-kluge_real_parameters(Tuple, Convert, Index, NewTuple, NewConvert) :-
-
-    Index++,
-    arg(Index', Tuple, Parameter),
-    arg(Index', NewTuple, Parameter'),
-    Index' < arity(Tuple),
-    real(Parameter),
-    convert_to_string(Parameter, String),
-    Convert =?= [] :
-      Convert' = [convert_to_real(String, `spifcp(1))],
-      Parameter' = `spifcp(1) |
-	self;
-
-    Index++,
-    arg(Index', Tuple, Parameter),
-    arg(Index', NewTuple, Parameter'),
-    Index' < arity(Tuple),
-    real(Parameter),
-    convert_to_string(Parameter, String),
-    Convert =\= [] :
-      Parameter' = `spifcp(N?) |
-	kluge_real_parameter(String, Convert, Convert, N, Convert'),
-	self;
-
-    Index++,
-    arg(Index', Tuple, Parameter),
-    arg(Index', NewTuple, Parameter'),
-    Index' < arity(Tuple),
-    otherwise :
-      Parameter = Parameter' |
-	self;
-
-    Index++,
-    arg(Index', Tuple, Parameter),
-    arg(Index', NewTuple, Parameter'),
-    Index' =:= arity(Tuple) :
-      Parameter' = Parameter,      
-      NewConvert = Convert.
-
-  kluge_real_parameter(String, Search, Convert, N, NewConvert) :-
-
-    Search ? convert_to_real(String, `spifcp(I)) :
-      Search' = _,
-      N = I,
-      NewConvert = Convert;
-
-    Search ? _,
-    otherwise |
-	self;
-
-    Search =?= [],
-    Convert = [convert_to_real(_String, `spifcp(I)) | _],
-    I++ :
-      N = I',
-      NewConvert = [convert_to_real(String, `spifcp(I')) | Convert].
