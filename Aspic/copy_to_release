@@ -74,6 +74,7 @@ cp -p Documentation/weighter.txt release/SpiFcp/Documentation
 rm -f release/BioSpi/Documentation/*.txt
 cp -p BioSpi/Documentation/BNF.txt release/BioSpi/Documentation
 cp -p BioSpi/Documentation/attributes.txt release/BioSpi/Documentation
+cp -p BioSpi/Documentation/list.txt release/BioSpi/Documentation
 cp -p BioSpi/Documentation/record.txt release/BioSpi/Documentation
 cp -p BioSpi/Documentation/user_macros.txt release/BioSpi/Documentation
 
