@@ -1,20 +1,19 @@
 #!/usr/local/bin/perl
 
 # Create a package file for mirror and mirror home pages of users.
-# Call: mhomepages [client]
+# Call: homepage [client | user]
 
 my $TmpDir = "/tmp";
-my $Target = "bach";
-my $TargetDir = "/DataBase/users";
+my $Target = "webout";
+my $TargetDir = "/WWW/mathusers";
 # temporary
 my $Rmirror = "/home/www/mirror-2.9/mirror";
 
-my $client = shift;
-my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
+my $client = "";
 
 # Initialization and argument handling
 
-my $defaults = "/home/www/mirror_defaults";
+my $defaults = "/home/www/Webout/homepage_defaults";
 #my $defaults = "/etc/local/homepage_defaults";
 my $distfile = "$TmpDir/mirror-" . getppid();
 `/usr/bin/rm -f $distfile`;
@@ -25,11 +24,17 @@ while (<DEFAULTS>) {
 }
 close DEFAULTS;
 
+my $argument = shift;
+
 my $only = $< eq "root" ? "" : $< ;
 if ($only) {
-  $only = getpwuid($only);
+  $only = $argument ? $argument : getpwuid($only);
+}
+else {
+  $client = $argument;
 }
 
+my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
 my ($system, $name) =
   split(/\s/, `$sysname`);
 if ($client) {
@@ -81,4 +86,3 @@ if ($only) {
 `/usr/bin/rm -f $distfile`;
 
 # The End
-
