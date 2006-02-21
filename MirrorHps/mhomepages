@@ -5,7 +5,7 @@
 
 my $TmpDir = "/tmp";
 my $Target = "webout";
-my $TargetDir = "/WWW/mathusers";
+my $TargetDir = "/math";
 # temporary
 my $Rmirror = "/home/www/mirror-2.9/mirror";
 
@@ -37,12 +37,14 @@ else {
 my $sysname = ($client ? "rsh $client " : "") . "uname -ns";
 my ($system, $name) =
   split(/\s/, `$sysname`);
+$name =~ s/^(.*)\.wisdom\.weizmann\.ac\.il$/$1/;
 if ($client) {
   $system = `uname -s`;
   chomp $system;
 }
 
-my @Auto = `ypcat -k auto.home`;
+#my @Auto = `ypcat -k auto.home`;
+my @Auto = `cat /home/www/Webout/auto.homek`;
 
 # Main loop
 
@@ -71,7 +73,7 @@ foreach $auto (@Auto) {
       }
     }
     print DISTFILE "package=$uid\n"
-                 . "\tremote_dir=$TargetDir/$uid/public_html\n"
+                 . "\tremote_dir=$TargetDir/$uid\n"
                  . "\tlocal_dir=$homedir/public_html/\n";
   }
 }
@@ -83,6 +85,6 @@ my $result = `$Rmirror $distfile`;
 if ($only) {
   print $result;
 }
-`/usr/bin/rm -f $distfile`;
+ `/usr/bin/rm -f $distfile`;
 
 # The End
