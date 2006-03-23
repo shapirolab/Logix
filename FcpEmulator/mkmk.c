@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.11 2005/09/02 04:54:00 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.12 2006/03/23 12:42:49 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -9,6 +9,8 @@
      foreign function - string concatenation kernels
    ctl:
      foreign function - enables creating ctl .bin files
+   cygwin:
+     builds makefile for cygwin kernerl cygwin_nt-5.1
    dbg:
      sets DEBUG flag
    dbgl:
@@ -79,6 +81,7 @@ static char *NullS = "";
 static char *cnvS = "cnv";
 static char *concatenateS = "concatenate";
 static char *ctlS = "ctl";
+static char *cygwin_5d1 = "cygwin_nt_5d1";
 static char *dbgS = "-DDEBUG";
 static char *dbglS = "-DDEBUG_LINK";
 static char *dbxS = "-g";
@@ -108,6 +111,7 @@ static char *ttyS = "tty";
 static char *cnvV = "";
 static char *concatenateV = "";
 static char *ctlV = "";
+static char *cygwin_5d1V = "";
 static char *dbgV = "";
 static char *dbglV = "";
 static char *dbvV = "";
@@ -180,6 +184,10 @@ main(argc, argv)
 	  printf("mkmk: Too many foreign functions\n");
 	  exit(1);
 	}
+	continue;
+      case 'y':
+	cygwin_5d1V = cygwin_5d1;
+	cnvV = cnvS;
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
@@ -468,6 +476,9 @@ main(argc, argv)
   Pos = cond_print(MakeFd, dbxV, "", "", Pos);
   Pos = cond_print(MakeFd, decV, "", "", Pos);
 
+  if (strcmp(cygwin_5d1V, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DCYGWIN", "", "", Pos);
+  }
   if (strcmp(hpux_9d05V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DHPUX", "", "", Pos);
   }
