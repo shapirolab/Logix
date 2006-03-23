@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.5 2005/09/02 04:54:01 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.6 2006/03/23 12:43:21 bill Exp $ */
 
 #include	<stdio.h>
 extern	FILE *DbgFile, *OutFile;
@@ -918,7 +918,7 @@ set_signals_masks()
 
 #endif
 
-#if (defined MACOSX) || (defined LINUX)
+#if (defined MACOSX) || (defined LINUX) || (defined CYGWIN)
 
 set_signals_masks()
 {

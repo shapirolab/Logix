@@ -1,13 +1,13 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.8 2005/09/02 04:54:00 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.9 2006/03/23 12:43:20 bill Exp $ */
 /*
 **	interface.c - unix interface functions.
 **
 **	Michael Hirsch and Bill Silverman		February 1986
 **
 **	Last update by:	     $Author: bill $
-**		       	     $Date: 2005/09/02 04:54:00 $
+**		       	     $Date: 2006/03/23 12:43:20 $
 **	Currently locked by: $Locker:  $
-**			     $Revision: 1.8 $
+**			     $Revision: 1.9 $
 **			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
 **
 */
@@ -205,7 +205,7 @@ interface(T)
 #else
 	extern int sys_err;
 #endif
-#if !(defined(LINUX) || defined(MACOSX))
+#if !(defined(LINUX) || defined(MACOSX) || defined(CYGWIN))
 	extern char *sys_errlist[];
 #endif
 
