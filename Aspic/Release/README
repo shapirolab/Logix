@@ -1,36 +1,3 @@
-The Logix system may be installed on linux, macosx, sgi and
-solaris platforms.  To (re)install the Logix system (e.g. on a
-linux platform):
-
-    % cd Logix
-    % ./install LINUX -h20000
-
-To install on a macosx, sgi or solaris platform, substitute
-MACOSX, SGI or SOLARIS for LINUX.
-
-The generated file may be used to start a Logix session on the
-appropriate platform - e.g.s:
-
-    % Logix/linux_logix
-    % Logix/macosx_logix
-    % Logix/sgi_logix
-    % Logix/solaris_logix
-
-However, do NOT run the system from within the Logix Directory,
-nor from within any of its sub-directories.
-
-During a Logix session, enter:
-
-    @h
-
-for Logix help, or:
-
-    @ph
-
-for Stochastic Pi Calculus help.  See user_macros.txt in sub-
-directory SpiFcp/Documentation and in BioSpi/Documentation for
-details about the user macros.
-
 The SpiFcp sub-directory supports applications written in dialect
 "spifcp" of Stochastic Pi Calculus.  It includes the source of
 the implementation, and examples in sub-directory Examples.  It
@@ -53,3 +20,9 @@ The files in bin are used to extract tabular information from a
 in sub-directory SpiFcp/Documentation).  You may find it useful to
 copy or to link them to your ~/bin directory.
 
+The Tutorial directory contains a tutorial of the system.  It also
+contains some simple examples which are referenced in the tutorial.
+
+The Logix directory contains the operating syatem which underlies the
+BioSpi system.  To complete installation, follow the directions in
+Logix/README.

@@ -9,6 +9,9 @@ cp -p Logix/README release/Logix
 rm -f release/Logix/install
 cp -p Logix/install release/Logix
 
+rm -f release/Logix/CYGWIN/*
+cp -p Logix/CYGWIN/*.o release/Logix/CYGWIN
+cp -p Logix/CYGWIN/spiweight.c release/Logix/CYGWIN
 rm -f release/Logix/LINUX/*
 cp -p Logix/LINUX/*.o release/Logix/LINUX
 cp -p Logix/LINUX/spiweight.c release/Logix/LINUX
@@ -22,6 +25,8 @@ rm -f release/Logix/SOLARIS/*
 cp -p Logix/SOLARIS/*.o release/Logix/SOLARIS
 cp -p Logix/SOLARIS/spiweight.c release/Logix/SOLARIS
 
+rm -f release/Logix/CYGWIN/makefile
+cp -p Emulator/CYGWIN/makefile release/Logix/CYGWIN
 rm -f release/Logix/LINUX/makefile
 cp -p Emulator/LINUX/makefile release/Logix/LINUX
 rm -f release/Logix/MACOSX/makefile

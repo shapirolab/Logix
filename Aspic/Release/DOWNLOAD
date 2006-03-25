@@ -14,9 +14,9 @@ To expand the release:
 A directory named Aspic-release and a system of sub-directories will be
 expanded in the current directory.
 
-A release includes emulators for linux, macosx sgi and solaris platforms.
-To install it on one or more of those processors, see the README file in
-Aspic-release.
+A release includes emulators for cygwin, linux, macosx, sgi and solaris
+platforms.  To install it on one or more of those processors, see the
+README file in Aspic-release/Logix.
 
 Additional documentation for the Logix system is in LogixDocs.  This
 includes:

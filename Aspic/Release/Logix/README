@@ -1,18 +1,20 @@
-The Logix system may be installed on linux, sgi and solaris
-platforms.  To (re)install the Logix system (e.g. on a linux
+The Logix system may be installed on cygwin, linux, macosx, sgi and
+solaris platforms.  To (re)install the Logix system (e.g. on a linux
 platform):
 
     % cd Logix
-    % ./install LINUX -h20000
+    % ./install LINUX
 
-To install on an sgi or solaris platform, substitute SGI or
-SOLARIS for LINUX.
+To install on a cygwin, macosx, sgi or solaris platform, substitute
+CYGWIN, MCAOSX, SGI or SOLARIS for LINUX.
 
 The generated file may be used to start a Logix session on the
 appropriate platform - e.g.s:
 
+    % Logix/cygwin_logix
     % Logix/linux_logix
-    % Logix/sgi_ligix
+    % Logix/macosx_logix
+    % Logix/sgi_logix
     % Logix/solaris_logix
 
 However, do NOT run the system from within the Logix Directory,
@@ -26,25 +28,7 @@ for Logix help, or:
 
     @ph
 
-for Stochastic Pi Calculus help.  See user_macros.txt in sub-
-directory Documentation for details about the user macros.
-
-The Documentation file includes Stochastic Pi Calculus BNF and
-various notes.  The notes also apply in most part to Ambient
+for Stochastic Pi Calculus help.  See user_macros.txt in directory
+SpiFcp/Documentation for details about the user macros, or directory
+BioSpi/Documentation for details of the user macros of the Ambient
 Stochastic Pi Calculus.
-
-The files in bin are used to extract tabular information from a
-Stochastic Pi Calculus application session (see record.txt in
-sub-directory Documentation).  The files in Bin are utilities.
-To make these files generally available, copy them to the
-directories of the same names in your home directory.
-
-Some examples of Stochastic Pi Calculus programs are included in
-its sub-directory,  Examples.
-
-The BioSpi sub-directory supports applications written in Ambient
-Stochastic Pi Calculus, including examples in its sub-directory,
-Examples.  It also has a sub-directory, Documentation, which
-contains the BNF of Ambient Stochastic Pi Calculus and other
-notes specific to it.
-

@@ -93,3 +93,14 @@ Version Aspic-release.2005-10-27.tar.gz
 Added support for Macintosh OSX BSD 10.4 and forward; fixed some minor bugs;
 added module multiple.cp; added documents CONSTANTS.txt, multiple.txt,
 multiple_bnf.txt; updated and edited various other documents.
+
+Version Aspic-release.2006-02-02.tar.gz
+
+Much improved multiple; fixed real value handling; fixed stream.cp; revised
+various documents, particulary CONSTANTS.txt, multiple.txt, multiple_bnf.txt;
+updated spi_monitor et al to use real numbers directly (quoted reals still
+work as previously).
+
+Version Aspic-release.2006-03-25.tar.gz
+
+Added support for PC under CYGWIN.
