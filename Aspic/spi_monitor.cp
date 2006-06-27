@@ -4,9 +4,9 @@ SpiFcp Channel activity monitor
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2006/01/23 12:06:37 $
+                        $Date: 2006/06/27 05:30:38 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.28 $
+                        $Revision: 1.29 $
                         $Source: /home/qiana/Repository/Aspic/spi_monitor.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -17,7 +17,7 @@ Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
 -language([evaluate,compound,colon]).
 -export([get_public_channels/1, public_channels/1, public_channels/2,
 	 new_channel/3, new_channel/4, new_public_channel/4,
-	 options/2, reset/0, scheduler/1]).
+	 options/2, public_object/2, reset/0, scheduler/1]).
 -include(spi_constants).
 
 RAN =>  4.					/* uniform 0..1 variate */
@@ -29,12 +29,12 @@ MAXTIME => 99999999999999999999999999999999999999999999999999999999999.0.
 
 DEBUG(Note) => write_channel(debug_note(Note), Scheduler).
 
-DUMMYCHANNEL(NewChannel) =>
+DUMMY_CHANNEL(NewChannel) =>
    (Schedule ? NewChannel :
-      make_channel(Dummy, _),
+      make_channel(Dummy, _) |
 	new_channel(ChannelName, Channel, 0,
 		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    _, _, Dummy, _, _, SpiOffsets),
+		    0, _, Dummy, _, _, SpiOffsets),
 	self).
 
 %STOPPED => DEBUG(stopped(Reply)).
@@ -130,8 +130,12 @@ initialize(In) :-
 */
 
 serve(In, Options, Ordinal, Randomize, SpiOffsets, DefaultWeighter) :-
+    true :
+      make_vector(2, SpiTime, _),
+      store_vector(1, 0.0, SpiTime),
+      close_vector(2, SpiTime) |
 	Publics = [{0, _, -1, ""}, {[], _, -1, ""}],
-	Parameters = [{0, _}, {[], _}],
+	Parameters = [{0, _}, {"SPITIME", SpiTime}, {[], _}],
 	processor#link(lookup(math, MathOffset), OkMath),
 	server,
 	start_scheduling.
@@ -152,26 +156,6 @@ server(In, Options, Scheduler, Parameters, Publics) :-
       write_channel(end_record(Stream'), Scheduler) |
 	self;
 
-/*************************** Obsolescent ***********************************/
-    In ? global_channels(List) |
-	merge_public_objects(List, Publics, Publics', "",
-			     Parameters, Parameters', 0,
-			     Scheduler, _),
-	self;
-
-    In ? global_channels(List, ReadyScheduler) |
-	merge_public_objects(List, Publics, Publics', "",
-			     Parameters, Parameters', 0,
-			     Scheduler, ReadyScheduler),
-	self;
-
-    In ? get_global_channels(List),
-    we(List) :
-      List = List'? |
-	copy_public(Publics, List', _),
-	self;
-/****************************************************************************/
-
     In ? get_public_channels(List),
     we(List) :
       List = List'? |
@@ -189,6 +173,20 @@ server(In, Options, Scheduler, Parameters, Publics) :-
 			     Parameters, Parameters', 0,
 			     Scheduler, ReadyScheduler),
 	self;
+
+    In ? public_object(Name, Value?^) |
+	merge_public_objects([Name(Value)], Publics, Publics', 0,
+			      Parameters, Parameters', 0,
+			      Scheduler, Ready),
+	wait_object_ready + (Initial = 0.0),
+	self;	
+
+    In ? public_object(Name, Initial, Value?^) |
+	merge_public_objects([Name(Value)], Publics, Publics', 0,
+			      Parameters, Parameters', 0,
+			      Scheduler, Ready),
+	wait_object_ready,
+	self;	
 
     In ? New , New = new_channel(_Creator, _Channel, _BaseRate) :
       write_channel(New, Scheduler) |
@@ -425,6 +423,12 @@ merge_public_objects(List, Publics, NewPublics, LastPublic,
     known(Result) |
 	merge_public_objects.
 
+wait_object_ready(Name, Initial, Value, Ready) :-
+
+    known(Ready) |
+	spi_object # create(Name, Initial, Value).
+
+
 /* copy_publics
 **
 ** Input:
@@ -457,7 +461,7 @@ copy_public(Publics, List, Ends) :-
 
 start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 			DefaultWeighter, Randomize,
-			OkMath):-
+			OkMath, SpiTime):-
 
     OkMath =\= true :
       DefaultWeighter = _,
@@ -465,6 +469,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
       Ordinal = _,
       Randomize = _,
       SpiOffsets = _,
+      SpiTime = [],
       make_channel(Scheduler, _) |
 	fail(math_offset(OkMath));
 
@@ -477,7 +482,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 	processor#Waiter?,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter',
 				Scheduler, _Recording, _Debug,
-				0.0, true, Wakeup,
+				SpiTime, true, Wakeup,
 				DefaultWeighter, Randomize,
 				{MAXTIME, _State}, Start_real_time,
 				BasedAnchor, InstantaneousAnchor).
@@ -549,14 +554,15 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 **
 ** Status:
 **
-**   BasedAnchor - anchor for (circular) chain of based-rate Channels
-**   Cutoff
-**     Limit - least upper bound of internal timer (:Now) - initially large
+**   Cutoff 2-Tuple
+**     Limit - least upper bound of internal timer (SpiTime) - initially large
 **     Status - Variable set to Now time when Limit exceeded (see below)
-**   InstantaneousAnchor - anchor for (circular) list of infinite rate Channels
-**   Now - 0-based internal clock
+**   SpiTime - 0-based internal clock
 **   Start_real_time - real time when Cutoff set (Now = 0) - not in status list
 **   Waiting - waiting for Wakeup signal = true/false
+**
+**   BasedAnchor - anchor for circular list of based-rate Channels
+**   InstantaneousAnchor - anchor for circular list of infinite rate Channels
 **
 ** Signal:
 **
@@ -570,7 +576,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 **
 ** Processing:
 **
-**   Maintain time  Now
+**   Maintain time  SpiTime (Now)
 **
 ** Whenever the system becomes idle, execute(SpiOffset, {SPI_STEP, ...})
 ** to select and complete a transmission (internal execute is used when
@@ -578,21 +584,21 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
 **
 ** Record:
 **
-**   Changes to  Now
+**   Changes to  SpiTime (Now)
 **   Start Communication
 **   Complete Transmission
 */
 
 STATUS => [anchors([BasedAnchor, InstantaneousAnchor]),
 	   cutoff_limit(CutoffLimit), cutoff_status(CutoffStatus?),
-	   debug(Debug?), now(Now), ordinal(Ordinal),
+	   debug(Debug?), spi_time(SpiTime), now(Now), ordinal(Ordinal),
 	   randomize(Randomize), record(Record?),
 	   waiting(Waiting), weighter(DefaultWeighter)].
 
 
 scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		Scheduler, Record, Debug,
-		Now, Waiting, Wakeup,
+		SpiTime, Waiting, Wakeup,
 		DefaultWeighter, Randomize,
 		Cutoff, Start_real_time,
 		BasedAnchor, InstantaneousAnchor) :-
@@ -601,12 +607,12 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       BasedAnchor = _,
       DefaultWeighter = _,
       InstantaneousAnchor = _,
-      Now = _,
       MathOffset = _,
       Ordinal = _,
       Randomize = _,
       Scheduler = _,
       SpiOffsets = _,
+      SpiTime = _,
       Start_real_time = _,
       Waiting = _,
       Wakeup = _,
@@ -648,7 +654,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       STOPPED |
 	self;
 
-    /* Set the time limit - maximum value for Now */
+    /* Set the time limit - maximum value for SpiTime */
     Schedule ? cutoff(Limit, State), Limit >= 0, State = State'?,
     info(REALTIME, Start_real_time') :
       Start_real_time = _,
@@ -715,9 +721,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     /* Close the recording stream, and start a new one. */
-    Schedule ? end_record(Stream),
-    Now' := 0.0 :
-      Now = _,
+    Schedule ? end_record(Stream) :
+      store_vector(1, 0.0, SpiTime),
       Record = [],
       Stream = Record'? |
 	self;
@@ -902,6 +907,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;		
 
     Schedule ? status(Status),
+    read_vector(1, SpiTime, Now),
     Cutoff = {CutoffLimit, CutoffStatus} :
       Status = STATUS |
 	self;		
@@ -936,9 +942,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Wakeup =?= done,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
-    arg(SPI_RATE, SpiOffsets, RateOffset) :
+    arg(SPI_RATE, SpiOffsets, RateOffset),
+    read_vector(1, SpiTime, Now) :
       Waiting = _,
-      Waiting' = false |
+      Waiting' = false,
+      store_vector(1, Now'?, SpiTime) |
 	sum_weights(BasedAnchor, RateOffset, 0, Total),
 	logix_total(MathOffset, BasedAnchor, Now, Total,
 		    RateOffset, Now', Wakeup'),
@@ -946,9 +954,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     Wakeup =?= done,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
-    SpiOffset =\= unbound :
+    SpiOffset =\= unbound,
+    read_vector(1, SpiTime, Now) :
       Waiting = _,
       execute(SpiOffset, {SPI_STEP, Now, BasedAnchor, Now', Wakeup'}),
+      store_vector(1, Now'?, SpiTime),
       Debug ! step(Waiting, Wakeup, Wakeup'),
       Waiting' = false |
 	self;
@@ -964,6 +974,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     PId1 =\= (_ : _), PId2 =\= (_ : _),
     arg(1, PId1, PName1),
     arg(1, PId2, PName2),
+    read_vector(1, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Waiting = _,
@@ -984,6 +995,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     string_to_dlist(PName2, PNL2, []),
     string_to_dlist(Prefix2, PX2, [CHAR_COLON | PNL2]),
     list_to_string(PX2, PrefixedName2),
+    read_vector(1, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Waiting = _,
@@ -996,7 +1008,8 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     Wakeup =?= true,
-    Cutoff =?= {CutoffLimit, CutoffStatus} :
+    Cutoff =?= {CutoffLimit, CutoffStatus},
+    read_vector(1, SpiTime, Now) :
       Waiting = _,
       Wakeup' = _,
       Waiting' = false,
@@ -1008,6 +1021,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     Cutoff = {CutoffLimit, CutoffStatus},
+    read_vector(1, SpiTime, Now),
     Now >= CutoffLimit,
     info(REALTIME, End_real_time),
     Real_time := End_real_time - Start_real_time :
@@ -1031,26 +1045,11 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
    */
   wait_done(Schedule, DefaultWeighter, Randomize, SpiOffsets, Ordinal, Done) :-
 
-   Schedule ? new_channel(ChannelName, Channel, _Rate) :
-      make_channel(Dummy, _) |
-	new_channel(ChannelName, Channel, 0,
-		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    0, _, Dummy, _, _, SpiOffsets),
-	self;
+    DUMMY_CHANNEL(new_channel(ChannelName, Channel, _Rate));
 
-   Schedule ? new_channel(ChannelName, Channel, _Weight, _Rate) :
-      make_channel(Dummy, _) |
-	new_channel(ChannelName, Channel, 0,
-		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    0, _, Dummy, _, _, SpiOffsets),
-	self;
+    DUMMY_CHANNEL(new_channel(ChannelName, Channel, _Weight, _Rate));
 
-   Schedule ? new_public_channel(ChannelName, Channel, _Weight, _Rate) :
-      make_channel(Dummy, _) |
-	new_channel(ChannelName, Channel, 0,
-		    SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX),
-		    0, _, Dummy, _, _, SpiOffsets),
-	self;
+    DUMMY_CHANNEL(new_public_channel(ChannelName, Channel, _Weight, _Rate));
 
     Schedule ? close(_, Reply) :
       Reply = [] |
@@ -1091,7 +1090,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 		Scheduler, Record, Debug,
-		Now, Waiting, Wakeup,
+		SpiTime, Waiting, Wakeup,
 		DefaultWeighter, Randomize,
 		Cutoff, Start_real_time,
 		BasedAnchor, InstantaneousAnchor,
@@ -1102,6 +1101,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     PId1 =\= (_ : _), PId2 =\= (_ : _),
     tuple(PId1), arg(1, PId1, PName1),
     tuple(PId2), arg(1, PId2, PName2),
+    read_vector(1, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
@@ -1119,6 +1119,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     string_to_dlist(PName2, PNL2, []),
     string_to_dlist(Prefix2, PX2, [CHAR_COLON | PNL2]),
     list_to_string(PX2, PrefixedName2),
+    read_vector(1, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
@@ -2330,11 +2331,11 @@ do_bimolecular_transmit(Channel, Uniform1, Uniform2, Wakeup) :-
 
 /*
 otherwise |
-  spi_utils#show_value(channel = Channel,[],C),
-  spi_utils#show_value(send = Send, [3], S),
-  spi_utils#show_value(receive = Receive, [3], R),
-  spi_utils#show_value(endsend = EndSend, [3], ES),
-  spi_utils#show_value(endreceive = EndReceive, [3], ER),
+  computation # spi_utils # show_value(channel = Channel,[],C),
+  computation # spi_utils # show_value(send = Send, [3], S),
+  computation # spi_utils # show_value(receive = Receive, [3], R),
+  computation # spi_utils # show_value(endsend = EndSend, [3], ES),
+  computation # spi_utils # show_value(endreceive = EndReceive, [3], ER),
   screen#display((C,S,R,ES,ER),length(0))
 */
 .
@@ -2513,10 +2514,10 @@ do_homodimerized_transmit(Channel, Uniform1, Uniform2, Wakeup) :-
 /*
 ;
 otherwise |
-  spi_utils#show_value(channel = Channel,[],C),
-  spi_utils#show_value(receive = Receive, [3], R),
-  spi_utils#show_value(dimer = Dimer, [3], D),
-  spi_utils#show_value(enddimer = EndDimer, [3], ED),
+  computation # spi_utils # show_value(channel = Channel,[],C),
+  computation # spi_utils # show_value(receive = Receive, [3], R),
+  computation # spi_utils # show_value(dimer = Dimer, [3], D),
+  computation # spi_utils # show_value(enddimer = EndDimer, [3], ED),
   screen#display((C,R,D,ED),length(0))
 */
 .
@@ -2654,9 +2655,11 @@ queue_to_anchor(Message, Anchor, Channel, Links) :-
 
 do_execute(Id, Offset, Command) :-
     true : execute(Offset, Command) |
-	spi_utils#show_value(do_execute(Id, Offset, Command),[5],O),
+	computation # spi_utils #
+		show_value(do_execute(Id, Offset, Command),[5],O),
 	screen#display(ok(O),wait(O));
     otherwise |
-	spi_utils#show_value(do_execute(Id, Offset, Command),[5],O),
+	computation # spi_utils #
+		show_value(do_execute(Id, Offset, Command),[5],O),
 	screen#display(failed(O),wait(O)).
 */
