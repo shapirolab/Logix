@@ -4,9 +4,9 @@ SpiFcp utility processes
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2005/07/19 14:46:52 $
+                        $Date: 2006/06/27 06:13:48 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.13 $
+                        $Revision: 1.14 $
                         $Source: /home/qiana/Repository/Aspic/spi_utils.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -37,27 +37,27 @@ make_channel(Channel, Creator, BaseRate) :-
     we(Channel),
     number(BaseRate) :
       Channel = Channel'? |
-	spi_monitor#new_channel(Creator, Channel', BaseRate);
+	computation # spi_monitor # new_channel(Creator, Channel', BaseRate);
 
     we(Channel),
     BaseRate =?= infinite :
       Channel = Channel'? |
-	spi_monitor#new_channel(Creator, Channel', BaseRate);
+	computation # spi_monitor # new_channel(Creator, Channel', BaseRate);
 
     string(Channel), Channel =\= "_", Channel =\= "",
     number(BaseRate) |
-	computation#dictionary(add, Channel, Ch?, Reply),
+	computation # dictionary(add, Channel, Ch?, Reply),
 	made_channel(Channel, Creator, BaseRate, Ch, Reply);
 
     string(Channel), Channel =\= "_", Channel =\= "",
     BaseRate =?= infinite |
-	computation#dictionary(add, Channel, Ch?, Reply),
+	computation # dictionary(add, Channel, Ch?, Reply),
 	made_channel(Channel, Creator, BaseRate, Ch, Reply);
 
     otherwise :
       Creator = _,
       BaseRate = _ |
-	computation#display(("Can't make_channel" : Channel)).
+	computation # display(("Can't make_channel" : Channel)).
 
   made_channel(Name, Creator, BaseRate, Channel, Reply) :-
     Reply = new,
@@ -65,13 +65,13 @@ make_channel(Channel, Creator, BaseRate) :-
     string_to_dlist(Name, Cl, []) :
       CT = [CHAR_DOT | Cl] |
 	list_to_string(CL, Creator'),
-	spi_monitor#new_channel(Creator'?, Channel, BaseRate);
+	computation # spi_monitor # new_channel(Creator'?, Channel, BaseRate);
 
     otherwise :
       Creator = _,
       BaseRate = _,
       Channel = _ |
-	computation#display(("spi_utils: Can't make_channel" : Name - Reply)).
+	computation # display(("spi_utils: Can't make_channel" : Name - Reply)).
 
 
 make_channel(Channel, Creator, BaseRate, ComputeWeight) :-
@@ -88,19 +88,19 @@ make_channel(Channel, Creator, BaseRate, ComputeWeight) :-
 
     string(Channel), Channel =\= "_", Channel =\= "",
     number(BaseRate) |
-	computation#dictionary(add, Channel, Ch?, Reply),
+	computation # dictionary(add, Channel, Ch?, Reply),
 	made_channel(Channel, Creator, BaseRate, ComputeWeight, Ch, Reply);
 
     string(Channel), Channel =\= "_", Channel =\= "",
     BaseRate =?= infinite |
-	computation#dictionary(add, Channel, Ch?, Reply),
+	computation # dictionary(add, Channel, Ch?, Reply),
 	made_channel(Channel, Creator, BaseRate, ComputeWeight, Ch, Reply);
 
     otherwise :
       Creator = _,
       BaseRate = _,
       ComputeWeight = _ |
-	computation#display(("Can't make_channel" : Channel)).
+	computation # display(("Can't make_channel" : Channel)).
 
   made_channel(Name, Creator, BaseRate, ComputeWeight, Channel, Reply) :-
     Reply = new,
@@ -115,12 +115,12 @@ make_channel(Channel, Creator, BaseRate, ComputeWeight) :-
       BaseRate = _,
       ComputeWeight = _,
       Channel = _ |
-	computation#display(("spi_utils: Can't make_channel" : Name - Reply)).
+	computation # display(("spi_utils: Can't make_channel" : Name - Reply)).
 
 make_channel_with_weight(Channel, Creator, BaseRate, ComputeWeight) :-
 
     string(ComputeWeight) |
-	spi_monitor#new_channel(Channel, Creator, ComputeWeight, BaseRate);
+	computation # spi_monitor # new_channel(Channel, Creator, ComputeWeight, BaseRate);
 
     tuple(ComputeWeight) |
 	utils#tuple_to_dlist(ComputeWeight, [Name | Parameters], []),
@@ -131,7 +131,7 @@ make_channel_with_weight(Channel, Creator, BaseRate, ComputeWeight) :-
       Channel = _,
       Creator = _,
       BaseRate = _ |
-	computation#display(
+	computation # display(
 		("spi_utils: ComputeWeight must be a string or a tuple" :
 				Creator - ComputeWeight)).
 
@@ -139,7 +139,7 @@ make_channel_with_weight(Channel, Creator, BaseRate, ComputeWeight) :-
 
     string(Name), Invalid =?= [] |
 	utils#list_to_tuple([Name, _ | List], WeightTuple),
-	spi_monitor#new_channel(Creator, Channel, WeightTuple, BaseRate);
+	computation # spi_monitor # new_channel(Creator, Channel, WeightTuple, BaseRate);
 
     otherwise,
     known(Invalid) :
@@ -148,7 +148,7 @@ make_channel_with_weight(Channel, Creator, BaseRate, ComputeWeight) :-
       BaseRate = _,
       List = _ |
 	utils#list_to_tuple([Name | Invalid], BadTuple),
-	computation#display(
+	computation # display(
 		("spi_utils: Bad ComputeWeight elements" : Creator - BadTuple)).
 
 send(Message, Channel) :-
@@ -162,20 +162,20 @@ send(Message, Channel, Multiplier, Chosen, Name) :-
     arity(Channel, CHANNEL_SIZE),
     we(Chosen) :
       Send = SPI_SEND(Name, Channel, Multiplier, 1) |
-	spi_monitor#scheduler(S),
+	computation # spi_monitor # scheduler(S),
 	write_channel(start(send, [Send], Value, Chosen), S),
 	transmitted(sending(Name), 1, Chosen, Message, Value);
 
     string(Channel), Channel =\= "_", Channel =\= "" :
       Name = _ |
-	computation#dictionary(find, Channel, Ch, Reply),
+	computation # dictionary(find, Channel, Ch, Reply),
 	send_message(Message, Channel, Multiplier, Chosen, Ch, Reply);
 
     otherwise :
       Message = _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("spi_utils: Can't send to" : Name(Channel))).
+	computation # display(("spi_utils: Can't send to" : Name(Channel))).
 
   send_message(Message, Name, Multiplier, Chosen, Channel, Reply) :-
     Reply = true |
@@ -186,7 +186,7 @@ send(Message, Channel, Multiplier, Chosen, Name) :-
       Multiplier = _, 
       Channel = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("spi_utils: Can't send to" : Name - Reply)).
+	computation # display(("spi_utils: Can't send to" : Name - Reply)).
 
 transmitted(Id, Tag, Chosen, Message, Value) :-
 
@@ -209,13 +209,13 @@ receive(Channel, Message, Multiplier, Chosen) :-
 receive(Channel, Message, Multiplier, Chosen, Name) :-
     string(Channel), Channel =\= "_", Channel =\= "" :
       Name = _ |
-	computation#dictionary(find, Channel, Ch, Reply),
+	computation # dictionary(find, Channel, Ch, Reply),
 	receive_message(Channel, Message, Multiplier, Chosen, Ch, Reply);
     vector(Channel),
     arity(Channel, CHANNEL_SIZE),
     we(Chosen) :
       Receive = SPI_RECEIVE(Name, Channel, Multiplier, 2) |
-	spi_monitor#scheduler(S),
+	computation # spi_monitor # scheduler(S),
 	write_channel(start(receive, [Receive], Value, Chosen), S),
 	transmitted(receiving(Name), 2, Chosen, Message, Value);
 
@@ -223,7 +223,7 @@ receive(Channel, Message, Multiplier, Chosen, Name) :-
       Message = _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("spi_utils: Can't receive from" : Name(Channel))).
+	computation # display(("spi_utils: Can't receive from" : Name(Channel))).
 	
 
   receive_message(Name, Message, Multiplier, Chosen, Channel, Reply) :-
@@ -235,7 +235,7 @@ receive(Channel, Message, Multiplier, Chosen, Name) :-
       Multiplier = _,
       Channel = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(
+	computation # display(
 		("spi_utils: Can't receive from" : Name - Reply)).
 
 
@@ -250,13 +250,13 @@ dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name) :-
     arity(Channel, CHANNEL_SIZE) :
       Chosen = Chosen'?,
       Dimer = SPI_DIMER(Name, Channel, {1, 2}, Multiplier) |
-	spi_monitor#scheduler(S),
+	computation # spi_monitor # scheduler(S),
 	write_channel(start(dimer, [Dimer], Value, Chosen'), S),
 	dimered(Chosen'?, SendMessage, ReceiveMessage, Value);
 
     string(Channel), Channel =\= "_", Channel =\= "" :
       Name = _ |
-	computation#dictionary(find, Channel, Ch, Reply),
+	computation # dictionary(find, Channel, Ch, Reply),
 	dimer_message(SendMessage, ReceiveMessage, Multiplier,
 			Channel, Chosen, Ch, Reply);
 
@@ -265,7 +265,7 @@ dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name) :-
       ReceiveMessage= _,
       Multiplier = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("spi_utils: Can't dimer on" : Name(Channel))).
+	computation # display(("spi_utils: Can't dimer on" : Name(Channel))).
 
   dimer_message(SendMessage, ReceiveMessage, Name, Multiplier,
 			Chosen, Channel, Reply) :-
@@ -278,7 +278,7 @@ dimer(SendMessage, ReceiveMessage, Channel, Multiplier, Chosen, Name) :-
       Multiplier = _,
       Channel = _ |
 	unify_without_failure(Chosen, 0),
-	computation#display(("spi_utils: Can't dimer on" : Name - Reply)).
+	computation # display(("spi_utils: Can't dimer on" : Name - Reply)).
 
 dimered(Chosen, SendMessage, ReceiveMessage, Value) :-
 
@@ -297,17 +297,17 @@ dimered(Chosen, SendMessage, ReceiveMessage, Value) :-
 
 
 "SPC"(Channel) :-
-	spi_monitor#options(Options, Options),
+	computation # spi_monitor # options(Options, Options),
 	"SPC"(Channel, Options?).
 
 "SPC"(SpiChannel, Options) :-
-	computation#display(term, Display, known(Display)),
+	computation # display(term, Display, known(Display)),
 	show_channel.
 
 show_channel(SpiChannel, Options, Display) :-
 
     string(SpiChannel), SpiChannel =\= "_", SpiChannel =\= "" |
-	computation#dictionary(find, SpiChannel, SpiChannel', Reply),
+	computation # dictionary(find, SpiChannel, SpiChannel', Reply),
 	show_spi_channel;
 
     otherwise |
@@ -319,7 +319,7 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
     Reply =\= true :
       Options = _,
       Display = "not_channel" |
-	computation#display(("spi_utils: Can't show channel" :
+	computation # display(("spi_utils: Can't show channel" :
 				SpiChannel-Reply));
 
     Reply =?= true,
@@ -331,7 +331,7 @@ show_spi_channel(SpiChannel, Options, Display, Reply) :-
       Options = _,
       Reply = _,
       Display = "not_channel" |
-	computation#display(("spi_utils: Not a Spi channel" : SpiChannel)).
+	computation # display(("spi_utils: Not a Spi channel" : SpiChannel)).
 
   show_spi_channel1(Name, SpiChannel, Options, Display) :-
 
@@ -512,7 +512,7 @@ parse_options(Options, Depth, Order, Which, Format) :-
 	parse_options;
 
     otherwise |
-	computation#display(("spi_utils: invalid_option" : Option)),
+	computation # display(("spi_utils: invalid_option" : Option)),
 	parse_options.
 
 
@@ -1579,7 +1579,7 @@ remote_goal(Name, Goal, OutGoal, SpiFcp, OutSpiFcp) :-
 weighter(Weighter) :-
 
     string(Weighter) |
-	spi_monitor # scheduler(S),
+	computation # spi_monitor # scheduler(S),
 	write_channel(default_weighter(Weighter), S);
 
     tuple(Weighter) |
@@ -1588,26 +1588,30 @@ weighter(Weighter) :-
 	update_weighter;
 
     otherwise |
-	computation#display(
+	computation # display(
 		"spi_utils: Weighter must be a string or a tuple" - Weighter).
 
   update_weighter(Name, List, Invalid) :-
 
     string(Name), Invalid =?= [] |
 	utils#list_to_tuple([Name, _ | List], Weighter),
-	spi_monitor # scheduler(S),
+	computation # spi_monitor # scheduler(S),
 	write_channel(default_weighter(Weighter), S);
 
     otherwise :
       List = _ |
 	utils#list_to_tuple([Name | Invalid], Weighter),
-	computation#display("spi_utils: Bad Weighter elements" - Weighter).
+	computation # display("spi_utils: Bad Weighter elements" - Weighter).
 
 
 validate_parameters(Parameters, List, Invalid) + (Bad = Tail?, Tail) :-
 
     Parameters ? P, number(P) :
       List ! P |
+	self;
+
+    Parameters ? V, vector(V), arity(V,2) :
+      List ! V |
 	self;
 
     Parameters ? P, otherwise :
