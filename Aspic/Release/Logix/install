@@ -45,7 +45,7 @@ FcpPath=$EmulatorDir/fcp
 echo making ${FcpPath} ...
 
 cd ${EmulatorDir}
-rm -f fcp spiweight.o
+rm -f fcp spiweight.o fcp.exe
 make
 cd ${CurrentDir}
 
