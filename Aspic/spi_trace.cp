@@ -4,9 +4,9 @@ SpiFcp Trace channel activity from monitor debug output
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2006/01/23 12:06:38 $
+                        $Date: 2006/06/27 08:49:52 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.6 $
+                        $Revision: 1.7 $
                         $Source: /home/qiana/Repository/Aspic/spi_trace.cp,v $
 
 Copyright (C) 2000, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -31,7 +31,7 @@ run(Goal, Limit) :-
 
     Goal =?= _#_,
     Limit >= 0 |
-	spi_monitor#scheduler(Scheduler),
+	computation # spi_monitor # scheduler(Scheduler),
 	write_channel(cutoff(Limit, _State), Scheduler),
 	computation#Goal;
 
@@ -77,11 +77,11 @@ runit(Goal, File, Limit, Scale, Format) :-
     Limit >= 0,
     convert_to_real(Scale, Scale'),
     0.0 < Scale' |
-	spi_monitor#scheduler(Scheduler),
+	computation # spi_monitor # scheduler(Scheduler),
 	write_channel(debug(Stream), Scheduler, Scheduler'),
 	write_channel(cutoff(Limit, _State), Scheduler'),
 	computation#[Goal, events(Events)],
-	spi_utils#show_value(Values?, [Style, 3], Processes),
+	computation # spi_utils # show_value(Values?, [Style, 3], Processes),
 	synchronize_output,
 	screen#display_stream(Out?, [put(File), width(10000)]),
 	filter_data;
