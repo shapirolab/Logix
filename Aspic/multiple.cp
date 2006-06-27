@@ -826,8 +826,7 @@ prepare_arguments(VOutcome, ArgumentTuple, Arguments, FileName, VPOutcome) :-
 
     E1 = [],
     otherwise |
-	start_run(computation#[utils#[evaluate(Limit, L),
-				      evaluate(Scale, S)],
+	start_run(computation#[utils#[evaluate(Limit, L), evaluate(Scale, S)],
 		   spi_status#get_status(cutoff_status, Status)],
 		  Status, VPOutcome).
 
