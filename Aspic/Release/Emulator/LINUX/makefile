@@ -1,6 +1,6 @@
 # fcp make
 SHELL = /bin/csh
-GCC = gcc
+GCC = gcc -m32
 CFLAGS = -c -DDEBUG -g -DULTRIX -DLINUX
 
 INCLUDES = -I.
