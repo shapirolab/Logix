@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2004/12/24 16:55:34 $
+		       	$Date: 2006/06/27 04:43:10 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.7 $
+			$Revision: 1.8 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -58,7 +58,8 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 **                              and public channels:   Name(BaseRate)
 **                                                     Name(BaseRate, Weighter)
 **
-**          ParameterNames is a list of names of parameters and public channels.
+**          ParameterNames is a list of names of parameters and public objects,
+**          channels and variables which may be shared by other modules.
 **
 **          WeightRate = Weighter(BaseRate) weighter and rate for new channels.
 **
@@ -102,7 +103,7 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
 
     In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
     Controls =?= {Exported, Parameters, ParameterNames, WeightRate} |
-	make_process_scope(PiLHS, WeightRate, ProcessScope, [],
+	make_process_scope(PiLHS, WeightRate, ProcessScope, [], ParameterNames,
 				NewChannelList, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
@@ -437,7 +438,7 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
 	utilities#concatenate_lists([Privates, ChannelNames], ParameterNames),
 	make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
-				NewChannelList,
+				ParameterNames, NewChannelList,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
 	self;
@@ -646,7 +647,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
       NextOut = [].
 
 /*
-** make_process_scope/11
+** make_process_scope/12
 **
 ** Analyze PiLHS, producing a ProcessDefinition and a process scope server,
 ** serve_process_scope.
@@ -657,8 +658,8 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 **
 **   WeightRate is the module type and the default base rate.
 **
-**   ParameterNames is a list of channel descriptors (<stochactic_channel_list>)
-**   which are public to the module, and which may be shared by other modules.
+**   ParameterNames and PublicNames are lists of object, channel and variable 
+**   descriptors which are global to the process.
 **
 **   NewDefinition is the ProcessDefinition used by the new scope.
 **
@@ -676,7 +677,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 */
 
 make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
-		NewChannelList1, Out, NextOut,
+		PublicNames, NewChannelList1, Out, NextOut,
 		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
@@ -703,8 +704,8 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
 	make_lhs_tuples(Name?, ParamList1?, ParameterNames1, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
 	extract_parameters(NewChannelList1?, Parameters, ParameterNameList),
-	atom_to_arguments(OuterLHS, Arguments),
-	utilities#subtract_list(ParameterNameList, Arguments, Undeclared),
+	defined_names(OuterLHS, PublicNames, DefinedNames),
+	utilities#subtract_list(ParameterNameList, DefinedNames, Undeclared),
 	diagnose_replies(Undeclared, Name, undeclared_parameter,
 				Errors'''', Errors'''''?),
 	optimize_procedures(NewDefinition, Notes, Out, Out'?),
@@ -722,15 +723,15 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
       C1 = _ |
 	utilities#subtract_list(L2, P, C2).
 
-  atom_to_arguments(Atom, Arguments) + (Index = 2) :-
+  defined_names(Atom, PublicNames, DefinedNames) + (Index = 2) :-
 
     Index++ =< arity(Atom),
     arg(Index, Atom, `Name) :
-      Arguments ! Name |
+      DefinedNames ! Name |
 	self;
 
     Index > arity(Atom) :
-      Arguments = [].
+      DefinedNames = PublicNames.
 
   remove_ambient_channel(ParameterNames, ParameterNames1) :-
 
