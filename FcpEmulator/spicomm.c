@@ -111,7 +111,7 @@
 #define LIST                3
 heapP cdr_down_list();
 
-dump_channel(ChP) {
+dump_channel(heapP ChP) {
   
   fprintf(stderr, "dumping channel: ");
   if (!do_read_vector(Word(SPI_CHANNEL_NAME,IntTag),Ref_Word(ChP)))
@@ -1084,7 +1084,6 @@ int *ChannelType;
   deref(KOutA,Pa);
   if (IsTpl(KOutA)) {
     heapP Pb;
-    int ix = 0;
     int Arity = Arity_of(KOutA);
     if (Arity == 1)
       return(False);
@@ -1550,33 +1549,8 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
     set_reply_to("Error - Send Weight not a Positive Integer",Reply);
     return(False);
   }
-  if (!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP))) {
+  if (!validate_weighter(ChP, &argn, argv))
     return(False);
-  }
-  if (IsRef(KOutA)) {
-    deref_ref(KOutA, Pa);
-    if (IsTpl(KOutA)) {
-      heapP Pb;
-      int Arity = Arity_of(KOutA);
-      if (Arity == 1)
-	return(False);
-      Pb = Pa += 2;
-      deref_ptr(Pb);
-      KOutA = *Pb;
-      for (argn = 0; argn < Arity-2; argn++) {
-	Pb = ++Pa;
-	deref_ptr(Pb);
-	if (IsReal(*Pb))
-	  argv[argn] = real_val((Pb+1));
-	else if (IsInt(*Pb))
-	  argv[argn] = Int_Val(*Pb);
-	else
-	  return False;
-      }
-    }
-    else
-      argn = 0;
-  }
   if (!IsInt(KOutA) || (WeightIndex=Int_Val(KOutA)) < 0)
     return set_reply_to("Error - Invalid Weight Index", Reply);
   if (SendWeight > 0)
@@ -1633,33 +1607,8 @@ int get_selector(heapP ChP, int BasicType, double *Result)
   deref_val(KOutA);
   SendWeight=Int_Val(KOutA); 
   if (SendWeight > 0) {
-    if (!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(ChP)))
+    if (!validate_weighter(ChP, &argn, argv))
       return(False);
-    if (IsRef(KOutA)) {
-      deref_ref(KOutA, Pa);
-      if (IsTpl(KOutA)) {
-	heapP Pb;
-	int ix = 0;
-	int Arity = Arity_of(KOutA);
-	if (Arity == 1)
-	  return(False);
-	Pb = Pa += 2;
-	deref_ptr(Pb);
-	KOutA = *Pb;
-	for (argn = 0; argn < Arity-2; argn++) {
-	  Pb = ++Pa;
-	  deref_ptr(Pb);
-	  if (IsReal(*Pb))
-	    argv[argn] = real_val((Pb+1));
-	  else if (IsInt(*Pb))
-	    argv[argn] = Int_Val(*Pb);
-	  else
-	    return False;
-	}
-      }
-      else
-	argn = 0;
-    }
     WeightIndex = Int_Val(KOutA);
 
     switch (BasicType)
@@ -2104,34 +2053,8 @@ heapP Channel, Weight, Reply ;
     set_reply_to("Error - Receive Weight not a Non-negative Integer", Reply);
     return(False);
   }
-
-  if (!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(Channel)))
+  if (!validate_weighter(Channel, &argn, argv))
     return(False);
-  if (IsRef(KOutA)) {
-    deref_ref(KOutA, Pa);
-    if (IsTpl(KOutA)) {
-      heapP Pb;
-      int ix = 0;
-      int Arity = Arity_of(KOutA);
-      if (Arity == 1)
-	return(False);
-      Pb = Pa += 2;
-      deref_ptr(Pb);
-      KOutA = *Pb;
-      for (argn = 0; argn < Arity-2; argn++) {
-	Pb = ++Pa;
-	deref_ptr(Pb);
-	if (IsReal(*Pb))
-	  argv[argn] = real_val((Pb+1));
-	else if (IsInt(*Pb))
-	  argv[argn] = Int_Val(*Pb);
-	else
-	  return False;
-      }
-    }
-    else
-      argn = 0;
-  }
   WeightIndex = Int_Val(KOutA);
 
   if (!channel_type(Channel, &ChannelType)) {
@@ -2167,4 +2090,56 @@ heapP Channel, Weight, Reply ;
   }
   return set_reply_to("true", Reply);
 }
- 
+
+validate_weighter(Channel, argnr, argv)
+heapP Channel;
+int *argnr;
+double *argv;
+{
+  heapP Pa;
+  heapT Pi;
+  int argn = 0;
+
+  if (!do_read_vector(Word(SPI_WEIGHT_TUPLE,IntTag),Ref_Word(Channel)))
+    return(False);
+  Pi = KOutA;
+  if (IsRef(Pi)) {
+    deref_ref(Pi, Pa);
+    if (IsTpl(Pi)) {
+      heapP Pb;
+      int Arity = Arity_of(Pi);
+      if (Arity == 1)
+	return(False);
+      Pb = Pa += 2;
+      deref_ptr(Pb);
+      Pi = *Pb;		/* the weighter's index */
+      for (/* argn = 0 */; argn < Arity-2; argn++) {
+	Pb = ++Pa;
+	deref_ptr(Pb);
+	if (IsReal(*Pb))
+	  argv[argn] = real_val((Pb+1));
+	else if (IsInt(*Pb))
+	  argv[argn] = Int_Val(*Pb);
+	else if (IsVctr(*Pb)) {
+	  if(!vctr_var_s(Pb, 2))
+	    return False;
+	  if (!do_read_vector(Word(1,IntTag),Ref_Word(Pb)))
+	    return(False);
+	  deref(KOutA, Pb);
+	  if (IsReal(*Pb))
+	    argv[argn] = real_val((Pb+1));
+	  else if (IsInt(*Pb))
+	    argv[argn] = Int_Val(*Pb);
+	}
+	else
+	  return False;
+      }
+    }
+    KOutA = Pi;
+  }
+if (!IsInt(KOutA)) {
+  fprintf(stderr, "*** KOutA = %x\n");
+}
+  *argnr = argn;
+  return True;
+}
