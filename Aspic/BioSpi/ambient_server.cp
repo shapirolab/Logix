@@ -4,9 +4,9 @@ User Ambient server
 William Silverman
 
 Last update by		$Author: bill $
-			$Date: 2005/10/27 17:15:05 $
+			$Date: 2006/06/27 04:30:48 $
 Currently locked by     $Locker:  $
-			$Revision: 1.28 $
+			$Revision: 1.29 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/ambient_server.cp,v $
 
 Copyright (C) 2001, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -87,7 +87,7 @@ run(Commands) :-
 run(Commands, System) :-
 	run(Commands, System, _Out).
 run(Commands, System, Out) :-
-	spi_monitor # [reset, scheduler(Scheduler)],
+	computation # spi_monitor # [reset, scheduler(Scheduler)],
 	synchronize.
 
 synchronize(Commands, System, Out, Scheduler) :-
@@ -371,7 +371,7 @@ ambient(AmbientName, SId, Commands, Parent, Ambient, Debug) :-
       make_channel(ToDomain, DIn),
       Children = [],
       store_vector(AMBIENT_ID, AmbientId?, Ambient) |
-	spi_monitor # scheduler(Scheduler),
+	computation # spi_monitor # scheduler(Scheduler),
 	make_ambient_id,
 	computation # "_domain"(domain_channel(Domain)),
 	computation_server#computation([identifier(AmbientId?, _) | Requests],
@@ -550,21 +550,6 @@ serve_ambient(In, Events, FromSub, Done,
 			      SharedChannels, SharedChannels', Unremoved),
 	pass_unremoved;
 
-/* Upward compatibility global channel declarations */
-    In ? global_channels(List) |
-	DEBUG(global/1, scheduler),
-	merge_public_objects(List, Parameters, Parameters', 0,
-			     PublicChannels, PublicChannels', 0,
-			     Scheduler, _, _),
-	self;
-
-    In ? global_channels(List, ReadyAmbient?^) |
-	DEBUG(global/2, scheduler),
-	merge_public_objects(List, Parameters, Parameters', 0,
-			     PublicChannels, PublicChannels', 0,
-			     Scheduler, Ambient, ReadyAmbient),
-	self;
-
     In ? public_channels(List) |
 	DEBUG(public/1, scheduler),
 	merge_public_objects(List, Parameters, Parameters', 0,
@@ -577,6 +562,16 @@ serve_ambient(In, Events, FromSub, Done,
 	merge_public_objects(List, Parameters, Parameters', 0,
 			     PublicChannels, PublicChannels', 0,
 			     Scheduler, Ambient, ReadyAmbient),
+	self;
+
+    In ? public_object(Name, Value?^) |
+	DEBUGT(public_object/2, scheduler, Name(Value)),
+	computation # spi_monitor # public_object(Name, Value),
+	self;
+
+    In ? public_object(Name, Initial, Value?^) |
+	DEBUGT(public_object/2, scheduler, Name(Value)),
+	computation # spi_monitor # public_object(Name, Initial, Value),
 	self;
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
@@ -1580,6 +1575,7 @@ merge_local_channels(Idle, Argument, NewArgument, Action,
 
     known(Idle),
     freeze(Argument, FrozenArgument, FrozenAtoms) :
+      Watch = _,
       melt(FrozenArgument, MeltedArgument, MeltedAtoms) |
 	merge_channels.
 
