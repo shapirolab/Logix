@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2003/08/31 18:39:27 $
+		       	$Date: 2006/06/27 04:47:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.6 $
+			$Revision: 1.7 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -195,9 +195,9 @@ complete_spifcp_attributes(Exported, Defaults, Parameters, Controls,
 	variable_default_base_rate(DefaultRate, FinalDefaultRate,
 				   ParameterNames, Errors, Errors'),
 	variable_default_weighter,
-	public_variable_names(AllVariables, _,
-			      ParameterNames, NextErrors', NextErrors,
-			      undeclared_public_variable).
+	verify_public_variables(ParameterNames, _,
+				AllVariables, NextErrors', NextErrors,
+				undeclared_public_variable).
 
   extract_parameter_names(Parameters, ParameterNames) :-
 
@@ -244,22 +244,17 @@ complete_spifcp_attributes(Exported, Defaults, Parameters, Controls,
 			     []),
 	utils#list_to_tuple([FinalVariable?, Index | FinalArguments?],
 			    FinalDefaultWeighter),
-	public_variable_names;
+	verify_public_variables;
 
-    tuple(DefaultWeighter), DefaultWeighter =\= `_,
-    arg(1, DefaultWeighter, Variable), Variable =?= `_VariableName :
+    otherwise :
       Diagnostic = non_public_default_weighter_argument |
-	public_variable_name(DefaultWeighter, FinalDefault,
-		 	     ParameterNames, Errors, Errors',
-			     non_public_variable_weighter_name),
-	utils#tuple_to_dlist(DefaultWeighter, [_Functor, Index | Arguments],
-			     []),
-	utils#list_to_tuple([FinalDefault?, Index | FinalArguments?],
+	utils#tuple_to_dlist(DefaultWeighter, [String, Index | Arguments], []),
+	utils#list_to_tuple([String, Index | FinalArguments?],
 			    FinalDefaultWeighter),
-	public_variable_names.
+	verify_public_variables.
 
-  public_variable_names(Arguments, FinalArguments,
-			ParameterNames, Errors, NextErrors, Diagnostic) :-
+  verify_public_variables(Arguments, FinalArguments,
+			  ParameterNames, Errors, NextErrors, Diagnostic) :-
 
     Arguments ? `VariableName :
       FinalArguments ! DefaultVariable |
@@ -268,7 +263,8 @@ complete_spifcp_attributes(Exported, Defaults, Parameters, Controls,
 	self;
 
     Arguments ? Other,
-    Other =\= `_ |
+    Other =\= `_ :
+      FinalArguments ! Other |
 	self;
 
     Arguments =?= [] :
@@ -683,7 +679,7 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 	      NextMake],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
-	parameters_to_asks([BaseRate], [number], Asks, NextAsks);
+	parameters_to_asks([BaseRate], [known], Asks, NextAsks);
 
     Descriptor = ChannelName(BaseRate, ComputeWeight),
     string(ComputeWeight),
@@ -718,7 +714,7 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
 	      NextMake],
-      Ops = [number | Ops],
+      Ops = [known | Ops],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	utils#tuple_to_dlist(ComputeWeight, [Functor, _ | List], []),
