@@ -4,9 +4,9 @@ Meta-Interpreter of Stochastic Pi Calculus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill Silverman
 
 Last update by          $Author: bill $
-			$Date: 2003/04/30 07:10:55 $
+			$Date: 2006/06/27 04:26:01 $
 Currently locked by     $Locker:  $
-			$Revision: 1.3 $
+			$Revision: 1.4 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/reduce.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -219,29 +219,29 @@ monitor(Commands,Signals,Spi_Input,Circuit,Channels) :-
 	Commands?resolvent(X) :
 	    Signals!suspend,
 	    L = [resolvent(X') | L'] |
-		spi_monitor # options(SpiOptions, SpiOptions),
-		spi_utils # show_resolvent(X'?, SpiOptions, X),
+		computation # [spi_monitor # options(SpiOptions, SpiOptions),
+			       spi_utils # show_resolvent(X'?, SpiOptions, X)],
 		close_tail(Commands', Signals', Spi_Input, L'-R, Channels);
 
 	Circuit = L-R,
 	Commands?enabled(X) :
 	    Signals!suspend,
 	    L = [enabled(X') | L'] |
-		spi_monitor # options(SpiOptions, SpiOptions),
-		spi_utils # show_resolvent(X'?, SpiOptions, X),
+		computation # [spi_monitor # options(SpiOptions, SpiOptions),
+			       spi_utils # show_resolvent(X'?, SpiOptions, X)],
 		close_tail(Commands', Signals', Spi_Input, L'-R, Channels);
 
 	Circuit = L-R,
 	Commands?disabled(X) :
 	    Signals!suspend,
 	    L = [disabled(X') | L'] |
-		spi_monitor # options(SpiOptions, SpiOptions),
-		spi_utils # show_resolvent(X'?, SpiOptions, X),
+		computation # [spi_monitor # options(SpiOptions, SpiOptions),
+			       spi_utils # show_resolvent(X'?, SpiOptions, X)],
 		close_tail(Commands', Signals', Spi_Input, L'-R, Channels);
 
 	Spi_Input ? " goal "(Goal, SpiGoal) |
-		spi_monitor # options(SpiOptions, SpiOptions),
-		spi_utils # show_goals(Goal, SpiOptions?, SpiGoal),
+		computation # [spi_monitor # options(SpiOptions, SpiOptions),
+			       spi_utils # show_goals(Goal, SpiOptions?, SpiGoal)],
 		monitor;
 
 	otherwise,

@@ -4,9 +4,9 @@ Main control of Stochastic Pi Calulus algorithmic debugger.
 Yossi Lichtenstein, Peter Gerstenhaber, Bill SIlverman
 
 Last update by          $Author: bill $
-			$Date: 2004/10/21 19:41:48 $
+			$Date: 2006/06/27 04:26:01 $
 Currently locked by     $Locker:  $
-			$Revision: 1.5 $
+			$Revision: 1.6 $
 			$Source: /home/qiana/Repository/Aspic/spidbg/self.cp,v $
 
 Copyright (C) 1988, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -105,9 +105,10 @@ procedure interpret(Id, RPCGoal).
 interpret(Id, RPCGoal) + (SpiOptions = []) :- 
     true:
       make_channel(BadOption, _) |
-	spi_utils # parse_options(SpiOptions, Depth(1), BadOption(BadOption),
-		      			Which(note), Format(short)),
-	computation # events(Events),
+	computation # [events(Events),
+		       spi_utils #
+		parse_options(SpiOptions, Depth(1), BadOption(BadOption),
+			      Which(note), Format(short))],
 	do_debug(Events, Id, RPCGoal, [Depth,Which,Format]).
 
 /*************************************************************************/
@@ -137,8 +138,7 @@ adb(Id,RPCGoal,Trace) + (SpiOptions = []) :-
 		,log(nolog)
 		,breaklist(Goal, Breaks)
 		,make_channel(IO_Channel,IO)
-		,spi_monitor # options(SpiOptions, OldSpiOptions)
-
+		,computation # spi_monitor # options(SpiOptions, OldSpiOptions)
 		,computation # shell(prompt,'@debug ->')
 		,computation # shell(filter_system_macros,Input,NonCommands)
 		,filter(Id', Input, IO?, Events, OldSpiOptions,
@@ -216,7 +216,7 @@ shutdown(Id, In, CloseIOs, Events, OldSpiOptions, ChokeStreams) :-
 		computation # shell(pop_prompt),
 		complete_io(Id, CloseIOs),
 		print_all_events(Id, Events),
-		spi_monitor # options(OldSpiOptions, _).
+		computation # spi_monitor # options(OldSpiOptions, _).
 
 /*************************************************************************/
 procedure send_a_command(C, Id, OutStreams, NewOutStreams).
