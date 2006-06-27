@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.12 2006/03/23 12:42:49 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.13 2006/06/27 04:56:50 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -10,16 +10,13 @@
    ctl:
      foreign function - enables creating ctl .bin files
    cygwin:
-     builds makefile for cygwin kernerl cygwin_nt-5.1
+     builds makefile for cywin kernel CYGWIN_NT-5.1
    dbg:
      sets DEBUG flag
    dbgl:
      sets DEBUG_LINK
    dbx:
      compile with -g
-   dec:
-     sets ULTRIX flag, enables running on dec workstations or intel pcs
-     add cnv.c to files.
    doors:
      foreign function - doors api.
    file:
@@ -32,6 +29,8 @@
      foreign function - operating system interface
    linux:
      builds makefile for linux kernel 2.2.12, redhat 6.1
+   long:
+     build version for 64-bit word platform
    macosx:
      builds makefile for powerpc BSD kernel
    math:
@@ -45,6 +44,8 @@
    os4.1:
      links with -Bstatic as required by certain computers to enable dynamic
        linkning
+   short:
+     build version for 32-bit word platform (default)
    spi:
      foreign function - SpiFcp requests
    sgi_irix_5d2:
@@ -57,6 +58,9 @@
      foreign function - timer requests
    tty:
      foreign function - tty handler
+   ultrix:
+     sets ULTRIX flag, enables running on intel pcs
+     add cnv.c to files.
 
 **
 **
@@ -81,18 +85,19 @@ static char *NullS = "";
 static char *cnvS = "cnv";
 static char *concatenateS = "concatenate";
 static char *ctlS = "ctl";
-static char *cygwin_5d1 = "cygwin_nt_5d1";
+static char *cygwin_nt_5d1S = "cygwin_nt-5d1";
 static char *dbgS = "-DDEBUG";
 static char *dbglS = "-DDEBUG_LINK";
 static char *dbxS = "-g";
-static char *decS = "-DULTRIX";
 static char *doorsS = "doorsfcp";
 static char *fileS = "file";
 static char *freeze_termS = "freeze_term";
 static char *interfaceS = "interface";
 static char *hpux_9d05S = "hppa1d1_hpux_9d05";
-static char *linux_6d1 = "linux_2d2d12_redhat_6d1";
-static char *macosx_10d4 = "macosx_BSD_10d4";
+static char *linux_6d1S = "linux_2d2d12_redhat_6d1";
+static char *longS = "-m64";
+static char *longwordS = "-DLONGWORD";
+static char *macosx_8d4S = "macosx_BSD_8d4";
 static char *mathS = "math";
 static char *noptS = " ";
 static char *optS = "-O";
@@ -103,20 +108,22 @@ static char *os41S = "-Bstatic";
 static char *spiS = "spicomm";
 static char *spiwS = "spiweight";
 static char *sgi_5d2S = "sgi_irix_5d2";
+static char *shortS = "-m32";
+static char *shortwordS = "";
 static char *solaris_2d3S = "sun4_solaris_2d3";
 static char *sunos_4d1d3S = "sun4_sunos_4d1d3";
 static char *timerS = "timer";
 static char *ttyS = "tty";
+static char *ultrixS = "-DULTRIX";
 
 static char *cnvV = "";
 static char *concatenateV = "";
 static char *ctlV = "";
-static char *cygwin_5d1V = "";
+static char *cygwin_nt_5d1V = "";
 static char *dbgV = "";
 static char *dbglV = "";
 static char *dbvV = "";
 static char *dbxV = "";
-static char *decV = "";
 static char *doorsV = "";
 static char *fileV = "";
 static char *freeze_termV = "";
@@ -124,7 +131,9 @@ static char *hpux_9d05V = "";
 static char *interfaceV = "";
 static char *libsV = "";
 static char *linux_6d1V = "";
-static char *macosx_10d4V = "";
+static char *longV = "-m32";
+static char *longwordV = "";
+static char *macosx_8d4V = "";
 static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
@@ -136,6 +145,7 @@ static char *solaris_2d3V = "";
 static char *sunos_4d1d3V = "";
 static char *timerV = "";
 static char *ttyV = "";
+static char *ultrixV = "";
 
 main(argc, argv)
      int	argc;
@@ -185,10 +195,11 @@ main(argc, argv)
 	  exit(1);
 	}
 	continue;
-      case 'y':
-	cygwin_5d1V = cygwin_5d1;
-	cnvV = cnvS;
-	continue;
+	case 'y':
+	  /* CYGWIN_NT-5.1 */
+	  cygwin_nt_5d1V = cygwin_nt_5d1S;
+	  cnvV = cnvS;
+	  continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
@@ -198,7 +209,6 @@ main(argc, argv)
       /* dbgl */
       /* dbv */
       /* dbx */
-      /* dec */
       /* doors */
       switch (*S++) {
       case 'b':
@@ -232,11 +242,6 @@ main(argc, argv)
 	  printf("mkmk: Unknown option %s\n", *argv);
 	  exit(1);
 	}
-	continue;
-      case 'e':
-	/* dec */
-	decV = decS;
-	cnvV = cnvS;
 	continue;
       case 'o':
 	/* doors */
@@ -298,13 +303,18 @@ main(argc, argv)
 	  continue;
 	case 'n':
 	  /* linux_2d2d12_redhat_6d1 */
-	  linux_6d1V = linux_6d1;
+	  linux_6d1V = linux_6d1S;
 	  cnvV = cnvS;
 	  continue;
 	default:
 	  printf("mkmk: Unknown option %s\n", *argv);
 	  exit(1);
 	}
+      case 'o':
+	/* long */
+	longV = longS;
+	longwordV = longwordS;
+	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
@@ -314,7 +324,7 @@ main(argc, argv)
 	switch (*S++) {
 	case 'c':
 	  /* macosx */
-	  macosx_10d4V = macosx_10d4;
+	  macosx_8d4V = macosx_8d4S;
 	  continue;
 	case 't':
 	  /* math */
@@ -375,6 +385,11 @@ main(argc, argv)
 	/* sgi_irix_5d2 */
 	sgi_5d2V = sgi_5d2S;
 	continue;
+      case 'h':
+	/* short */
+	longV = shortS;
+	longwordV = shortwordS;
+	continue;
       case 'p':
 	/* spi */
 	spiV = LinkFunc[LinkFuncNum] = spiS;
@@ -431,6 +446,11 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+    case 'u':
+      /* ultrix */
+      ultrixV = ultrixS;
+      cnvV = cnvS;
+      continue;
     default:
       printf("mkmk: Unknown option %c\n", *argv);
       exit(1);
@@ -468,25 +488,26 @@ main(argc, argv)
 
   fprintf(MakeFd, "# fcp make\n");
   fprintf(MakeFd, "SHELL = /bin/csh\n");
-  fprintf(MakeFd, "GCC = gcc\n");
+  fprintf(MakeFd, "GCC = gcc %s\n", longV);
   Pos = fprintf(MakeFd, "CFLAGS = -c");
+  Pos = cond_print(MakeFd, longwordV, "", "", Pos);
   Pos = cond_print(MakeFd, dbgV, "", "", Pos);
   Pos = cond_print(MakeFd, dbglV, "", "", Pos);
   Pos = cond_print(MakeFd, dbvV, "", "", Pos);
   Pos = cond_print(MakeFd, dbxV, "", "", Pos);
-  Pos = cond_print(MakeFd, decV, "", "", Pos);
+  Pos = cond_print(MakeFd, ultrixV, "", "", Pos);
 
-  if (strcmp(cygwin_5d1V, NullS) != 0) {
+  if (strcmp(cygwin_nt_5d1V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DCYGWIN", "", "", Pos);
   }
   if (strcmp(hpux_9d05V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DHPUX", "", "", Pos);
   }
-  if (strcmp(macosx_10d4V, NullS) != 0) {
-    Pos = cond_print(MakeFd, "-DMACOSX", "", "", Pos);
-  }
   if (strcmp(linux_6d1V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);
+  }
+  if (strcmp(macosx_8d4V, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DMACOSX", "", "", Pos);
   }
   if (strcmp(sgi_5d2V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DSGI", "", "", Pos);
