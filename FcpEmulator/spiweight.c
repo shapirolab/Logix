@@ -14,6 +14,8 @@ struct weighter {
   int index;
 };
 
+double exp(double exp);
+
 /* Add the name and index of your computation to the following table. */
 
 struct weighter weighttab[] = {
