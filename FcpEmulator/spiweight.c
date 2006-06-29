@@ -6,7 +6,7 @@
 /******************************  Examples *******************************/
 #define SQUARE 100
 #define POLY   101
-/******************************my defines *******************************/
+/***************************** my defines *******************************/
 #define DELTA_DELAY 300
 #define GAUSSIAN_DELAY 301
 struct weighter {
@@ -67,6 +67,7 @@ double spi_compute_bimolecular_weight(int method,
 				      int argn, double argv[])
 {
   double result;
+  double exp(double expression);
 
   switch (method) {
 
@@ -82,16 +83,17 @@ double spi_compute_bimolecular_weight(int method,
       break;
     }
   */
-      /*
-       * modeling a delay:
-       * using a gaussian with a given width(gaussbreite)
-       * plus an offset delay time
-       * thus needing three arguments:
-       * double currentTime
-       * double delayTime
-       * double sigma_square(variance)
-       * function: exp(-(currentTime - delayTime)^2/2* sigma_square)
-       */
+
+  /*
+   * modeling a delay:
+   * using a gaussian with a given width(gaussbreite)
+   * plus an offset delay time
+   * thus needing three arguments:
+   * double currentTime
+   * double delayTime
+   * double sigma_square(variance)
+   * function: rate*exp(-(currentTime - delayTime)^2/2* sigma_square)
+   */
 
     case GAUSSIAN_DELAY: {
       if(argn >= 0){
@@ -100,6 +102,13 @@ double spi_compute_bimolecular_weight(int method,
 	double variance    = argv[2];
 	double delta = currentTime - delayTime;
 	result = rate*exp(-((delta*delta/2)*variance));
+
+	/* if result is 0, this channel cannot be chosen. */
+	if(result <= 0) {
+	  /* This is a kluge, which may be removed, if you don't mind
+	     indefinite delays in choosing this channel */
+	  result = rate;
+	}
       }
       else
 	spi_compute_bimolecular_weight(DEFAULT,rate,sends,receives,argn,argv);
