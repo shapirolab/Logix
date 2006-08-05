@@ -136,6 +136,7 @@ BNF for BioFcp - see CONSTANTS.txt for the BNF of Logix constants.
                            <nested_scope>
                            <ambient>
                            <macro_call>
+			   <object_call>
                            <external_call>
                            {<logix_goal>}
                            {(<logix_goal_list>)}
@@ -180,6 +181,17 @@ BNF for BioFcp - see CONSTANTS.txt for the BNF of Logix constants.
                            serialize_messages(<channels_and_reply>)
 			   get_channel_status(<channel> , <channel_attributes>
 			                                , <logix_variable>)
+			   object(<logix_variable>)
+			   object(<logix term>, <logix_variable>)
+
+<object_call>	       ::= <logix_variable> ! <object_request>
+
+<object_request>       ::= close(<request_reply>)
+			   name(<logix_variable>, <request_reply>)
+			   read(<logix_variable>, <request_reply>)
+			   store(<logix term>, <request_reply>)
+			   values(<logix_variable>, <request_reply>)
+
 
 <channels_and_reply>   ::= <logix_variable>
                            <channel> , <channels_and_reply>
@@ -271,7 +283,9 @@ of the process or in a <public_declaration>.  In any case, the
 <logix_variable> should be instantiated to a string (see above).
 
 Any <weighter_parameter> may be specified by a <logix_variable>, as
-for a <base_rate> (see above).
+for a <base_rate> (see above).  When that <logix_variable> is an
+object, its most recent value is used in calculating the value of
+the <weighter_declaration>.
 
 
 An argument in a <macro_call> which precedes the <channels_and_reply> or
@@ -288,10 +302,16 @@ The program macro  get_channel_status  instantiates the trailing
 program_macros.txt for details regarding <channel_attribute> values.
 
 
-
 WARNING: When the single underscore character <logix_variable> appears
 in a <receive> <transmission> in place of a <channel>, the corresponding
 <send> <channel> should be declared in a <public_declaration>.
+
+
+A <request_reply> is a <logix_variable> which is instantiated at the
+conclusion of the request; if the request succeeded, it is instantiated 
+to the the string "true", or if the request failed, it is instantiated
+to a diagnostic, explaining the failure.  The <request_reply> may be
+omitted from the <object_request>.
 
 
 Logix Terms:
@@ -351,7 +371,7 @@ variable names all begin with a capital letter or underscore; to reference a
 <logix_term>, refer to '_var'(<channel>).
 
 
-A <logix_variable> may have a value which is an arbitrary logix term.  Such
+A <logix_variable> may have a value which is an arbitrary Logix term.  Such
 a value may be tested by a <logix_ask_guard>, instantiated or used as an
 argument in a <logix_goal> or in a <logix_tell_guard>.  An arbitrary
 <logix_term> may be sent in a <message> by the library <logix_goal>
@@ -375,6 +395,9 @@ A <logix_variable> may be instantiated by an assignment in a <logix_goal>
 within a <call> :
 
     <logix_variable> = <logix_term>
+
+A <logix_term> may also be used to initialise an object, or as a "value"
+stored by an <object_call>.
 
 
 The additive definition of <left_hand_side> is syntactic sugar - e.g.
