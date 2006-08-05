@@ -1,6 +1,6 @@
 # fcp make
 SHELL = /bin/csh
-GCC = gcc -m32
+GCC = gcc
 CFLAGS = -c -DDEBUG -g -DSGI
 
 INCLUDES = -I.
