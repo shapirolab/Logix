@@ -1,25 +1,18 @@
 rm -f system/../Bin/reserved_text.bin
 
-rm -f release/SpiFcp/*.cp
-cp -p spi_*.cp release/SpiFcp
-cp -p user_macros.cp release/SpiFcp
-cp -p multiple.cp release/SpiFcp
+rm -f release/SpiFcp/Source/*.cp
+cp -p spi_*.cp release/SpiFcp/Source
+cp -p user_macros.cp release/SpiFcp/Source
+cp -p multiple.cp release/SpiFcp/Source
 rm -f system/*.cp
 cp -p spi_constants.cp system
 
-rm -f release/SpiFcp/Bin/*.bin
-cp -p Bin/spi_*.bin release/SpiFcp/Bin
-cp -p Bin/user_macros.bin release/SpiFcp/Bin
-cp -p Bin/multiple.bin release/SpiFcp/Bin
 rm -f system/Bin/spi_*.bin
-ln    release/SpiFcp/Bin/spi_*.bin system/Bin
+cp -p Bin/spi*.bin system/Bin
 rm -f system/Bin/multiple.bin
-ln    release/SpiFcp/Bin/multiple.bin system/Bin
+cp -p Bin/multiple.bin system/Bin
 rm -f system/user_macros.bin
 cp -p Bin/user_macros.bin system
-
-rm -f release/SpiFcp/library_server/spi_library.cp
-cp -p library_server/spi_library.cp release/SpiFcp/library_server
 
 rm -f system/library_server/Bin/spi_library.bin
 cp -p library_server/Bin/spi_library.bin system/library_server/Bin
@@ -27,30 +20,28 @@ cp -p library_server/Bin/spi_library.bin system/library_server/Bin
 rm -f system/spidbg/Bin/self.bin
 cp -p spidbg/Bin/self.bin system/spidbg/Bin
 
-rm -f release/SpiFcp/spifcp/*.cp
-cp -p spifcp/*.cp release/SpiFcp/spifcp
+rm -f release/SpiFcp/Source/library_server/spi_library.cp
+cp -p library_server/spi_library.cp release/SpiFcp/Source/library_server
 
-rm -f release/BioSpi/*.cp
-cp -p BioSpi/ambient_list.cp release/BioSpi
-cp -p BioSpi/ambient_server.cp release/BioSpi
-cp -p BioSpi/user_macros.cp release/BioSpi
+rm -f release/SpiFcp/Source/spifcp/*.cp
+cp -p spifcp/*.cp release/SpiFcp/Source/spifcp
+
+rm -f release/BioSpi/Source/*.cp
+cp -p BioSpi/ambient_list.cp release/BioSpi/Source
+cp -p BioSpi/ambient_server.cp release/BioSpi/Source
+cp -p BioSpi/user_macros.cp release/BioSpi/Source
 
 rm -f release/BioSpi/Bin/*.bin
-cp -p BioSpi/Bin/ambient_list.bin release/BioSpi/Bin
-cp -p BioSpi/Bin/ambient_server.bin release/BioSpi/Bin
 cp -p BioSpi/Bin/user_macros.bin release/BioSpi/Bin
 rm -f system/Bin/ambient_*.bin
-ln    release/BioSpi/Bin/ambient_list.bin system/Bin
-ln    release/BioSpi/Bin/ambient_server.bin system/Bin
-
-rm -f release/SpiFcp/spifcp/*.cp
-cp -p spifcp/*.cp release/SpiFcp/spifcp
+cp -p BioSpi/Bin/ambient_list.bin system/Bin
+cp -p BioSpi/Bin/ambient_server.bin system/Bin
 
 rm -f system/transform/spifcp/Bin/*.bin
 cp -p spifcp/Bin/self.bin system/transform/spifcp/Bin
 
-rm -f release/BioSpi/biospi/*.cp
-cp -p BioSpi/biospi/*.cp release/BioSpi/biospi
+rm -f release/BioSpi/Source/biospi/*.cp
+cp -p BioSpi/biospi/*.cp release/BioSpi/Source/biospi
 
 rm -f system/transform/biospi/Bin/*.bin
 cp -p BioSpi/biospi/Bin/self.bin system/transform/biospi/Bin
@@ -113,4 +104,3 @@ cp -p Tutorial/which.cp release/Tutorial/which.cp
 cd Release
 source copy_to_release
 cd ..
-
