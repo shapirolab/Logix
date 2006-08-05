@@ -1,0 +1,42 @@
+An object is a monitored, named Logix variable, with a "value" which
+may be accessed and altered.  The object is created by the either of
+the macro calls:
+
+    object(<logix_variable>)
+    object(<initial value>, <logix_variable>)
+
+where <initial value> is an arbitrary Logix term; if <initial value>
+is omitted, the initial value of the object is integer 0.  The
+<logix_variable> is instantiated as a result of the call.
+
+An <object_call> (see Spifcp/Documentation/BNF.txt) presents a request
+to the monitor.  It has the form:
+
+    <logix_variable> ! <object_request>
+
+The requests are:
+
+    close(<request_reply>)
+    name(<logix_variable>, <request_reply>)
+    read(<logix_variable>, <request_reply>)
+    store(<logix_term>, <request_reply>)
+    values(<logix_variable>, <request_reply>)
+
+The <request_reply> may be omitted; in that case the close request is
+just the string "close".
+
+The <logix_variable> is instantiated by the request to the appropriate
+value:
+
+    name	The name of the object.
+    read	The most recent value of the object.
+    values	A Logix list of values stored to the object, beginning
+		with the most recent one.  Note that the tail of the
+		list is uninstantiated until the object is closed.
+
+The store request makes the <logix_term> the most recent value of the
+object, and unifies it with a trailing list element.
+
+An object may appear in place of a <weighter_parameter>.  In that
+case, the most recent value of the object is used to compute the value
+of the <weighter_declaration>.

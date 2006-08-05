@@ -16,6 +16,7 @@ program.  They have the general form:
 
     <simple_argument>         ::= <integer>
                                   <real>
+                                  <number>
                                   <string>
                                   []
                                   <channel>
@@ -29,11 +30,6 @@ program.  They have the general form:
 
     <strings>                 ::= <string>
                                   <string> , <strings>
-
-Where <real> is designated, a numeric value or a <string> representing a
-real value may appear - it is converted to the correspondig real value
-before the macro is performed.  This allows real values to be represented
-in the conventional form, including an optional exponent.
 
 A string may be any logix string, including arbitrary quoted strings.  The
 possible string values may be enumerated for a specific macro.
