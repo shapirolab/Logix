@@ -4,9 +4,9 @@ SpiFcp Channel activity monitor
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2006/06/27 05:30:38 $
+                        $Date: 2006/08/05 06:10:26 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.29 $
+                        $Revision: 1.30 $
                         $Source: /home/qiana/Repository/Aspic/spi_monitor.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,16 +15,18 @@ Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -monitor(initialize).
 -language([evaluate,compound,colon]).
--export([get_public_channels/1, public_channels/1, public_channels/2,
+-export([get_public_channels/1, get_public_values/1,
+	 public_channels/1, public_channels/2,
 	 new_channel/3, new_channel/4, new_public_channel/4,
-	 options/2, public_object/2, reset/0, scheduler/1]).
+	 options/2,
+	 public_object/3,
+	 reset/0, scheduler/1]).
 -include(spi_constants).
 
 RAN =>  4.					/* uniform 0..1 variate */
 LN  =>  9.					/* natural logarithm */
 
 REALTIME => 12.
-
 MAXTIME => 99999999999999999999999999999999999999999999999999999999999.0.
 
 DEBUG(Note) => write_channel(debug_note(Note), Scheduler).
@@ -69,7 +71,7 @@ initialize(In) :-
       Randomize = 0,
       SpiOffsets = SPIOFFSETS,
       DefaultWeighter = SPI_DEFAULT_WEIGHT_NAME(SPI_DEFAULT_WEIGHT_INDEX) |
-	processor#link(lookup(spicomm, SpiOffset), OkComm),
+	processor # link(lookup(spicomm, SpiOffset), OkComm),
 	check_spicomm(OkComm, SpiOffsets, SpiOffsets'),
 	serve.
 
@@ -78,7 +80,7 @@ initialize(In) :-
     Ok =\= true :
       DefaultSpiOffsets = _,
       SpiOffsets = {unbound, unbound, unbound, unbound, unbound} |
-	computation#comment(("No spicomm" : "No non-standard weighters."));
+	computation # comment(("No spicomm" : "No non-standard weighters."));
 
     Ok =?= true :
       SpiOffsets = DefaultSpiOffsets.
@@ -88,14 +90,11 @@ initialize(In) :-
 **
 ** It recognises:
 **
-***** Obsolescent **********************************************************
-**    get_global_channels(List?^)
-**    global_channels(List)
-**    global_channels(List, Scheduler^)
-****************************************************************************
 **    get_public_channels(SortedList?^)
+**    get_public_values(SortedList?^)
 **    public_channels(SortedList)
 **    public_channels(SortedList, Scheduler^)
+**    public_object(Name, Initial, Vector?^)
 **    new_channel(ChannelName, Channel, BaseRate)
 **    new_channel(ChannelName, Channel, ComputeWeight, BaseRate)
 **    options(New, Old?^)
@@ -116,11 +115,13 @@ initialize(In) :-
 ** Monitor State
 **
 **   Options - for spi_utils functions
-**   Parameters - sorted (bounded) list of global parameters:
-**                                       {name,value}
-**   Publics - sorted (bounded) list of public channel:
+**
+**   Parameters - {Channels, Values}
+**     Channels - sorted (bounded) list of public channels:
 **                                       {name,channel,baserate}
 **                                       {name,channel,computeweight,baserate}
+**     Values - sorted (bounded) list of public values:
+**                                       {name,value}
 **   Scheduler - Channel to Scheduling input
 **     Randomize - state of scheduling: 0 or SPI_RANDOM_FLAG
 **
@@ -131,16 +132,50 @@ initialize(In) :-
 
 serve(In, Options, Ordinal, Randomize, SpiOffsets, DefaultWeighter) :-
     true :
-      make_vector(2, SpiTime, _),
-      store_vector(1, 0.0, SpiTime),
-      close_vector(2, SpiTime) |
-	Publics = [{0, _, -1, ""}, {[], _, -1, ""}],
-	Parameters = [{0, _}, {"SPITIME", SpiTime}, {[], _}],
-	processor#link(lookup(math, MathOffset), OkMath),
+      make_vector(OBJECT_ARITY, SpiTime, Outputs),
+      store_vector(OBJECT_VALUES, TIME_INITIAL_VALUE, SpiTime),
+      Channels = [{[], _, -1, ""}],
+      NamedValues = [{TIME_OBJECT_NAME, SpiTime}, {[], _}],
+      Parameters = {Channels, NamedValues} |
+	arg(OBJECT_VALUES, Outputs, Values),
+	arg(OBJECT_REQUESTS, Outputs, Requests),
+	filter_time_requests(Requests?, Requests'),
+	spi_object # monitor(TIME_OBJECT_NAME, _InitialValue, SpiTime, 
+				Values, Requests'?),
+	processor # link(lookup(math, MathOffset), OkMath),
 	server,
 	start_scheduling.
 
-server(In, Options, Scheduler, Parameters, Publics) :-
+  filter_time_requests(Requests, Filtered) :-
+
+    Requests ? Close, Close =?= close(_False) |
+	spitime_cant_do(Close),
+	self;
+
+    Requests ? Store, Store =?= store(_NewValue, _False) |
+	spitime_cant_do(Store),
+	self;
+
+    Requests ? Other,
+    otherwise :
+      Filtered ! Other |
+	self;
+
+    Requests =?= [] :
+      Filtered = [].
+
+  spitime_cant_do(Request) :-
+
+    arity(Request, Arity),
+    arg(Arity, Request, False),
+    we(False) :
+      False = false;
+
+    otherwise |
+	fail(TIME_OBJECT_NAME - Request, forbidden).
+
+
+server(In, Options, Parameters, Scheduler) :-
 
     In ? debug(Debug) :
       Debug = Debug'?,
@@ -156,35 +191,28 @@ server(In, Options, Scheduler, Parameters, Publics) :-
       write_channel(end_record(Stream'), Scheduler) |
 	self;
 
-    In ? get_public_channels(List),
-    we(List) :
-      List = List'? |
-	copy_public(Publics, List', _),
+    In ? get_public_channels(List?^),
+    Parameters =?= {Channels, _NamedValues} |
+	copy_bounded(Channels, List),
+	self;
+
+    In ? get_public_values(List?^),
+    Parameters =?= {_Channels, NamedValues} |
+	copy_bounded(NamedValues, List),
 	self;
 
     In ? public_channels(List) |
-	merge_public_objects(List, Publics, Publics', 0,
-			     Parameters, Parameters', 0,
-			     Scheduler, _),
+	merge_parameter_list(List, Parameters, Parameters', Scheduler, _),
 	self;
 
     In ? public_channels(List, ReadyScheduler) |
-	merge_public_objects(List, Publics, Publics', 0,
-			     Parameters, Parameters', 0,
-			     Scheduler, ReadyScheduler),
+	merge_parameter_list(List, Parameters, Parameters',
+			 Scheduler, ReadyScheduler),
 	self;
 
-    In ? public_object(Name, Value?^) |
-	merge_public_objects([Name(Value)], Publics, Publics', 0,
-			      Parameters, Parameters', 0,
-			      Scheduler, Ready),
-	wait_object_ready + (Initial = 0.0),
-	self;	
-
-    In ? public_object(Name, Initial, Value?^) |
-	merge_public_objects([Name(Value)], Publics, Publics', 0,
-			      Parameters, Parameters', 0,
-			      Scheduler, Ready),
+    In ? public_object(Name, Initial, Vector?^) |
+	merge_parameter_list(Name(Vector), Parameters, Parameters',
+			     Scheduler, Ready),
 	wait_object_ready,
 	self;	
 
@@ -217,10 +245,10 @@ server(In, Options, Scheduler, Parameters, Publics) :-
       In'' = [reset(DefaultWeighter?, Randomize?, SpiOffsets?, 1) | In'] |
 	self;
 
-    In ? reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal) :
-      Parameters = _,
-      Publics = _,
+    In ? reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal),
+    Parameters =?= {_Channels, NamedValues} :
       close_channel(Scheduler) |
+	close_public_objects,
 	serve;
 
     In ? scheduler(Scheduler^) |
@@ -244,218 +272,273 @@ server(In, Options, Scheduler, Parameters, Publics) :-
 	self,
 	fail(Other, unknown);
 
-    In =?= [] :
+    In =?= [],
+    Parameters =?= {_Channels, NamedValues} :
       Options = _,
-      Parameters = _,
-      Publics = _,
-      close_channel(Scheduler).
+      close_channel(Scheduler) |
+	close_public_objects.
 
+  close_public_objects(NamedValues) :-
+
+    NamedValues ? _Name(Vector),
+    arity(Vector, OBJECT_ARITY),
+    read_vector(OBJECT_VALUES, Vector, _Value) :
+      write_vector(OBJECT_REQUESTS, close(_), Vector) |
+	self;
+
+    /* If not a vector or different arity or unstored, just ignore it! */
+    NamedValues ? _Name(_Value),
+    otherwise |
+	self;
+
+    NamedValues ? _Name(Variable),
+    unknown(Variable) |
+	self;
+
+    NamedValues =?= [] :
+      true.
+    
 /***************************** Utilities ************************************/
 
-/* merge_public_objects
+/* merge_parameter_list
 **
 ** Input:
 **
 **   List - sorted list of: Name(Value)
 **                          Name(Channel^, BaseRate)
 **                          Name(Channel^, ComputeWeight, BaseRate)
-**   Parameters - (bounded) sorted list of:
-**                          Name(Value).
-**   Publics - (bounded) sorted list of:
-**                          Name(Channel, BaseRate, ComputeWeight)
-**   LastParameter - Name of previous element of Parameters - initially 0.
-**   LastPublic - Name of previous element of Publics - initially 0.
+**          or: Name(Object)
+**   Parameters - {Channels, NamedValues}
+**     NamedValues -  (bounded) sorted list of: Name(Value).
+**     Channels - (bounded) sorted list of:
+**				 Name(Channel, BaseRate, ComputeWeight).
 **   Scheduler - FCP channel to scheduling monitor.
 **
 ** Output:
 **
-**   NewParameters - updated parameter list.
-**   NewPublics - updated public list.
+**   NewParameters - {NewChannels, NewNamedValues}
+**     NewNamedValues  - updated named value list.
+**     NewChannels - updated channels list.
 **   ReadyScheduler - Scheduler.
 **
 ** Processing:
 **
-**   Merge (new) Named Channels to NewPublics,
-**         (new) Named Parameters to NewParameters
+**   PriorNamedValue - Name of previous element of NamedValues - initially 0.
+**   PriorChannel    - Name of previous element of Publics - initially 0.
+**   Merge (new) Named Channels to NewChannels,
+**         (new) Named Values to NewNamedValues
 **   Call scheduling to create each new Channel.
-**   Call computation to unify each new Parameter.
+**   Call computation to define each new named value (in list);
+**         do not define objects.
 */
 
-merge_public_objects(List, Publics, NewPublics, LastPublic,
-		     Parameters, NewParameters, LastParameter,
+merge_parameter_list(List, Parameters, NewParameters,
 		     Scheduler, ReadyScheduler) :-
 
+    Parameters =?= {Channels, NamedValues} :
+      PriorChannel = 0,
+      PriorName = 0,
+      NewParameters = {NewChannels?, NewNamedValues?} |
+	merge_parameters.
+
+merge_parameters(List, Channels, NewChannels, PriorChannel,
+		 NamedValues, NewNamedValues, PriorName,
+		 Scheduler, ReadyScheduler) :-
+
     List =?= [] :
-      LastPublic = _,
-      LastParameter = _,
+      PriorChannel = _,
+      PriorName = _,
       ReadyScheduler = Scheduler,
-      NewPublics = Publics,
-      NewParameters = Parameters;
+      NewChannels = Channels,
+      NewNamedValues = NamedValues;
+
+    List =?= Name(Vector), string(Name),
+    NamedValues =?= [Name(NamedValue) | _] :
+      PriorChannel = _,
+      PriorName = _,
+      Vector = NamedValue,
+      NewChannels = Channels,
+      NewNamedValues = NamedValues,
+      ReadyScheduler = Scheduler;
+
+    List =?= Name(_), string(Name),
+    NamedValues ? NamedValue, NamedValue = PriorName'(_),
+    PriorName' @< Name :
+      PriorName = _,
+      NewNamedValues ! NamedValue |
+	self;
 
     List ? Name(Value), string(Name),
-    Parameters ? Parameter, Parameter =?= Name(ParameterValue) :
-      LastParameter = _,
-      Value = ParameterValue,
-      NewParameters ! Parameter,
-      LastParameter' = Name |
+    NamedValues ? NamedValue, NamedValue =?= Name(NameValue) :
+      PriorName = _,
+      Value = NameValue,
+      NewNamedValues ! NamedValue,
+      PriorName' = Name |
 	self;
 
     List = [Name(_) | _], string(Name),
-    Parameters ? Parameter, Parameter = LastParameter'(_),
-    LastParameter' @< Name :
-      LastParameter = _,
-      NewParameters ! Parameter |
+    NamedValues ? NamedValue, NamedValue = PriorName'(_),
+    PriorName' @< Name :
+      PriorName = _,
+      NewNamedValues ! NamedValue |
 	self;
 
+    List =?= Name(Vector), string(Name),
+    NamedValues =?= [Name1(_) | _],
+    PriorName @< Name, Name @< Name1 :
+      PriorChannel = _,
+      NewChannels = Channels,
+      NewNamedValues = [Name(Vector?) | NamedValues],
+      ReadyScheduler = Scheduler;
+
     List ? Name(Value), string(Name),
-    Parameters =?= [Name1(_) | _],
-    LastParameter @< Name, Name @< Name1 :
+    NamedValues =?= [Name1(_) | _],
+    PriorName @< Name, Name @< Name1 :
       List'' = [Name(Value) | List'],
-      Parameters' = [Name(SystemValue) | Parameters] |
+      NamedValues' = [Name(SystemValue) | NamedValues] |
 	computation # dictionary(add, Name, SystemValue, Result),
-	wait_parameter_result;
+	wait_name_added;
 
     List ? Name(NewChannel, BaseRate), string(Name),
-    LastPublic @< Name,
+    PriorChannel @< Name,
     we(NewChannel),
-    Publics ? Public, Public = Name(SpiChannel, _ComputeWeight, BaseRate),
+    Channels ? Public, Public = Name(SpiChannel, _ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      LastPublic = _,
+      PriorChannel = _,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewPublics ! Public,
-      LastPublic' = Name |
+      NewChannels ! Public,
+      PriorChannel' = Name |
 	self;
 
     List ? Name(_NewChannel, BaseRate), string(Name),
-    Publics ? Entry, Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
+    Channels ? Entry, Entry = Name(_SpiChannel, _ComputeWeight, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewPublics ! Entry |
+      NewChannels ! Entry |
 	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List = [Name(_NewChannel, _BaseRate) | _], string(Name),
-    Publics ? Entry,
-    Entry = LastPublic'(_, _, _),
-    LastPublic' @< Name :
-      LastPublic = _,
-      NewPublics ! Entry |
+    Channels ? Entry,
+    Entry = PriorChannel'(_, _, _),
+    PriorChannel' @< Name :
+      PriorChannel = _,
+      NewChannels ! Entry |
 	self;
 
     List ? Name(NewChannel, BaseRate), string(Name),
     we(NewChannel),
-    Publics =?= [Name1(_, _, _) | _],
+    Channels =?= [Name1(_, _, _) | _],
     string(Name),
-    LastPublic @< Name, Name @< Name1 :
+    PriorChannel @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', BaseRate) | List'],
-      Publics' =
-	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate) | Publics],
+      Channels' =
+	[Name(SpiChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate) | Channels],
       write_channel(new_public_channel(Name, SpiChannel,
 				       SPI_DEFAULT_WEIGHT_NAME,	BaseRate),
 		    Scheduler) |
 	self;
 
     List ? Name(NewChannel, CW, BaseRate), string(Name),
-    LastPublic @< Name,
+    PriorChannel @< Name,
     we(NewChannel),
-    Publics ? Public, Public = Name(SpiChannel, ComputeWeight, BaseRate),
+    Channels ? Public, Public = Name(SpiChannel, ComputeWeight, BaseRate),
     vector(SpiChannel),
     read_vector(SPI_CHANNEL_REFS, SpiChannel, References),
     References++ :
-      LastPublic = _,
+      PriorChannel = _,
       CW = ComputeWeight?,
       NewChannel = SpiChannel,
       store_vector(SPI_CHANNEL_REFS, References', SpiChannel),
-      NewPublics ! Public,
-      LastPublic' = Name |
+      NewChannels ! Public,
+      PriorChannel' = Name |
 	self;
 
     List ? Name(_NewChannel, _ComputeWeight, BaseRate), string(Name),
-    Publics ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
+    Channels ? Entry, Entry = Name(_SpiChannel, _, OtherBaseRate),
     BaseRate =\= OtherBaseRate :
-      NewPublics ! Entry |
+      NewChannels ! Entry |
 	fail(public_channel(rate_conflict(Name - BaseRate =\= OtherBaseRate))),
 	self;
 
     List ? Name(_NewChannel, ComputeWeight, _BaseRate), string(Name),
-    Publics ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
+    Channels ? Entry, Entry = Name(_SpiChannel, OtherComputeWeight, _),
     ComputeWeight =\= OtherComputeWeight :
-      NewPublics ! Entry |
+      NewChannels ! Entry |
 	fail(public_channel(compute_weight_conflict(Name -
 				ComputeWeight =\= OtherComputeWeight))),
 	self;
 
     List = [Name(_NewChannel, _ComputeWeight, _BaseRate) | _], string(Name),
-    Publics ? Entry,
-    Entry = LastPublic'(_, _, _),
-    LastPublic' @< Name :
-      LastPublic = _,
-      NewPublics ! Entry |
+    Channels ? Entry,
+    Entry = PriorChannel'(_, _, _),
+    PriorChannel' @< Name :
+      PriorChannel = _,
+      NewChannels ! Entry |
 	self;
 
     List ? Name(NewChannel, ComputeWeight, BaseRate), string(Name),
     we(NewChannel),
-    Publics =?= [Name1(_, _, _) | _],
+    Channels =?= [Name1(_, _, _) | _],
     string(Name),
-    LastPublic @< Name, Name @< Name1 :
+    PriorChannel @< Name, Name @< Name1 :
       NewChannel = NewChannel'?,
       List'' = [Name(NewChannel', ComputeWeight, BaseRate) | List'],
-      Publics' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Publics],
+      Channels' = [Name(SpiChannel?, ComputeWeight, BaseRate) | Channels],
       write_channel(new_public_channel(Name, SpiChannel,
 				       ComputeWeight, BaseRate),
 		    Scheduler) |
 	self;
 
     otherwise :
-      LastPublic = _,
-      LastParameter = _,
+      PriorChannel = _,
+      PriorName = _,
       ReadyScheduler = Scheduler,
-      NewParameters = Parameters,
-      NewPublics = Publics |
-	fail(merge_public_objects(List)).
+      NewNamedValues = NamedValues,
+      NewChannels = Channels |
+	fail(merge_parameters(List)).
 
-  wait_parameter_result(List, Publics, NewPublics, LastPublic,
-			Parameters, NewParameters, LastParameter,
-			Scheduler, ReadyScheduler, Result) :-
+  wait_name_added(List, Channels, NewChannels, PriorChannel,
+		  NamedValues, NewNamedValues, PriorName,
+		  Scheduler, ReadyScheduler, Result) :-
     known(Result) |
-	merge_public_objects.
+	merge_parameters.
 
-wait_object_ready(Name, Initial, Value, Ready) :-
+  wait_object_ready(Name, Initial, Vector, Ready) :-
 
-    known(Ready) |
-	spi_object # create(Name, Initial, Value).
+    known(Ready), Name =\= TIME_OBJECT_NAME |
+	spi_object # create(Name, Initial, Vector);
+
+    otherwise :
+      Initial = _,
+      Name = _,
+      Ready = _,
+      Vector = _ .
 
 
-/* copy_publics
+/* copy_bounded
 **
 ** Input:
 **
-**   Publics - (bounded) list of {Name, Channel, BaseRate}
+**   Bounded = (bounded) list of {Name, Channel, BaseRate}
 **
 ** Output:
 **
-**   List - Publics exluding bounding entries
-**   Ends - bounding entries of Publics
+**   List - copied exluding bounding entry
 */
 
-copy_public(Publics, List, Ends) :-
-    Publics ? Head :
-      Ends ! Head |
-	copy_interior.
+copy_bounded(Bounded, List) :-
 
-  copy_interior(Publics, List, Ends) :-
-
-    Publics ? Entry,
-    Publics' =\= [] :
+    Bounded ? Entry,
+    Bounded' =\= [] :
       List ! Entry |
 	self;
 
-    Publics = [_] :
-      List = [],
-      Ends = Publics.
+    Bounded = [_] :
+      List = [].
 
 /***************************** Scheduling ***********************************/ 
 
@@ -479,7 +562,7 @@ start_scheduling(Scheduler, MathOffset, Ordinal, SpiOffsets,
       make_channel(Scheduler, Schedule) |
 	make_channel_anchor(based, BasedAnchor),
 	make_channel_anchor(instantaneous, InstantaneousAnchor),
-	processor#Waiter?,
+	processor # Waiter?,
 	scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter',
 				Scheduler, _Recording, _Debug,
 				SpiTime, true, Wakeup,
@@ -616,6 +699,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Start_real_time = _,
       Waiting = _,
       Wakeup = _,
+      close_vector(OBJECT_REQUESTS, SpiTime),
       Waiter = [],
       Record = [],
       Debug = [] |
@@ -722,7 +806,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     /* Close the recording stream, and start a new one. */
     Schedule ? end_record(Stream) :
-      store_vector(1, 0.0, SpiTime),
+      store_vector(OBJECT_VALUES, 0.0, SpiTime),
       Record = [],
       Stream = Record'? |
 	self;
@@ -870,7 +954,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     Schedule ? diagnostic(Diagnostic) :
       Debug ! Diagnostic |
-	screen#display(("Application Diagnostic" -> Diagnostic)),
+	screen # display(("Application Diagnostic" -> Diagnostic)),
 	self;
 
     Schedule ? spifunctions(List),
@@ -887,7 +971,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Step = Step'?,
       Index = Index'?,
       Rate = Rate'? |
-	processor#link(lookup(spicomm, SpiOffset), _Ok),
+	processor # link(lookup(spicomm, SpiOffset), _Ok),
 	spifunctions,
 	self;
 
@@ -907,7 +991,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;		
 
     Schedule ? status(Status),
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     Cutoff = {CutoffLimit, CutoffStatus} :
       Status = STATUS |
 	self;		
@@ -943,10 +1027,10 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
     SpiOffset =?= unbound,
     arg(SPI_RATE, SpiOffsets, RateOffset),
-    read_vector(1, SpiTime, Now) :
+    read_vector(OBJECT_VALUES, SpiTime, Now) :
       Waiting = _,
       Waiting' = false,
-      store_vector(1, Now'?, SpiTime) |
+      store_vector(OBJECT_VALUES, Now'?, SpiTime) |
 	sum_weights(BasedAnchor, RateOffset, 0, Total),
 	logix_total(MathOffset, BasedAnchor, Now, Total,
 		    RateOffset, Now', Wakeup'),
@@ -955,10 +1039,10 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Wakeup =?= done,
     arg(SPI_STEP, SpiOffsets, SpiOffset),
     SpiOffset =\= unbound,
-    read_vector(1, SpiTime, Now) :
+    read_vector(OBJECT_VALUES, SpiTime, Now) :
       Waiting = _,
       execute(SpiOffset, {SPI_STEP, Now, BasedAnchor, Now', Wakeup'}),
-      store_vector(1, Now'?, SpiTime),
+      store_vector(OBJECT_VALUES, Now'?, SpiTime),
       Debug ! step(Waiting, Wakeup, Wakeup'),
       Waiting' = false |
 	self;
@@ -974,7 +1058,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     PId1 =\= (_ : _), PId2 =\= (_ : _),
     arg(1, PId1, PName1),
     arg(1, PId2, PName2),
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Waiting = _,
@@ -995,7 +1079,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     string_to_dlist(PName2, PNL2, []),
     string_to_dlist(Prefix2, PX2, [CHAR_COLON | PNL2]),
     list_to_string(PX2, PrefixedName2),
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Waiting = _,
@@ -1009,7 +1093,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 
     Wakeup =?= true,
     Cutoff =?= {CutoffLimit, CutoffStatus},
-    read_vector(1, SpiTime, Now) :
+    read_vector(OBJECT_VALUES, SpiTime, Now) :
       Waiting = _,
       Wakeup' = _,
       Waiting' = false,
@@ -1021,7 +1105,7 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
 	self;
 
     Cutoff = {CutoffLimit, CutoffStatus},
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     Now >= CutoffLimit,
     info(REALTIME, End_real_time),
     Real_time := End_real_time - Start_real_time :
@@ -1036,14 +1120,15 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
       Record = [],
       Debug = [],
       CutoffStatus = (done @ Now: seconds = Real_time) |
-	computation#display(CutoffStatus),
+	computation # display(CutoffStatus),
 	wait_done.
 
   /* 
    * Supply default actions for selected requests.
    * (Could improve (?) close(...) to actually close the channels.)
    */
-  wait_done(Schedule, DefaultWeighter, Randomize, SpiOffsets, Ordinal, Done) :-
+  wait_done(Schedule, DefaultWeighter, Randomize, SpiOffsets, Ordinal, Done,
+		SpiTime) :-
 
     DUMMY_CHANNEL(new_channel(ChannelName, Channel, _Rate));
 
@@ -1080,12 +1165,14 @@ scheduling(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     Other =\= new_public_channel(_, _, _, _) |
 	self;
 
-    Schedule =?= [] :
-      Done = _ |
-	self#reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal);
-
     unknown(Schedule),
-    known(Done) |
+    known(Done) :
+      Schedule' = [] |
+	self;
+
+    Schedule =?= [] :
+      Done = _,
+      close_vector(OBJECT_REQUESTS, SpiTime) |
 	self#reset(DefaultWeighter, Randomize, SpiOffsets, Ordinal).
 
 continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
@@ -1101,7 +1188,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     PId1 =\= (_ : _), PId2 =\= (_ : _),
     tuple(PId1), arg(1, PId1, PName1),
     tuple(PId2), arg(1, PId2, PName2),
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Record = [Now, end(PName1(RCId1, SENT_ARROW, CNId1)),
@@ -1119,7 +1206,7 @@ continue_waiting(Schedule, MathOffset, Ordinal, SpiOffsets, Waiter,
     string_to_dlist(PName2, PNL2, []),
     string_to_dlist(Prefix2, PX2, [CHAR_COLON | PNL2]),
     list_to_string(PX2, PrefixedName2),
-    read_vector(1, SpiTime, Now),
+    read_vector(OBJECT_VALUES, SpiTime, Now),
     read_vector(SPI_CHANNEL_NAME, CH1, CNId1),
     read_vector(SPI_CHANNEL_NAME, CH2, CNId2) :
       Record = [Now, end(PrefixedName1(RCId1, SENT_ARROW, CNId1)),
@@ -1432,10 +1519,10 @@ new_channel(ChannelName, Channel, BaseRate, ComputeWeight, Randomize, Reply,
 
 queue_channel(Channel, Anchor) :-
 
-    read_vector(SPI_PREVIOUS_CHANNEL, Anchor, OldLast) :
-      store_vector(SPI_PREVIOUS_CHANNEL, OldLast, Channel),
+    read_vector(SPI_PREVIOUS_CHANNEL, Anchor, OldPrevious) :
+      store_vector(SPI_PREVIOUS_CHANNEL, OldPrevious, Channel),
       store_vector(SPI_NEXT_CHANNEL, Anchor, Channel),
-      store_vector(SPI_NEXT_CHANNEL, Channel, OldLast),
+      store_vector(SPI_NEXT_CHANNEL, Channel, OldPrevious),
       store_vector(SPI_PREVIOUS_CHANNEL, Channel, Anchor).
 
 reset_default_weighter(SpiOffset, New, Old, Default) :-
