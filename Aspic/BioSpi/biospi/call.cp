@@ -1,12 +1,12 @@
 /*
-Precompiler for Stic Pi Calculus procedures - call management.
+Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/01/27 10:35:33 $
+		       	$Date: 2006/08/05 06:50:31 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.10 $
+			$Revision: 1.11 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -77,6 +77,16 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 					Primed),
 	macroed_call;
 
+    Body1 =?= (Object ! Request) :
+      Locals = _,
+      Primes = _,
+      CallDefinition = [] |
+	verify_object(Object, ObjectName, Errors, Errors'),
+	verify_request(ObjectName?, Request, MacroCall),
+	extract_id(ProcessDefinition, ProcessName, _Arity),
+	call_object_macro(ProcessName?, MacroCall?,
+		Body2, In, NextIn, Errors', NextErrors);
+
     Body1 = `Functor :
       Locals = _,
       Primes = _,
@@ -141,7 +151,7 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
   macro_call(ChannelNames, Locals, Name, Arguments, MacroedArguments) :-
 
     Name =?= set_base_rate |
-	verify_macro + (ArgTypes = [real | channels]);
+	verify_macro + (ArgTypes = [number | channels]);
 
     Name =?= randomize_messages |
 	verify_macro + (ArgTypes = channels);
@@ -155,6 +165,17 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	verify_status_list,
 	verify_macro +
 	  (ArgTypes = [channel | attributes]);
+
+    Name =?= object,
+    Arguments = [`Object] :
+      Arguments' = [0, `Object] |
+	self;
+
+    Name =?= object,
+    Arguments = [Any, `Object],
+    nth_char(1, Object, C), CHAR_A =< C, C =< CHAR_Z :
+      Arguments' = [Object, Any, `Object] |
+	verify_macro + (ArgTypes = [string, any]);
 
     otherwise :
       Arguments = _,
@@ -231,9 +252,25 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       OkArgs ! Arg |
 	self;
 
+    ArgTypes ? number,
+    Arguments ? Arg, number(Arg) :
+      OkArgs ! Arg |
+	self;
+
     ArgTypes ? nil,
     Arguments ? [] :
       OkArgs ! [] |
+	self;
+
+    ArgTypes ? constant,
+    Arguments ? Constant,
+    constant(Constant) :
+      OkArgs ! Constant |
+	self;
+
+    ArgTypes ? any,
+    Arguments ? Any :
+      OkArgs ! Any |
 	self;
 
     ArgTypes ? channel,
@@ -366,6 +403,95 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 	
   verified_macro_arguments(OkArguments, OkArguments?^).
   verified_macro_arguments(_OkArguments, error([]^)).
+
+
+  verify_object(Object, ObjectName, Errors, NextErrors) :-
+
+    Object =?= `VariableName |
+	verify_object_name;
+
+    Object =?= ?VariableName |
+	verify_object_name;
+
+    otherwise :
+      ObjectName = "_Object",
+      Errors = ["not an object"(Object) | NextErrors].
+
+  verify_object_name(VariableName, ObjectName, Errors, NextErrors) :-
+
+    string(VariableName), nth_char(1, VariableName, C),
+    CHAR_A =< C, C =< CHAR_Z :
+      ObjectName = VariableName,
+      Errors = NextErrors;
+
+    otherwise :
+      ObjectName = "_",
+      Errors = ["not an object name"(VariableName) | NextErrors].
+
+  verify_request(ObjectName, Request, MacroCall) :-
+
+    string(Request) :
+      Request' = Request(`"_") |
+	self;
+
+    tuple(Request), arity(Request, A), 1< A, A < 4 |
+	verify_request_tuple;
+
+    otherwise :
+      MacroCall = error("Ill-formed request"(ObjectName ! Request)).
+	
+
+  verify_request_tuple(ObjectName, Request, MacroCall) :-
+
+    arg(1, Request, RequestName), string(RequestName),
+    arity(Request, Arity),
+    arg(Arity, Request, `_) |
+	normalise_request;
+
+    otherwise :
+      MacroCall = error("invalid object request"(ObjectName ! Request)).
+
+  normalise_request(ObjectName, Request, MacroCall) :-
+
+    Request =?= RequestName(Argument), RequestName =\= close :
+      Request' = RequestName(Argument, `"_") |
+	self;
+
+    Request =?= close(_) |
+	complete_object_request;
+
+    Request =?= name(_,_) |
+	complete_object_request;
+
+    Request =?= read(_,_) |
+	complete_object_request;
+
+    Request = values(_,_) |
+	complete_object_request;
+
+    Request = store(_,_) |
+	complete_object_request;
+
+    otherwise : 
+      MacroCall = error("unrecognised macro name"(ObjectName!Request)).
+
+  complete_object_request(ObjectName, Request, MacroCall) :-
+    true: MacroCall = spi_object_request(?ObjectName, Request).
+
+  call_object_macro(ProcessName, MacroCall,
+	Body2, In, NextIn, Errors, NextErrors) :-
+
+    MacroCall =\= error(_) :
+      ProcessName = _,
+      Body2 = MacroCall,
+      In = [logix_variables(LogixVars) | NextIn],
+      Errors = NextErrors |
+	utilities#find_logix_variables(MacroCall, LogixVars, []);
+
+    MacroCall =?= error(Diagnostic) :
+      Body2 = true,
+      In = NextIn,
+      Errors = [ProcessName-Diagnostic | NextErrors].
 
 
 verify_call_channels(Name, Goal, ChannelNames, Locals, Errors, NextErrors)
