@@ -1,32 +1,28 @@
-This directory should serve as a base for testing biospi programs.
-It includes the source of the additions to aspic which implement
-Ambients.
+This directory may be used as a base for the development of Ambient
+Stochastic Pi Calculus Programs.source
 
-The "executables" of the source are in sub-directory Bin.  If you
-need to use another directory for development, link or copy the
+The "executable" of the user macros for the ambient version is in Bin.
+If you need to use another directory for development, link or copy the
 module Bin/user_macros.bin to that directory (or its Bin sub-directory),
 or to a directory which is between the scopes of that directory
 and your home directory,
 
-The module user_macros.cp defines the user macros of BioSpi.  Try
+The Source directory contains the source of the additions to aspic which
+implement Ambients.
+
+The module Source/user_macros.cp defines the user macros of BioSpi.  Try
 command "ph" for a list of user macros.  These user macros apply to
-source files written in language(biospi).  For further information
-about the user macros see the documents named user_macros.txt in the
-Documentation sub-directories.
+source files written in language(biospi).  For further information about
+the user macros see the documents named user_macros.txt in Documentation
+sub-directories.
 
-The modules in Bin are the "executable" forms of the source.  Three are
-linked to modules of the same name in Aspic-release/Logix/system/Bin,
-and they should not be recompiled here without breaking the link,
-unless you intend to replace the version of that module which may be
-accessed from outside the scope of this directory.
+The other modules in Source are the service that manages the Ambient
+tree (ambient_server.cp) and a module which implements the user macro
+"atrace" (ambient_list.cp) - see Documentation/trace.txt for details.
 
-The module ambient_server.bin implements the ambient management process.
-
-The module ambient_list.bin implements the user macro "atrace" - see
-Documentation/trace.txt for details.
-
-The module ambient_trace.bin is an obsolescent form of ambient_list.bin.
-
+The biospi sub-directory of Source contains the program which transforms
+modules written in language(spifcp) into Logix source programs written
+in language(compound).
 
 Some examples of Ambient Stochastic Pi Calculus programs are included in
 sub-directory, Examples.
