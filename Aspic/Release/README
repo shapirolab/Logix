@@ -1,19 +1,16 @@
-The SpiFcp sub-directory supports applications written in dialect
-"spifcp" of Stochastic Pi Calculus.  It includes the source of
-the implementation, and examples in sub-directory Examples.  It
-also has a sub-directory, Documentation, which contains the BNF of
-Stochastic Pi Calculus and other notes specific to it.
+The SpiFcp directory supports applications written in dialect"spifcp"
+of Stochastic Pi Calculus.  Its Source sub-directory contains the
+source of the implementation.  The Examples sub-directory contains
+examples of programs written in language(spifcp) .  The Documentation
+sub-directory contains the BNF of Stochastic Pi Calculus and other
+notes specific to it.
 
-The BioSpi sub-directory supports applications written in dialect
-biospi of Ambient Stochastic Pi Calculus, including examples in its
-sub-directory, Examples.  It also has a sub-directory, Documentation,
-which contains the BNF of Ambient Stochastic Pi Calculus and other
-notes specific to it.  When running programs which have been written
-in language(biospi), if the current (UNIX) directory is outside of
-the scope of Aspic-release/BioSpi, copy or link the file
-Aspic-release/BioSpi/Bin/user_macros.bin to the current directory
-or to a directory which contains it, or to the Bin sub-directory of
-either.
+The BioSpi directory supports applications written in dialect biospi
+of Ambient Stochastic Pi Calculus.  Its Source sub-directory contains
+the source of the extension to Ambient Stochasic Pi Calculus.  The
+sub-directory contains examples of programs written in language(biospi).
+The Documentation sub-directory contains the BNF of Ambient Stochastic
+Pi Calculus and other notes specific to it.
 
 The files in bin are used to extract tabular information from a
 (Ambient) Stochastic Pi Calculus application session (see record.txt
