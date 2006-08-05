@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/06/27 04:39:40 $
+		       	$Date: 2006/08/05 06:47:00 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -828,9 +828,9 @@ guarded_clauses(RHS1, RHS2, Process, Nested, Scope) +
 	self;
 
     otherwise :
-      Process = _,
       Index = _,
-      FinalMode = none,
+      FinalMode = _,
+      Process = none(_LHS, _ProcessRHS, []),
       Scope ! error(invalid_guarded_clause(RHS1)),
       NextRHSS = [],
       Nested = [] |
@@ -1115,13 +1115,15 @@ transform_body(Body1, Body2, Nested, NextNested, Scope, NextScope) :-
 			Scope, Scope'?),
 	self;
 
-    Body1 = (_Channel ? _Message) :
+    Body1 = (Channel ? _Message),
+    nth_char(1, Channel, C), CHAR_a =< C, C =< CHAR_z :
       Scope ! error(receive_in_body(Body1)),
       Goals = NextGoals,
       Nested = NextNested,
       Scope' = NextScope;
 
-    Body1 = (_Channel ! _Message) :
+    Body1 = (Channel ! _Message),
+    nth_char(1, Channel, C), CHAR_a =< C, C =< CHAR_z :
       Scope ! error(send_in_body(Body1)),
       Goals = NextGoals,
       Nested = NextNested,
