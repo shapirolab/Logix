@@ -4,9 +4,9 @@ Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/08/05 06:50:31 $
+		       	$Date: 2006/11/01 11:25:41 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.11 $
+			$Revision: 1.12 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -161,10 +161,10 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
     Name =?= get_channel_status,
     Arguments = [Channel | StatusList] :
-      Arguments' = [Channel | VerifiedStatusList] |
+      Arguments' = [Channel | VerifiedStatusList?] |
 	verify_status_list,
-	verify_macro +
-	  (ArgTypes = [channel | attributes]);
+	verify_macro + (ArgTypes = [channel | attributes]),
+	single_attribute(MacroedArguments', MacroedArguments);
 
     Name =?= object,
     Arguments = [`Object] :
@@ -183,6 +183,15 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       Locals = _,
       Name = _,
       MacroedArguments = unrecognized_macro_call.
+
+  single_attribute(MA0, MA) :-
+
+    MA0 =?= [Channel, [Attribute], Result],
+    string(Attribute) :
+      MA = [Channel, Attribute, Result];
+
+    otherwise :
+      MA0 = MA.
 
   verify_status_list(StatusList, VerifiedStatusList) :-
 
@@ -430,50 +439,50 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 
   verify_request(ObjectName, Request, MacroCall) :-
 
-    string(Request) :
-      Request' = Request(`"_") |
-	self;
+    Request = close :
+      Request' = close(`"_") |
+	complete_object_request;
 
-    tuple(Request), arity(Request, A), 1< A, A < 4 |
-	verify_request_tuple;
+    Request =?= close(`_) |
+	complete_object_request;
+
+    Request =?= RequestName(Argument), Request =\= close(_) :
+      NormalRequest = RequestName(Argument, `"_") |
+	normalised_request;
+
+    Request =?= _(_, `_) |
+	normalised_request + (NormalRequest = Request);
 
     otherwise :
       MacroCall = error("Ill-formed request"(ObjectName ! Request)).
-	
 
-  verify_request_tuple(ObjectName, Request, MacroCall) :-
+  normalised_request(ObjectName, Request, MacroCall, NormalRequest) :-
 
-    arg(1, Request, RequestName), string(RequestName),
-    arity(Request, Arity),
-    arg(Arity, Request, `_) |
-	normalise_request;
+    NormalRequest =?= name(_,_) |
+	verify_object_argument;
 
-    otherwise :
-      MacroCall = error("invalid object request"(ObjectName ! Request)).
+    NormalRequest =?= read(_,_) |
+	verify_object_argument;
 
-  normalise_request(ObjectName, Request, MacroCall) :-
+    NormalRequest =?= values(_,_) |
+	verify_object_argument;
 
-    Request =?= RequestName(Argument), RequestName =\= close :
-      Request' = RequestName(Argument, `"_") |
-	self;
-
-    Request =?= close(_) |
-	complete_object_request;
-
-    Request =?= name(_,_) |
-	complete_object_request;
-
-    Request =?= read(_,_) |
-	complete_object_request;
-
-    Request = values(_,_) |
-	complete_object_request;
-
-    Request = store(_,_) |
-	complete_object_request;
+    NormalRequest =?= store(_,_) :
+      Request = _ |
+	complete_object_request + (Request = NormalRequest);
 
     otherwise : 
+      NormalRequest = _,
       MacroCall = error("unrecognised macro name"(ObjectName!Request)).
+
+  verify_object_argument(ObjectName, Request, MacroCall, NormalRequest) :-
+
+    arg(2, Request, `_) |
+	complete_object_request + (Request = NormalRequest);
+
+    otherwise :
+      NormalRequest = _,
+      MacroCall = error("result must be a variable"(ObjectName!Request)).
 
   complete_object_request(ObjectName, Request, MacroCall) :-
     true: MacroCall = spi_object_request(?ObjectName, Request).
