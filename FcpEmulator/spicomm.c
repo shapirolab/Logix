@@ -111,6 +111,13 @@
 #define LIST                3
 heapP cdr_down_list();
 
+/* Object definitions */
+
+#define OBJECT_ARITY        2
+#define OBJECT_VALUES       1
+#define OBJECT_REQUESTS     2
+
+
 dump_channel(heapP ChP) {
   
   fprintf(stderr, "dumping channel: ");
@@ -2121,15 +2128,17 @@ double *argv;
 	else if (IsInt(*Pb))
 	  argv[argn] = Int_Val(*Pb);
 	else if (IsVctr(*Pb)) {
-	  if(!vctr_var_s(Pb, 2))
+	  if(!vctr_var_s(Pb, OBJECT_ARITY))
 	    return False;
-	  if (!do_read_vector(Word(1,IntTag),Ref_Word(Pb)))
+	  if (!do_read_vector(Word(OBJECT_VALUES,IntTag),Ref_Word(Pb)))
 	    return(False);
 	  deref(KOutA, Pb);
 	  if (IsReal(*Pb))
 	    argv[argn] = real_val((Pb+1));
 	  else if (IsInt(*Pb))
 	    argv[argn] = Int_Val(*Pb);
+	  else
+	    return False;
 	}
 	else
 	  return False;
