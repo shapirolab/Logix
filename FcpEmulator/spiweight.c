@@ -93,16 +93,18 @@ double spi_compute_bimolecular_weight(int method,
    * double delayTime
    * double sigma_square(variance)
    * function: rate*exp(-(currentTime - delayTime)^2/2* sigma_square)
+   *
+   * (note that the function is independant of the sends and receives.)
    */
 
     case GAUSSIAN_DELAY: {
-      if(argn >= 0){
+      if(argn >= 3){
 	double currentTime = argv[0];
 	double delayTime   = argv[1];
 	double variance    = argv[2];
 	double delta = currentTime - delayTime;
-	result = rate*exp(-((delta*delta/2)*variance));
 
+	result = rate*exp(-((delta*delta/2)*variance));
 	/* if result is 0, this channel cannot be chosen. */
 	if(result <= 0) {
 	  /* This is a kluge, which may be removed, if you don't mind
@@ -125,7 +127,7 @@ double spi_compute_bimolecular_weight(int method,
      */
 
     case DELTA_DELAY: {
-      if(argn >= 0){
+      if(argn >= 2){
 	double currentTime = argv[0];
 	double delayTime   = argv[1];
 	result = (currentTime > delayTime) ? rate*sends*receives : 0;
