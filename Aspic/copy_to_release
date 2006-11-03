@@ -52,6 +52,7 @@ cp -p Documentation/CONSTANTS.txt release/SpiFcp/Documentation
 cp -p Documentation/attributes.txt release/SpiFcp/Documentation
 cp -p Documentation/multiple.txt release/SpiFcp/Documentation
 cp -p Documentation/multiple_bnf.txt release/SpiFcp/Documentation
+cp -p Documentation/object.txt release/SpiFcp/Documentation
 cp -p Documentation/program_macros.txt release/SpiFcp/Documentation
 cp -p Documentation/public.txt release/SpiFcp/Documentation
 cp -p Documentation/public_variables.txt release/SpiFcp/Documentation
