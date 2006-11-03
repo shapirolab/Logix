@@ -1,6 +1,6 @@
 An object is a monitored, named Logix variable, with a "value" which
-may be accessed and altered.  The object is created by the either of
-the macro calls:
+may be accessed and altered.  The object is created by either of the
+macro calls:
 
     object(<logix_variable>)
     object(<initial value>, <logix_variable>)
@@ -34,9 +34,30 @@ value:
 		with the most recent one.  Note that the tail of the
 		list is uninstantiated until the object is closed.
 
-The store request makes the <logix_term> the most recent value of the
-object, and unifies it with a trailing list element.
+In response to the store request, the monitor notes the <logix_term>
+as the most recent value of the object, and unifies it with a trailing
+list element.
 
 An object may appear in place of a <weighter_parameter>.  In that
 case, the most recent value of the object is used to compute the value
 of the <weighter_declaration>.
+
+
+There is one predefined object, SPITIME, which may be referenced by:
+
+    SPITIME ! read(Value)
+
+to obtain the current value of the internal clock, or by:
+
+    SPITIME ! values(List)
+
+to obtain a list of values of the internal clock, starting with its
+current value.  This list may be viewed as a stream which is augmented
+each time a transmission is completed.
+
+The internal clock is a positive, increasing, real number, initially 0.
+
+The 'close' and 'store' commands are not permitted for this object.
+
+
+The object monitor is implemented by spi_object.cp .  The 
