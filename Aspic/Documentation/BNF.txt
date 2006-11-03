@@ -181,8 +181,9 @@ BNF for SpiFcp - see CONSTANTS.txt for the BNF of Logix constants.
 <logix_goal_list>      ::= <logix_goal>
                            <logix_goal> , <logix_goal_list>
 
-Primitives:
 
+Primitives:
+----------
 
 A <process_name> is an alpha-numeric string, beginning with an upper-case
 letter, which may contain underscore (_) characters.
@@ -214,7 +215,7 @@ weighter.txt.
 
 
 Semantics:
-
+---------
 
 A <parameter> in a <public_declaration> is an implicit argument of every
 process in the program.
@@ -248,10 +249,12 @@ a <public_declaration>; in the latter case, when the channel is a
 of the process or in a <public_declaration>.  In any case, the
 <logix_variable> should be instantiated to a string (see above).
 
-Any <weighter_parameter> may be specified by a <logix_variable>, as
-for a <base_rate> (see above).  When that <logix_variable> is an
-object, its most recent value is used in calculating the value of
-the <weighter_declaration>.
+A <weighter_parameter> should be a number to be used in calculating the
+value of the <weighter_declaration>.  A <weighter_parameter>  may be
+specified by a <logix_variable>, whose value is a number (as above for
+a <base_rate>) or by an object.  When that <logix_variable> is an object,
+its monitor's current value should be a number, which is used in
+calculating the value of the <weighter_declaration>.
 
 
 An argument in a <macro_call> which precedes the <channels_and_reply> or
@@ -281,7 +284,7 @@ omitted from the <object_request>.
 
 
 Logix Terms:
-
+-----------
 
 A <logix_ask_guard> is any predicate permitted in the ask of a guard in
 logix language(compound).
@@ -297,6 +300,7 @@ remote procedure call in logix language(compound).
 
 
 Notes:
+-----
 
 The "new" predicate has been subsumed into a prefix <parameter_list>
 of a <new_scope> and the added <parameter_list> of a <process>.
