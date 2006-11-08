@@ -4,9 +4,9 @@ Spifcp Library processes
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2006/08/05 05:29:01 $
+                        $Date: 2006/11/08 17:06:24 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.8 $
+                        $Revision: 1.9 $
                         $Source: /home/qiana/Repository/Aspic/library_server/spi_library.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -325,6 +325,7 @@ object(Name, InitialValue, Object) :-
 
 /****************************************************************************/
 
+/***************** Obsolescent ****************/
 spi_object_request(Object, Request) :-
 
     vector(Object),
@@ -332,6 +333,17 @@ spi_object_request(Object, Request) :-
       write_vector(OBJECT_REQUESTS, Request, Object);
 
     otherwise |
+	computation#display('Can''t send'(Object!Request)).
+/***************** Obsolescent ****************/
+
+spi_object_request(Request, Object, PrimedObject) :-
+
+    vector(Object),
+    arity(Object, OBJECT_ARITY) :
+      write_vector(OBJECT_REQUESTS, Request, Object, PrimedObject);
+
+    otherwise :
+      PrimedObject = _ |
 	computation#display('Can''t send'(Object!Request)).
 "
 
