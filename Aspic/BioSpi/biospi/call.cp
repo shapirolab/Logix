@@ -4,9 +4,9 @@ Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/11/01 11:25:41 $
+		       	$Date: 2006/11/08 17:28:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.12 $
+			$Revision: 1.13 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -484,8 +484,11 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       NormalRequest = _,
       MacroCall = error("result must be a variable"(ObjectName!Request)).
 
+
   complete_object_request(ObjectName, Request, MacroCall) :-
-    true: MacroCall = spi_object_request(?ObjectName, Request).
+    string_to_dlist(ObjectName, ON, [CHAR_PRIME]),
+    list_to_string(ON, PrimedObjectName) :
+      MacroCall = spi_object_request(Request, ?ObjectName, `PrimedObjectName).
 
   call_object_macro(ProcessName, MacroCall,
 	Body2, In, NextIn, Errors, NextErrors) :-
