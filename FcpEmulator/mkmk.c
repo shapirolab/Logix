@@ -1,10 +1,12 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.13 2006/06/27 04:56:50 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.14 2007/02/21 16:18:42 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
 	(Note that only the initials that distinguish the flag from other
 	 flags are required).
 
+   arch:
+     architecture type
    concatenate:
      foreign function - string concatenation kernels
    ctl:
@@ -31,6 +33,8 @@
      builds makefile for linux kernel 2.2.12, redhat 6.1
    long:
      build version for 64-bit word platform
+   maci386:
+     builds makefile for architecture i386 BSD kernel
    macosx:
      builds makefile for powerpc BSD kernel
    math:
@@ -97,6 +101,7 @@ static char *hpux_9d05S = "hppa1d1_hpux_9d05";
 static char *linux_6d1S = "linux_2d2d12_redhat_6d1";
 static char *longS = "-m64";
 static char *longwordS = "-DLONGWORD";
+static char *maci386S = "maci386_BSD";
 static char *macosx_8d4S = "macosx_BSD_8d4";
 static char *mathS = "math";
 static char *noptS = " ";
@@ -116,6 +121,7 @@ static char *timerS = "timer";
 static char *ttyS = "tty";
 static char *ultrixS = "-DULTRIX";
 
+static char *archV = "";
 static char *cnvV = "";
 static char *concatenateV = "";
 static char *ctlV = "";
@@ -133,6 +139,7 @@ static char *libsV = "";
 static char *linux_6d1V = "";
 static char *longV = "-m32";
 static char *longwordV = "";
+static char *maci386V = "";
 static char *macosx_8d4V = "";
 static char *mathV = "";
 static char *optV = "";
@@ -322,10 +329,24 @@ main(argc, argv)
     case 'm':
       if (*S++ == 'a') {
 	switch (*S++) {
-	case 'c':
-	  /* macosx */
-	  macosx_8d4V = macosx_8d4S;
+	case 'c': {
+	  switch (*S++) {
+	  case ('i'):
+	    /* maci386 */
+	    maci386V = maci386S;
+	    archV = "-arch i386 ";
+	    continue;
+	  case ('o'):
+	    /* macosx */
+	    macosx_8d4V = macosx_8d4S;
+	    archV = "-arch  ppc ";
+	    continue;
+	  default:
+	    printf("mkmk: Unknown option %s\n", *argv);
+	    exit(1);
+	  }
 	  continue;
+	}
 	case 't':
 	  /* math */
 	  mathV = LinkFunc[LinkFuncNum] = mathS;
@@ -488,7 +509,7 @@ main(argc, argv)
 
   fprintf(MakeFd, "# fcp make\n");
   fprintf(MakeFd, "SHELL = /bin/csh\n");
-  fprintf(MakeFd, "GCC = gcc %s\n", longV);
+  fprintf(MakeFd, "GCC = gcc %s%s\n", archV, longV);
   Pos = fprintf(MakeFd, "CFLAGS = -c");
   Pos = cond_print(MakeFd, longwordV, "", "", Pos);
   Pos = cond_print(MakeFd, dbgV, "", "", Pos);
@@ -506,8 +527,11 @@ main(argc, argv)
   if (strcmp(linux_6d1V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);
   }
+  if (strcmp(maci386V, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DMACINTOSH", "", "", Pos);
+  }
   if (strcmp(macosx_8d4V, NullS) != 0) {
-    Pos = cond_print(MakeFd, "-DMACOSX", "", "", Pos);
+    Pos = cond_print(MakeFd, "-DMACINTOSH", "", "", Pos);
   }
   if (strcmp(sgi_5d2V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DSGI", "", "", Pos);
