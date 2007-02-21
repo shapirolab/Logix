@@ -1,0 +1,2 @@
+./mkmk maci386_BSD concatenate ctl dbg dbx file freeze_term \
+interface math spi timer tty ultrix
