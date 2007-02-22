@@ -1,7 +1,7 @@
 # fcp make
 SHELL = /bin/csh
-GCC = gcc -m32
-CFLAGS = -c -DDEBUG -g -DMACOSX
+GCC = gcc -arch ppc -m32
+CFLAGS = -c -DDEBUG -DMACINTOSH
 
 INCLUDES = -I.
 
