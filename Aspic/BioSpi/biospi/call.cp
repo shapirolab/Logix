@@ -4,9 +4,9 @@ Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2007/02/22 10:40:12 $
+		       	$Date: 2007/02/22 22:57:06 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.14 $
+			$Revision: 1.15 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -176,7 +176,7 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       ChannelNames = _,
       Locals = _,
       Name = _,
-      MacroedArguments = unrecognized_macro_call.
+      MacroedArguments = unrecognised_macro_call.
 
   single_attribute(MA0, MA) :-
 
