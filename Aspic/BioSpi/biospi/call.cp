@@ -4,9 +4,9 @@ Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/11/08 17:28:15 $
+		       	$Date: 2007/02/22 10:40:12 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.13 $
+			$Revision: 1.14 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -23,21 +23,15 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
 		In, NextIn, Errors, NextErrors, CallDefinition) :-
 
-    Body1 = true :
-      ProcessDefinition = _,
-      Locals = _,
-      Primes = _,
-      In = NextIn,
-      Errors = NextErrors,
-      Body2 = true,
-      CallDefinition = [];
-
-    Body1 =?= self :
-      Body1' = `Name |
-	extract_id(ProcessDefinition, Name, _Arity),
+    Body1 =?= (_ = _) :
+      Body1' = {Body1} |
 	self;
 
-    string(Body1), Body1 =\= true, Body1 =\= self,
+    Body1 =?= (_ := _) :
+      Body1' = {Body1} |
+	self;
+
+    string(Body1),
     nth_char(1, Body1, C), CHAR_a =< C, C =< CHAR_z :
       Primes = _,
       Name = Body1,
@@ -393,7 +387,13 @@ make_local_call(ProcessDefinition, Locals, Primes, Body1, Body2,
       Body2 = true,
       Errors = [ProcessName-Body1-MacroErrors | NextErrors];
 
-    otherwise :
+    MacroArguments =?= unrecognised_macro_call :
+      Name = _,
+      ProcessName = _,
+      Body2 = Body1,
+      NextErrors = Errors;
+
+    otherwise :		/* this shouldn't happen */
       Name = _,
       Body2 = true,
       Errors = [ProcessName-Body1-MacroArguments | NextErrors].
@@ -742,6 +742,11 @@ complete_remote_call(Name, PiCall, Arguments, CompoundCall,
 
 
 prime_macro_arguments(Primes, MacroedArguments, PrimedArguments, Variables) :-
+
+    MacroedArguments =?= [] :
+      Primes = _,
+      PrimedArguments = [],
+      Variables = [];
 
     MacroedArguments ? Constant, constant(Constant) :
       PrimedArguments ! Constant |

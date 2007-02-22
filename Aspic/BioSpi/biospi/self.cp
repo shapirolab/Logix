@@ -4,9 +4,9 @@ Transformer for Ambient Stochastic Pi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/08/05 06:47:00 $
+		       	$Date: 2007/02/22 10:40:12 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.12 $
+			$Revision: 1.13 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -1035,6 +1035,7 @@ transform_guard(Guard, Control, LastClause, Clauses, BodyGuard,
       BodyGuard = otherwise,
       Scope = NextScope;      
 
+    Guard =\= (_ ? _), Guard =\= (_ ! _),
     Guard =\= (_ =?= _), Guard =\= (_ =\= _),
     Guard =\= (_ & _), Guard =\= otherwise,
     Guard =\= (merge + _), Guard =\= (merge - _),
@@ -1053,12 +1054,27 @@ logix_guards(Guard, Control, LastClause, Clauses, BodyGuard, Result) :-
 
     tuple(Guard),
     Guard =\= `_, Guard =\= ?_,
+    Guard =\= (_ , _), Guard =\= (_ : _),
     arity(Guard, Arity) :
       Clauses = logix([LastClause]),
       Control = logix(_),
       Index = 1,
       Result = logix_variables(LogixVars?) |
 	copy_ask_guards;
+
+    Guard =?= (_ , _) :
+      BodyGuard = Guard,
+      Clauses = logix([LastClause]),
+      Control = logix(_),
+      Result = logix_variables(LogixVars?) |
+	utilities#find_logix_variables(Guard, LogixVars, []);
+
+    Guard =?= (_ : _) :
+      BodyGuard = Guard,
+      Clauses = logix([LastClause]),
+      Control = logix(_),
+      Result = logix_variables(LogixVars?) |
+	utilities#find_logix_variables(Guard, LogixVars, []);
 
     otherwise:
       BodyGuard = true,
