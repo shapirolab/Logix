@@ -5,14 +5,15 @@ platform):
     % cd Logix
     % ./install LINUX
 
-To install on a cygwin, macosx, sgi or solaris platform, substitute
-CYGWIN, MCAOSX, SGI or SOLARIS for LINUX.
+To install on a cygwin, maci386, macosx, sgi or solaris platform,
+substitute CYGWIN, MACI386, MACOSX, SGI or SOLARIS for LINUX.
 
 The generated file may be used to start a Logix session on the
 appropriate platform - e.g.s:
 
     % Logix/cygwin_logix
     % Logix/linux_logix
+    % Logix/maci386_logix
     % Logix/macosx_logix
     % Logix/sgi_logix
     % Logix/solaris_logix
