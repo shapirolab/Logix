@@ -104,3 +104,13 @@ work as previously).
 Version Aspic-release.2006-03-25.tar.gz
 
 Added support for PC under CYGWIN.
+
+Version Aspic-release.2006-10-24.tar.gz
+
+Added support for "object"s; fixed some bugs in handling user <weighter>s.
+
+Version Aspic-release.2007-02-22.tar.gz
+
+Added support for Macintosh with i386 architecture; revised spi_record to
+go 15% faster; fixed some minor bugs; revised BNF.txt; simplified Logix
+guards and library goal reference.
