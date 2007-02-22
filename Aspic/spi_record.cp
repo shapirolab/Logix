@@ -4,9 +4,9 @@ SpiFcp Record channel activity from monitor record output
 William Silverman
 
 Last update by          $Author: bill $
-                        $Date: 2006/06/27 08:49:51 $
+                        $Date: 2007/02/22 10:42:05 $
 Currently locked by     $Locker:  $
-                        $Revision: 1.14 $
+                        $Revision: 1.15 $
                         $Source: /home/qiana/Repository/Aspic/spi_record.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -15,10 +15,13 @@ Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
 
 -language([evaluate,compound,colon]).
 -mode(trust).
--export([run/2, run/3, run/4, run/5
-	, filter_ambient/5]).
+-export([run/2, run/3, run/4, run/5]).
 
 -include(spi_constants).
+
+FILE_OPEN => 9.
+FILE_CLOSE => 10. 
+FILE_BUFFER => 12.
 
 % Numeric arguments should be evaluated by convert_to_real.
 
@@ -29,86 +32,158 @@ run(Goal, Limit) :-
     Limit' >= 0 |
 	computation # spi_monitor # scheduler(Scheduler),
 	write_channel(cutoff(Limit', _State), Scheduler),
-	computation#Goal;
+	computation # Goal;
 
     otherwise |
 	fail(run(Goal, Limit)).
 
 run(Goal, File, Limit) :-
-	runit + (Scale = 1, Format = none).
+
+	check_arguments([goal(Goal), file(File), limit(Limit)],
+			Reply),
+	run_check + (Scale = 1.0, Format = none, Entry = run/3). 
 
 run(Goal, File, Limit, Arg) :-
-    convert_to_real(Arg, Scale) |
-	runit + (Format = none);
+
+    convert_to_real(Arg, _) |
+	check_arguments([goal(Goal), file(File), limit(Limit),
+			 scale(Arg)],
+			Reply),
+	run_check + (Scale = Arg, Format = none, Entry = run/3);
+
     otherwise |
-	format_arg + (Scale = 1, Format = Arg).
+	check_arguments([goal(Goal), file(File), limit(Limit),
+			 format(Arg)],
+			Reply),
+	run_check + (Scale = 1.0, Format = Arg, Entry = run/4). 
 
 run(Goal, File, Limit, Scale, Format) :-
-    convert_to_real(Scale, Scale') |
-	format_arg.
-run(Goal, File, Limit, Format, Scale) :-
-    convert_to_real(Scale, Scale') |
-	format_arg.
 
-format_arg(Goal, File, Limit, Scale, Format) :-
-    Format =?= none |
-	runit;
-    Format =?= process |
-	runit;
-    Format =?= creator |
-	runit;
-    Format =?= full |
-	runit;
-    Format =?= ambient |
-	runit;
-    otherwise :
-      Limit = _,
-      File = _,
-      Goal = _,
-      Scale = _ |
-	fail("Unrecognized format" - Format).
+	check_arguments([goal(Goal), file(File), limit(Limit),
+			 scale(Scale), format(Format)],
+			Reply),
+	run_check + (Entry = run/5).
 
-runit(Goal, File, Limit, Scale, Format) :-
+check_arguments(Args, Reply) :-
 
-    Goal =?= _#_,
-    string(File), File =\= "",
-    convert_to_real(Limit, Limit'),
-    0.0 =< Limit',
-    convert_to_real(Scale, Scale'),
-    0.0 < Scale' |
-	computation # spi_monitor # scheduler(Scheduler),
-	write_channel(record(Stream), Scheduler, Scheduler'),
-	write_channel(cutoff(Limit', _State), Scheduler'),
-	computation#[Goal, events(Events)],
-	file#put_file(File, Out?, write, Ok),
-	filter_data,
-	run_ok;
-
-    otherwise |
-	fail("Bad argument" - run(Goal, File, Limit, Scale, Format)).
-
-  run_ok(Events, File, Ok) :-
-
-    Ok = true :
-      Events = _,
-      File = _;
-
-    otherwise :
-      Events = _ |
-	fail(("
-		write"(File) - Ok));
-
-    Events ? Event,
-    Event =\= aborted |
+    Args ? goal(_ # _) |
 	self;
 
-    Events ? aborted :
-      Events' = _,
+    Args ? file(File),
+    convert_to_string(File, String), String =\= "" |
+	self;
+
+    Args ? limit(Limit),
+    convert_to_real(Limit, Real), Real > 0.0 |
+	self;
+
+    Args ? scale(Scale),
+    convert_to_real(Scale, Real), Real > 0.0 |
+	self;
+
+    Args ? format(Format),
+    Format =?= none |
+	self;
+
+    Args ? format(Format),
+    Format =?= process |
+	self;
+
+    Args ? format(Format),
+    Format =?= creator |
+	self;
+
+    Args ? format(Format),
+    Format =?= full |
+	self;
+
+    Args ? format(Format),
+    Format =?= ambient |
+	self;
+
+    Args ? Type(Value),
+    otherwise :
+      Reply ! Type(Value) |
+	self;
+
+    Args =?= [] :
+      Reply = [].
+
+run_check(Goal, File, Limit, Scale, Format, Entry, Reply) :-
+
+    Reply =?= [],
+    convert_to_string(File, File'),
+    convert_to_real(Limit, Limit'),
+    convert_to_real(Scale, Scale') :
+      Entry = _ |
+	file # pwd(UID),
+	make_absolute(File', UID?, record, FileName),
+	processor # link(lookup(file, Offset)),
+	runit;
+
+    otherwise :
       File = _,
-      Ok = _.
+      Format = _,
+      Goal = _,
+      Limit = _,
+      Scale = _ |
+	/* should wait here */
+	utils # list_to_tuple([errors | Reply], Tuple),
+	fail(Entry, Tuple).
+
+  make_absolute(Name, UID, OpCode, NewName) :-
+
+    string_to_dlist(Name, [First | _], []),
+    First =:= ascii('/') : UID = _, OpCode = _,
+    Name = NewName ;
+
+    otherwise,
+    string_to_dlist(Name, NL, []),
+    string_to_dlist(UID, UIDNL, NL) : OpCode = _ |
+	list_to_string(UIDNL, NewName);
+
+    otherwise,
+    string(UID) : Name' = '?' |
+	fail("bad file name" - OpCode(Name)),
+	self;
+
+    UID = false(Reason) :
+      NewName = '?' |
+	fail(Reason - OpCode(Name)).
+
+  runit(Goal, FileName, Limit, Scale, Format, Offset) :-
+    known(FileName),
+    Offset < 0 :
+      execute(Offset, {FILE_OPEN, FileName, write, Fd}) |
+	check_open,
+	begin_monitor.
+
+  check_open(Fd, Ok) :-
+
+    integer(Fd),
+    Fd > 0 :
+      Ok = true;
+
+    integer(Fd),
+    Fd =< 0 :
+      Status = Fd /* for now */,
+      Ok = false(Status).
+
+  begin_monitor(Goal, Fd, Limit, Scale, Format, Offset, Ok) :-
+
+    Ok = true |
+	computation # spi_monitor # scheduler(Scheduler),
+	write_channel(cutoff(Limit, _State), Scheduler, Scheduler'),
+	begin_computation.
+	
+  begin_computation(Goal, Fd, Scheduler, Scale, Format, Offset) :-
+    vector(Scheduler) :
+      write_channel(record(Stream), Scheduler) |
+	computation # [events(Events), Goal],
+	filter_data + (Last = 0).
 
 
-filter_data(Stream, Events, Out, Scale, Format) :-
+filter_data(Stream, Fd, Events, Scale, Format, Offset, Last) :-
 
     Format =?= none |
 	filter_none;
@@ -123,22 +198,15 @@ filter_data(Stream, Events, Out, Scale, Format) :-
  	filter_full;
 
     Format =?= ambient |
- 	filter_ambient + (Last = 0);
-
-    otherwise :
-      Events = _,
-      Scale = _,
-      Stream = _,
-      Out = [] |
-	fail(invalid_format(Format)).
+ 	filter_ambient + (Then = 0).
 
 
-filter_ambient(Stream, Events, Out, Scale, Last) :-
+filter_ambient(Stream, Events, Fd, Scale, Offset, Last, Then) :-
 
     Stream ? Number, number(Number),
     Number > 0,
-    Last' := Scale*Number :
-      Last = _ |
+    Then' := Scale*Number :
+      Then = _ |
 	self;
 
     Stream ? start(_Name) |
@@ -154,24 +222,118 @@ filter_ambient(Stream, Events, Out, Scale, Last) :-
     Stream ? ambient(terminated(system, system)) |
 	self;
 
+    Last =?= 0,
     Stream ? ambient(F(A1(N1), A2(N2))),
     string(F), string(A1), number(N1), string(A2), number(N2),
-    Last > 0,
-    convert_to_string(Last, SL),
-    string_to_dlist(SL, DLast, [CHAR_EOL | List?]) :
-      Last' = -1,
-      Out ! TwoLines? |
+    Then > 0,
+    convert_to_string(Then, SL),
+    string_to_dlist(SL, DThen, [CHAR_EOL | List?]) :
+      Then' = -1 |
 	ambient_line_to_list,
-	list_to_string(DLast, TwoLines),
+	ambient_line_out(DThen, Offset, Fd, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? ambient(F(A1(N1), A2(N2))),
     string(F), string(A1), number(N1), string(A2), number(N2),
-    Last =< 0 :
-      Out ! OneLine? |
+    Then =< 0 |
 	ambient_line_to_list,
-	list_to_string(List, OneLine),
+	ambient_line_out(List, Offset, Fd, Last'),
 	self;
+
+    Last =\= 0 :
+      Events = _,
+      Scale = _,
+      Stream = _,
+      Then = _,
+      Stream' = file_error - Last |
+	filter_end;
+
+    otherwise :
+      Last = _,
+      Then = _ |
+	filter_end;
+
+    Events ? Event,
+    Event =\= aborted |
+	self;
+
+    unknown(Stream),
+    Events ? aborted :
+      Events' = _,
+      Last = _,
+      Then = _,
+      Scale = _ |
+	close_file.
+
+  ambient_line_to_list(F, A1, N1, A2, N2, List) :-
+
+    convert_to_string(N2, SN2),
+    string_to_dlist(SN2, DN2, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(A2, DA2, [CHAR_LEFT_PAREN | DN2]),
+    convert_to_string(N1, SN1),
+    string_to_dlist(SN1, DN1, [CHAR_RIGHT_PAREN, CHAR_SPACE | DA2]),
+    string_to_dlist(A1, DA1, [CHAR_LEFT_PAREN | DN1]),
+    string_to_dlist(F, DF, [CHAR_SPACE | DA1]) :
+      List = DF.
+
+  ambient_line_out(Lines, Offset, Fd, Last) :-
+    list_to_string(Lines, OutString) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, OutString, Last)).
+
+
+filter_none(Stream, Events, Fd, Scale, Offset, Last) :-
+
+    Last =?= 0,
+    Stream ? Number, number(Number),
+    Number' := Scale*Number,
+    convert_to_string(Number', NumberString) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, NumberString, Last')) |
+	self;
+
+    Last =?= 0,
+    Stream ? start(Name),
+    string_to_dlist(Name, CP, []),
+    list_to_string([CHAR_PLUS | CP], String) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
+	self;
+
+    Last =?= 0,
+    Stream ? end(Name(_ChannelName, _Action, _FileId)),
+    string_to_dlist(Name, CP, []),
+    list_to_string([CHAR_MINUS | CP], String) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
+	self;
+
+/* For ambient merge */
+    Last =?= 0,
+    Stream ? reset(Prefix),
+    convert_to_string(Prefix, SPrefix),
+    string_to_dlist(SPrefix, LPrefix, []),
+    list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, ResetPrefix, Last')) |
+	self;
+
+    Last =?= 0,
+    Stream ? reset(AmbientName(UniqueId)),
+    convert_to_string(UniqueId, UniqueId'),
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]),
+    list_to_string(CN, Prefix) :
+      Stream'' = [reset(Prefix) | Stream'] |
+	self;
+
+    Last =?= 0,
+    Stream ? ambient(_) |
+	/* Just ignore it for now */
+	self;
+
+    Last =\= 0 :
+      Events = _,
+      Scale = _,
+      Stream = _,
+      Stream' = file_error - Last |
+	filter_end;
 
     otherwise :
       Last = _ |
@@ -185,161 +347,127 @@ filter_ambient(Stream, Events, Out, Scale, Last) :-
     Events ? aborted :
       Events' = _,
       Last = _,
-      Scale = _,
-      Out = [].
-
-  ambient_line_to_list(F, A1, N1, A2, N2, List) :-
-
-    convert_to_string(N2, SN2),
-    string_to_dlist(SN2, DN2, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(A2, DA2, [CHAR_LEFT_PAREN | DN2]),
-    convert_to_string(N1, SN1),
-    string_to_dlist(SN1, DN1, [CHAR_RIGHT_PAREN, CHAR_SPACE | DA2]),
-    string_to_dlist(A1, DA1, [CHAR_LEFT_PAREN | DN1]),
-    string_to_dlist(F, DF, [CHAR_SPACE | DA1]) :
-      List = DF.
+      Scale = _ |
+	close_file.
 
 
-filter_none(Stream, Events, Out, Scale) :-
+filter_process(Stream, Events, Fd, Scale, Offset, Last) :-
 
+    Last =?= 0,
     Stream ? Number, number(Number),
-    Number' := Scale*Number :
-      Out ! Number',
-      Out' ! "
-" |
+    Number' := Scale*Number,
+    convert_to_string(Number', NumberString) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, NumberString, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? start(Name), string(Name),
-    string_to_dlist(Name, CP, [CHAR_EOL]),
+    string_to_dlist(Name, CP, []),
     list_to_string([CHAR_PLUS | CP], String) :
-      Out ! String |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
-    Stream ? end(Name(_ChannelName, _Action, _FileId)),
-    string_to_dlist(Name, CP, [CHAR_EOL]),
-    list_to_string([CHAR_MINUS | CP], String) :
-      Out ! String |
-	self;
-
-/* For ambient merge */
-    Stream ? reset(Prefix),
-    convert_to_string(Prefix, SPrefix),
-    string_to_dlist(SPrefix, LPrefix, [CHAR_EOL]),
-    list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
-      Out ! ResetPrefix? |
-	self;
-
-    Stream ? reset(AmbientName(UniqueId)),
-    convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
-      Out ! ResetPrefix? |
-	list_to_string([CHAR_BANG | CN], ResetPrefix),
-	self;
-
-    Stream ? ambient(_) |
-	/* Just ignore it for now */
-	self;
-
-    otherwise |
-	filter_end;
-
-    Events ? Event,
-    Event =\= aborted |
-	self;
-
-    unknown(Stream),
-    Events ? aborted :
-      Events' = _,
-      Scale = _,
-      Out = [].
-
-filter_process(Stream, Events, Out, Scale) :-
-
-    Stream ? Number, number(Number),
-    Number' := Scale*Number :
-      Out ! Number',
-      Out' ! "
-" |
-	self;
-
-    Stream ? start(Name), string(Name),
-    string_to_dlist(Name, CP, [CHAR_EOL]),
-    list_to_string([CHAR_PLUS | CP], String) :
-      Out ! String |
-	self;
-
+    Last =?= 0,
     Stream ? end(Name(ChannelName, Action, _FileId)),
-    string_to_dlist(ChannelName, CN, [CHAR_EOL]),
+    string_to_dlist(ChannelName, CN, []),
     string_to_dlist(Action, CA, [CHAR_SPACE | CN]),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]),
     list_to_string([CHAR_MINUS | CP], String) :
-      Out ! String |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(self(p2c ChannelName), Action, _FileId)) |
-	process_inter_comm(Name, ChannelName, Action, " p2c ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " p2c ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(parent(p2c ChannelName), Action, _FileId)) |
-	process_inter_comm(Name, ChannelName, Action, " c2p ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " c2p ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(s2s ChannelName), Action, _FileId)) |
-	process_inter_comm(Name, ChannelName, Action, " s2s ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " s2s ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_self(exit ChannelName), Action, _FileId)),
     Action =?= RECEIVED_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " expel ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " expel ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(exit ChannelName), Action, _FileId)),
     Action =?= SENT_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " exit ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " exit ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(enter ChannelName), Action, _FileId)),
     Action =?= RECEIVED_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " accept ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " accept ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(enter ChannelName), Action, _FileId)),
     Action =?= SENT_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " enter ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " enter ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(merge(ChannelName)), Action, _FileId)),
     Action =?= RECEIVED_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " merge+ ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " merge+ ",
+			   Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(merge(ChannelName)), Action, _FileId)),
     Action =?= SENT_ARROW |
-	process_inter_comm(Name, ChannelName, Action, " merge- ", Out, Out'),
+	process_inter_comm(Name, ChannelName, Action, " merge- ",
+			   Fd, Offset, Last'),
 	self;
 
 /* For ambient merge */
+    Last =?= 0,
     Stream ? reset(Prefix),
     convert_to_string(Prefix, SPrefix),
-    string_to_dlist(SPrefix, LPrefix, [CHAR_EOL]),
+    string_to_dlist(SPrefix, LPrefix, []),
     list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
-      Out ! ResetPrefix? |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, ResetPrefix, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
-      Out ! ResetPrefix? |
-	list_to_string([CHAR_BANG | CN], ResetPrefix),
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]),
+    list_to_string(CN, Prefix) :
+      Stream'' = [reset(Prefix) | Stream'] |
 	self;
 
+    Last =?= 0,
     Stream ? ambient(_) |
 	/* Just ignore it for now */
 	self;
 
-   otherwise |
+    Last =\= 0 :
+      Events = _,
+      Scale = _,
+      Stream = _,
+      Stream' = file_error - Last |
+	filter_end;
+
+   otherwise :
+      Last = _ |
 	filter_end;
 
     Events ? Event,
@@ -349,148 +477,147 @@ filter_process(Stream, Events, Out, Scale) :-
     unknown(Stream),
     Events ? aborted :
       Events' = _,
-      Scale = _,
-      Out = [].
+      Last = _,
+      Scale = _ |
+	close_file.
 
+  process_inter_comm(Name, ChannelName, Action, Capability, Fd, Offset, Last) :-
 
-  process_inter_comm(Name, ChannelName, Action, Capability, Out, Out') :-
-
-    string_to_dlist(ChannelName, CN, [CHAR_EOL]),
+    string_to_dlist(ChannelName, CN, []),
     string_to_dlist(Capability, CC, CN),
     string_to_dlist(Action, CA, CC),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]),
     list_to_string([CHAR_MINUS | CP], String) :
-      Out ! String? ;
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last));
 
     otherwise :
+      Fd = _,
+      Offset = _,
       Element = end(Name(ChannelName), Action, Capability),
-      Out = Out' |
+      Last = 0 |
 	fail(Element).
 
 
-filter_creator(Stream, Events, Out, Scale) :-
+filter_creator(Stream, Events, Fd, Scale, Offset, Last) :-
 
+    Last =?= 0,
     Stream ? Number, number(Number),
-    Number' := Scale*Number :
-      Out ! Number',
-      Out' ! "
-" |
+    Number' := Scale*Number,
+    convert_to_string(Number', NumberString) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, NumberString, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? start(Name), string(Name),
-    string_to_dlist(Name, CP, [CHAR_EOL]),
+    string_to_dlist(Name, CP, []),
     list_to_string([CHAR_PLUS | CP], String) :
-      Out ! String |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_ChannelName, Action, CreatedId)),
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, []),
     string_to_dlist(Action, CA, [CHAR_SPACE | CI]),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String),
+    string_to_dlist(Name, CP, [CHAR_SPACE | CA]),
+    list_to_string([CHAR_MINUS | CP], String) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_ChannelName, Action, CreatedId(UniqueId))),
     number(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN]),
     string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(Action, CA, [CHAR_SPACE | CI]),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String),
+    string_to_dlist(Name, CP, [CHAR_SPACE | CA]),
+    list_to_string([CHAR_MINUS | CP], String) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(self(_InterAmbientId), Action, p2c FileId)) |
-	creator_inter_comm(Name, Action, FileId, " p2c ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " p2c ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(parent(_InterAmbientId), Action, p2c FileId)) |
-	creator_inter_comm(Name, Action, FileId, " c2p ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " c2p ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, s2s FileId)) |
-	creator_inter_comm(Name, Action, FileId, " s2s ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " s2s ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, exit FileId)),
     Action =?= RECEIVED_ARROW |
-	creator_inter_comm(Name, Action, FileId, " expel ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " expel ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, exit FileId)),
     Action =?= SENT_ARROW |
-	creator_inter_comm(Name, Action, FileId, " exit ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " exit ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, enter FileId)),
     Action =?= RECEIVED_ARROW |
-	creator_inter_comm(Name, Action, FileId, " accept ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " accept ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, enter FileId)),
     Action =?= SENT_ARROW |
-	creator_inter_comm(Name, Action, FileId, " enter ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " enter ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, merge(FileId))),
     Action =?= RECEIVED_ARROW |
-	creator_inter_comm(Name, Action, FileId, " merge+ ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " merge+ ", Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_LocusId, Action, merge(FileId))),
     Action =?= SENT_ARROW |
-	creator_inter_comm(Name, Action, FileId, " merge- ", Out, Out'?),
+	creator_inter_comm(Name, Action, FileId, " merge- ", Fd, Offset, Last'),
 	self;
-
-/* The following code does not work in-line
-
-    Stream ? end(Name(_LocusId, Action, merge(CreatedId))),
-    string(CreatedId),
-    Action =?= SENT_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(" merge- ", CP, CI),
-    string_to_dlist(Action, CA, CP),
-    string_to_dlist(Name, CN, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CN], String),
-	self;
-
-    Stream ? end(Name(_LocusId, Action, merge(CreatedId(UniqueId)))),
-    Action =?= SENT_ARROW,
-    convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
-    string_to_dlist(" merge- ", CP, CI),
-    string_to_dlist(Action, CA, [CHAR_SPACE | CP]),
-    string_to_dlist(Name, CN, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CN], String),
-	self;
-*/
 
 /* For ambient merge */
+    Last =?= 0,
     Stream ? reset(Prefix),
     convert_to_string(Prefix, SPrefix),
-    string_to_dlist(SPrefix, LPrefix, [CHAR_EOL]),
+    string_to_dlist(SPrefix, LPrefix, []),
     list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
-      Out ! ResetPrefix? |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, ResetPrefix, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
-      Out ! ResetPrefix? |
-	list_to_string([CHAR_BANG | CN], ResetPrefix),
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]),
+    list_to_string(CN, Prefix) :
+      Stream'' = [reset(Prefix) | Stream'] |
 	self;
 
+    Last =?= 0,
     Stream ? ambient(_) |
 	/* Just ignore it for now */
 	self;
 
-    otherwise |
+    Last =\= 0 :
+      Events = _,
+      Scale = _,
+      Stream = _,
+      Stream' = file_error - Last |
+	filter_end;
+
+    otherwise :
+      Last = _ |
 	filter_end;
 
     Events ? Event,
@@ -500,234 +627,155 @@ filter_creator(Stream, Events, Out, Scale) :-
     unknown(Stream),
     Events ? aborted :
       Events' = _,
-      Scale = _,
-      Out = [].
+      Last = _,
+      Scale = _ |
+	close_file.
 
-  creator_inter_comm(Name, Action, FileId, Capability, Out, Out') :-
+  creator_inter_comm(Name, Action, FileId, Capability, Fd, Offset, Last) :-
 
     string(FileId),
-    string_to_dlist(FileId, CI, [CHAR_EOL]),
+    string_to_dlist(FileId, CI, []),
     string_to_dlist(Capability, CC, CI),
     string_to_dlist(Action, CA, CC),
-    string_to_dlist(Name, CN, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CN], String);
+    string_to_dlist(Name, List, [CHAR_SPACE | CA]) |
+	output_minus_string;
 
     FileId =?= CreatedId(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN]),
     string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(Capability, CC, CI),
     string_to_dlist(Action, CA, CC),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String).
+    string_to_dlist(Name, List, [CHAR_SPACE | CA]) |
+	output_minus_string.
 
 
-filter_full(Stream, Events, Out, Scale) :-
+filter_full(Stream, Events, Fd, Scale, Offset, Last) :-
 
+    Last =?= 0,
     Stream ? Number, number(Number),
-    Number' := Scale*Number :
-      Out ! Number',
-      Out' ! "
-" |
+    Number' := Scale*Number,
+    convert_to_string(Number', NumberString) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, NumberString, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? start(Name), string(Name),
-    string_to_dlist(Name, CP, [CHAR_EOL]),
+    string_to_dlist(Name, CP, []),
     list_to_string([CHAR_PLUS | CP], String) :
-      Out ! String |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(ChannelName, Action, CreatedId)),
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
+    string_to_dlist(CreatedId, CI, []),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(Action, CA, [CHAR_SPACE | CN]),
     string_to_dlist(Name, CP, [CHAR_SPACE | CA]),
     list_to_string([CHAR_MINUS | CP], String) :
-      Out ! String |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last')) |
 	self;
-/*
-    Stream ? end(Name(self(p2c ChannelName), Action, p2c CreatedId)),
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" p2c ", CP2C, CN),
-    string_to_dlist(Action, CA, CP2C),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
 
-    Stream ? end(Name(parent(p2c ChannelName), Action, p2c CreatedId)),
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" c2p ", CC2P, CN),
-    string_to_dlist(Action, CA, CC2P),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(s2s ChannelName), Action, s2s CreatedId)),
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" s2s ", CS2S, CN),
-    string_to_dlist(Action, CA, CS2S),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_self(exit ChannelName), Action, exit CreatedId)),
-    Action =?= RECEIVED_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" expel ", CEXPEL, CN),
-    string_to_dlist(Action, CA, CEXPEL),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(exit ChannelName), Action, exit CreatedId)),
-    Action =?= SENT_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" exit ", CEXIT, CN),
-    string_to_dlist(Action, CA, CEXIT),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(enter ChannelName), Action, enter CreatedId)),
-    Action =?= RECEIVED_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" accept ", CENTER, CN),
-    string_to_dlist(Action, CA, CENTER),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(enter ChannelName), Action, enter CreatedId)),
-    Action =?= SENT_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" enter ", CENTER, CN),
-    string_to_dlist(Action, CA, CENTER),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(merge(ChannelName)), Action, merge(CreatedId))),
-    Action =?= RECEIVED_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" merge+ ", CMERGE, CN),
-    string_to_dlist(Action, CA, CMERGE),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-
-    Stream ? end(Name(_parent(merge(ChannelName)), Action, merge(CreatedId))),
-    Action =?= SENT_ARROW,
-    string_to_dlist(CreatedId, CI, [CHAR_EOL]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(" merge- ", CMERGE, CN),
-    string_to_dlist(Action, CA, CMERGE),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String |
-	self,
-	list_to_string([CHAR_MINUS | CP], String);
-*/
-
+    Last =?= 0,
     Stream ? end(Name(ChannelName, Action, CreatedId(UniqueId))),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN]),
     string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
-    string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
-    string_to_dlist(Action, CA, [CHAR_SPACE | CN]),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String),
+    list_to_string(CI, CreatedId') :
+      Stream'' = [end(Name(ChannelName, Action, CreatedId')) | Stream'] |
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(s2s ChannelName), Action, s2s FileId)) |
 	full_inter_comm(Name, ChannelName, Action, FileId, " s2s ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(self(p2c ChannelName), Action, p2c FileId)) |
 	full_inter_comm(Name, ChannelName, Action, FileId, " p2c ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(parent(p2c ChannelName), Action, p2c FileId)) |
 	full_inter_comm(Name, ChannelName, Action, FileId, " c2p ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(exit ChannelName), Action, exit FileId)),
     Action =?= RECEIVED_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " expel ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(exit ChannelName), Action, exit FileId)),
     Action =?= SENT_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " exit ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(enter ChannelName), Action, enter FileId)),
     Action =?= RECEIVED_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " accept ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(enter ChannelName), Action, enter FileId)),
     Action =?= SENT_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " enter ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(merge(ChannelName)), Action, merge(FileId))),
     Action =?= RECEIVED_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " merge+ ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
+    Last =?= 0,
     Stream ? end(Name(_parent(merge(ChannelName)), Action, merge(FileId))),
     Action =?= SENT_ARROW |
 	full_inter_comm(Name, ChannelName, Action, FileId, " merge- ",
-			Out, Out'),
+			Fd, Offset, Last'),
 	self;
 
 /* For ambient merge */
+    Last =?= 0,
     Stream ? reset(Prefix),
     convert_to_string(Prefix, SPrefix),
-    string_to_dlist(SPrefix, LPrefix, [CHAR_EOL]),
+    string_to_dlist(SPrefix, LPrefix, []),
     list_to_string([CHAR_BANG | LPrefix], ResetPrefix) :
-      Out ! ResetPrefix? |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, ResetPrefix, Last')) |
 	self;
 
+    Last =?= 0,
     Stream ? reset(AmbientName(UniqueId)),
     convert_to_string(UniqueId, UniqueId'),
-    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
-    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]) :
-      Out ! ResetPrefix? |
-	list_to_string([CHAR_BANG | CN], ResetPrefix),
+    string_to_dlist(UniqueId', CU, [CHAR_RIGHT_PAREN]),
+    string_to_dlist(AmbientName, CN, [CHAR_LEFT_PAREN | CU]),
+    list_to_string(CN, Prefix) :
+      Stream'' = [reset(Prefix) | Stream'] |
 	self;
 
     Stream ? ambient(_) |
 	/* Just ignore it for now */
 	self;
 
-    otherwise |
+    Last =\= 0 :
+      Events = _,
+      Scale = _,
+      Stream = _,
+      Stream' = file_error - Last |
+	filter_end;
+
+    otherwise :
+      Last = _ |
 	filter_end;
 
     Events ? Event,
@@ -737,63 +785,72 @@ filter_full(Stream, Events, Out, Scale) :-
     unknown(Stream),
     Events ? aborted :
       Events' = _,
-      Scale = _,
-      Out = [].
+      Last = _,
+      Scale = _ |
+	close_file.
 
-  full_inter_comm(Name, ChannelName, Action, FileId, Capability, Out, Out') :-
+  full_inter_comm(Name, ChannelName, Action, FileId, Capability,
+		  Fd, Offset, Last) :-
 
     string(FileId),
-    string_to_dlist(FileId, CI, [CHAR_EOL]),
+    string_to_dlist(FileId, CI, []),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(Capability, CC, CN),
     string_to_dlist(Action, CA, CC),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String);
+    string_to_dlist(Name, List, [CHAR_SPACE | CA]) |
+	output_minus_string;
 
     FileId =?= CreatedId(UniqueId),
     convert_to_string(UniqueId, UniqueIdString),
-    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN, CHAR_EOL]),
+    string_to_dlist(UniqueIdString, CU, [CHAR_RIGHT_PAREN]),
     string_to_dlist(CreatedId, CI, [CHAR_LEFT_PAREN | CU]),
     string_to_dlist(ChannelName, CN, [CHAR_COLON, CHAR_SPACE | CI]),
     string_to_dlist(Capability, CC, CN),
     string_to_dlist(Action, CA, CC),
-    string_to_dlist(Name, CP, [CHAR_SPACE | CA]) :
-      Out ! String? |
-	list_to_string([CHAR_MINUS | CP], String);
-
-    otherwise :
-      Element = end(Name(ChannelName), Action, Capability, FileId),
-      Out = Out' |
-	fail(Element).
+    string_to_dlist(Name, List, [CHAR_SPACE | CA]) |
+	output_minus_string.
 
 
-filter_end(Stream, Events, Out, Scale) :-
+output_minus_string(List, Fd, Offset, Last) :-
+    list_to_string([CHAR_MINUS | List], String) :
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, Last)).
+
+
+filter_end(Stream, Events, Fd, Scale, Offset) :-
 
     Stream ? idle(Number),
-    Number' := Scale*Number :
+    Number' := Scale*Number,
+    convert_to_string(Number', String) :
       Events = _,
       Stream' = _,
-      Out = [Number', "
-"];
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, String, _Last)) |
+	close_file;
 
     Stream ? Element,
-    otherwise,
-    list_to_string([CHAR_QUERY, CHAR_EOL], String) :
+    otherwise :
       Events = _,
       Scale = _,
       Stream' = _,
-      Out = [String] |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, "?", _Last)) |
+	close_file,
 	fail((data:Element));
 
     Stream =?= [] :
       Events = _,
-      Scale = _,
-      Out = [] ;
+      Scale = _ |
+	close_file;
 
-    otherwise,
-    list_to_string([CHAR_QUERY, CHAR_EOL], String) :
+    otherwise :
       Events = _,
       Scale = _,
-      Out = [String] |
+      execute(Offset, FILE_BUFFER(Fd, CHAR_EOL, "?", _Last)) |
+	close_file,
 	fail((format:Stream)).
+
+
+close_file(Fd, Offset) :-
+    known(Offset), known(Fd) :
+      execute(Offset, {FILE_CLOSE, Fd});
+% | screen#display(close_file(Fd,Offset) - ok);
+    otherwise : Offset = _, Fd = _ .
+% | screen#display(close_file(Fd,Offset) - ng).
