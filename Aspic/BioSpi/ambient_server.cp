@@ -4,9 +4,9 @@ User Ambient server
 William Silverman
 
 Last update by		$Author: bill $
-			$Date: 2006/06/27 04:30:48 $
+			$Date: 2007/02/26 06:28:30 $
 Currently locked by     $Locker:  $
-			$Revision: 1.29 $
+			$Revision: 1.30 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/ambient_server.cp,v $
 
 Copyright (C) 2001, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -585,7 +585,7 @@ serve_ambient(In, Events, FromSub, Done,
 	),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
 	       PrivateChannels, PrivateChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
     Locus =?= private,
@@ -598,7 +598,7 @@ serve_ambient(In, Events, FromSub, Done,
 	),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs,
 	       PrivateChannels, PrivateChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
     Locus =?= public,
@@ -613,7 +613,7 @@ serve_ambient(In, Events, FromSub, Done,
 	),
 	lookup(Name, PrivateChannel, SharedChannel, 1,
 	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
     Locus =?= self(Kind),
@@ -626,7 +626,7 @@ serve_ambient(In, Events, FromSub, Done,
 	),
 	lookup(Kind(Name), PrivateChannel, SharedChannel, 1,
 	       SharedChannels, SharedChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^),
     Locus =?= parent(Kind) :
@@ -634,7 +634,7 @@ serve_ambient(In, Events, FromSub, Done,
 		   lookup(self(Kind), PrivateChannel, SharedChannel, 1),
 		   Parent, Parent') |
 	DEBUG(lookup/3 - Locus - PrivateChannel, pass),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? new_ambient(Name, ModuleId, Goal),
     ModuleId = [ModuleName | SId] :
@@ -715,7 +715,7 @@ serve_ambient(In, Events, FromSub, Done,
 		PublicChannels - PublicChannels', search),
 	lookup(Name, PrivateChannel, SharedChannel, AddRefs',
 	       PublicChannels, PublicChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
     Locus =?= self(Kind),
@@ -724,7 +724,7 @@ serve_ambient(In, Events, FromSub, Done,
 		SharedChannels - SharedChannels', search),
 	lookup(Kind(Name), PrivateChannel, SharedChannel, AddRefs,
 	       SharedChannels, SharedChannels', Scheduler, Ambient, Debug),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? lookup(Locus, PrivateChannel, SharedChannel?^, AddRefs),
     Locus =?= parent(Kind) :
@@ -732,7 +732,7 @@ serve_ambient(In, Events, FromSub, Done,
 		   lookup(self(Kind), PrivateChannel, SharedChannel, AddRefs),
 		   Parent, Parent') |
 	DEBUG(lookup/4 - parent(Kind, AddRefs) - PrivateChannel, pass),
-	ambient_lookup;
+	ambient_lookup + (Es = Events);
 
     In ? new_child(Child) :
       Children' = [Child | Children] |
@@ -772,8 +772,8 @@ serve_ambient(In, Events, FromSub, Done,
 		   change_parent(Parent, Removed, Ready),
 		   Exiter) |
 	DEBUG("exit"(Removed, Ready), move - ExiterId - into - ParentId),
-	TERMS((read_vector(AMBIENT_ID, Enterer, ExiterId),
-	       read_vector(AMBIENT_ID, Ambient, MyId))),
+	TERMS((read_vector(AMBIENT_ID, Exiter, ExiterId),
+	       read_vector(AMBIENT_ID, Parent, ParentId))),
 	remove_shared_communications(Exiter, SharedChannels, Scheduler,
 					Removed),
 	record_ambient_item(Done, exit(Exiter, Parent), Ready, Scheduler),
@@ -992,9 +992,20 @@ serve_ambient(In, Events, FromSub, Done,
 		 Parameters, PublicChannels, PrivateChannels, SharedChannels,
 		 Requests, Controls, AmbientDone,
 		 Scheduler, Debug,
-		 SharedChannel) :-
-    known(SharedChannel) |
-	serve_ambient.
+		 SharedChannel, Es) :-
+
+    known(SharedChannel) :
+      Es = _ |
+	serve_ambient;
+
+    Es ? abort :
+      Es' = _,
+      SharedChannel = _,
+      In' = [abort | In] |
+	serve_ambient;
+
+    Es ? Other, Other =\= abort |
+	self.
 
   copy_resolvent(R, Resolvent, NextResolvent) :-
 
@@ -1259,7 +1270,7 @@ lookup(Id, PrivateChannel, SharedChannel, AddRefs, ChannelList, NewChannelList,
       NewChannelList =
 	[Id(SharedChannel?, SPI_DEFAULT_WEIGHT_NAME, BaseRate?) | ChannelList],
       write_channel(new_public_channel(Id, NewChannel, BaseRate?), Scheduler) |
-	DEBUG(lookup, new - PublicId - PrivateChannel(Type,Rate)),
+	DEBUG(lookup, new - Id - PrivateChannel(Type,Rate)),
 	rate_to_baserate,
 	update_new_channel;
 
@@ -2240,25 +2251,25 @@ format_typerate(Type, Rate, TypeRate) :-
     Type =:= SPI_BIMOLECULAR :
       TypeRate = bimolecular(Rate);
 
-    Type =:= SPI_BIMOLECULAR + SPI_RANDOM_MESSAGE :
+    Type =:= SPI_BIMOLECULAR + SPI_RANDOM_FLAG :
       TypeRate = 'bimolecular"'(Rate);
 
     Type =:= SPI_BIMOLECULAR_PRIME :
       TypeRate = "bimolecular'"(Rate);
 
-    Type =:= SPI_BIMOLECULAR_PRIME + SPI_RANDOM_MESSAGE :
+    Type =:= SPI_BIMOLECULAR_PRIME + SPI_RANDOM_FLAG :
       TypeRate = "bimolecular'"""(Rate);
 
     Type =:= SPI_HOMODIMERIZED :
       TypeRate = homodimerized(Rate);
 
-    Type =:= SPI_HOMODIMERIZED + SPI_RANDOM_MESSAGE :
+    Type =:= SPI_HOMODIMERIZED + SPI_RANDOM_FLAG :
       TypeRate = 'homodimerized"'(Rate);
 
     Type =:= SPI_HOMODIMERIZED_PRIME :
       TypeRate = "homodimerized'"(Rate);
 
-    Type =:= SPI_HOMODIMERIZED_PRIME + SPI_RANDOM_MESSAGE :
+    Type =:= SPI_HOMODIMERIZED_PRIME + SPI_RANDOM_FLAG :
       TypeRate = "homodimerized'"""(Rate);
 
     Type =:= SPI_INSTANTANEOUS :
