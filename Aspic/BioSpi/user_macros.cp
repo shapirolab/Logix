@@ -4,9 +4,9 @@ User Ambient macros
 William Silverman
 
 Last update by		$Author: bill $
-		       	$Date: 2005/07/19 14:47:05 $
+		       	$Date: 2007/02/27 17:31:57 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.23 $
+			$Revision: 1.24 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/user_macros.cp,v $
 
 Copyright (C) 1998, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -277,6 +277,12 @@ expand_biospi(Command, Cs) :-
 	    spi_macros # transform(N, Results) |Commands]\Commands;
 
 % override logix user macros.
+
+    Command = (#_) |
+	ambient_run(Command, Run, Run, Cs);
+
+    Command = (_#_) |
+	ambient_run(Command, Run, Run, Cs);
 
     Command = rtr :
       Command' = rtr("") |
