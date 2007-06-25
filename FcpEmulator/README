@@ -5,11 +5,12 @@ To prepare an emulator:
    This produces an executable, mkmk, which can be used to create
    a makefile.
 
-2. For machine <target> (e.g. linux macosx solaris, sgi) execute
+2. For machine <target> (e.g. linux maci386 macosx solaris, sgi) execute
 
    do-<target> <additional arguments> (e.g. do-linux spi)
 
-   This calls mkmk to create a makefile for <target>.
+   This calls mkmk with <additional arguments> to create a makefile for
+   <target>.
 
 3. make
 
