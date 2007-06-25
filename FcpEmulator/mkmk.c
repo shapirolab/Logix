@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.14 2007/02/21 16:18:42 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.15 2007/06/25 06:28:18 bill Exp $ */
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -47,7 +47,9 @@
      compiles with -O4 flag for all files except for emulate.c
    os4.1:
      links with -Bstatic as required by certain computers to enable dynamic
-       linkning
+       linking
+   posix:
+     sets linkage flags, etc. for Posix (compatible) systems
    short:
      build version for 32-bit word platform (default)
    spi:
@@ -110,6 +112,7 @@ static char *o1S = "-O1";
 static char *o2S = "-O2";
 static char *o4S = "-O4";
 static char *os41S = "-Bstatic";
+static char *posixS = "POSIX";
 static char *spiS = "spicomm";
 static char *spiwS = "spiweight";
 static char *sgi_5d2S = "sgi_irix_5d2";
@@ -137,7 +140,7 @@ static char *hpux_9d05V = "";
 static char *interfaceV = "";
 static char *libsV = "";
 static char *linux_6d1V = "";
-static char *longV = "-m32";
+static char *longV = "";
 static char *longwordV = "";
 static char *maci386V = "";
 static char *macosx_8d4V = "";
@@ -145,6 +148,7 @@ static char *mathV = "";
 static char *optV = "";
 static char *o4V = "";
 static char *os41V = "";
+static char *posixV = "";
 static char *spiV = "";
 static char *spiwV = "";
 static char *sgi_5d2V = "";
@@ -211,6 +215,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 'd':
       /* dbg */
       /* dbgl */
@@ -241,6 +246,7 @@ main(argc, argv)
 	    printf("mkmk: Unknown option %s\n", *argv);
 	    exit(1);
 	  }
+	  continue;
 	case 'x':
 	  /* dbx */
 	  dbxV = dbxS;
@@ -263,6 +269,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 'f':
       /* file */
       /* freeze_term */
@@ -287,6 +294,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 'h':
       /* hppa1d1_hpux_9d05 */
       hpux_9d05V = hpux_9d05S;
@@ -317,6 +325,7 @@ main(argc, argv)
 	  printf("mkmk: Unknown option %s\n", *argv);
 	  exit(1);
 	}
+	continue;
       case 'o':
 	/* long */
 	longV = longS;
@@ -326,6 +335,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 'm':
       if (*S++ == 'a') {
 	switch (*S++) {
@@ -339,7 +349,7 @@ main(argc, argv)
 	  case ('o'):
 	    /* macosx */
 	    macosx_8d4V = macosx_8d4S;
-	    archV = "-arch  ppc ";
+	    archV = "-arch ppc ";
 	    continue;
 	  default:
 	    printf("mkmk: Unknown option %s\n", *argv);
@@ -396,6 +406,10 @@ main(argc, argv)
 	exit(1);
       }
       continue;
+    case 'p':
+      /* posix */
+      posixV = posixS;
+      continue;
     case 's':
       /* sgi_irix_5d2 */
       /* sun4_solaris_2d3 */
@@ -437,10 +451,12 @@ main(argc, argv)
 	  printf("mkmk: Unknown option %s\n", *argv);
 	  exit(1);
 	}
+	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 't':
       /* timer */
       /* tty */
@@ -467,6 +483,7 @@ main(argc, argv)
 	printf("mkmk: Unknown option %s\n", *argv);
 	exit(1);
       }
+      continue;
     case 'u':
       /* ultrix */
       ultrixV = ultrixS;
@@ -477,6 +494,7 @@ main(argc, argv)
       exit(1);
     }
   }
+
   if (LinkFuncNum > 0) {
     fprintf(LinkFd, "#define	NUM_FUNCTIONS	%d\n", LinkFuncNum);
     fprintf(LinkFd, "\n");
@@ -634,12 +652,22 @@ main(argc, argv)
     }
   }
   if (strcmp(mathV, NullS) != 0) {
-    Pos = cond_print(MakeFd, "-lm", "", "", Pos);
+    if (strcmp(posixV, posixS) != 0) {
+      Pos = cond_print(MakeFd, "-lm", "", "", Pos);
+    }
+    else {
+      Pos = cond_print(MakeFd, "-l m", "", "", Pos);
+    }
   }
   if (strcmp(libsV, NullS) != 0) {
     Pos = cond_print(MakeFd, libsV, "", "", Pos);
   }
-  Pos = cond_print(MakeFd, "-lc", "", "", Pos);
+  if (strcmp(posixV, posixS) != 0) {
+    Pos = cond_print(MakeFd, "-lc", "", "", Pos);
+  }
+  else {
+    Pos = cond_print(MakeFd, "-l c", "", "", Pos);
+  }
 
   fprintf(MakeFd, "\n\n");
 
