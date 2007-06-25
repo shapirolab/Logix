@@ -1,4 +1,4 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.7 2007/02/21 16:18:42 bill Exp $ */
+/* $Header: /home/qiana/Repository/FcpEmulator/notify.c,v 1.8 2007/06/25 07:16:56 bill Exp $ */
 
 #include	<stdio.h>
 extern	FILE *DbgFile, *OutFile;
@@ -1069,6 +1069,7 @@ int signal_event(Sig)
 	      CoreDumped = True;
 	    }
 #endif
+	    break;
 	  }
 
 	  if (!Exiting) {
