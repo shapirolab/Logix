@@ -7,7 +7,7 @@ To prepare an emulator:
 
 2. For machine <target> (e.g. linux macosx solaris, sgi) execute
 
-   do-<target>
+   do-<target> <additional arguments> (e.g. do-linux spi)
 
    This calls mkmk to create a makefile for <target>.
 
