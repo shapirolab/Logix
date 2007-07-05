@@ -1,7 +1,7 @@
 # fcp make
 SHELL = /bin/csh
 GCC = gcc -m32
-CFLAGS = -c -DDEBUG -g -DULTRIX -DLINUX
+CFLAGS = -c -DULTRIX -DLINUX
 
 INCLUDES = -I.
 
@@ -11,7 +11,7 @@ OFILES = cnv.o concatenate.o ctl.o dist.o emulate.o externs.o fcp.o \
 	 spiweight.o streams.o timer.o tty.o unify.o utility.o
 
 
-LIBS   = -lm -lc
+LIBS   = -l m -l c
 
 fcp: \
 	$(OFILES)

@@ -1,7 +1,7 @@
 # fcp make
 SHELL = /bin/csh
 GCC = gcc -m32
-CFLAGS = -c -DDEBUG -g -DULTRIX -DCYGWIN
+CFLAGS = -c -DULTRIX -DCYGWIN
 
 INCLUDES = -I.
 

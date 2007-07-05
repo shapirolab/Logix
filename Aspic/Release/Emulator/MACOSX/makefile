@@ -1,7 +1,7 @@
 # fcp make
 SHELL = /bin/csh
 GCC = gcc -arch ppc -m32
-CFLAGS = -c -DDEBUG -DMACINTOSH
+CFLAGS = -c -DMACINTOSH
 
 INCLUDES = -I.
 
@@ -11,7 +11,7 @@ OFILES = concatenate.o ctl.o dist.o emulate.o externs.o fcp.o file.o \
 	 streams.o timer.o tty.o unify.o utility.o
 
 
-LIBS   = -lm -lc
+LIBS   = -l m -l c
 
 fcp: \
 	$(OFILES)
