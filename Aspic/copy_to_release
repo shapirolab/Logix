@@ -26,6 +26,10 @@ cp -p library_server/spi_library.cp release/SpiFcp/Source/library_server
 rm -f release/SpiFcp/Source/spifcp/*.cp
 cp -p spifcp/*.cp release/SpiFcp/Source/spifcp
 
+rm -f release/SpiFcp/Source/spidbg/*.cp
+cp -p spidbg/*.cp release/SpiFcp/Source/spidbg
+
+
 rm -f release/BioSpi/Source/*.cp
 cp -p BioSpi/ambient_list.cp release/BioSpi/Source
 cp -p BioSpi/ambient_server.cp release/BioSpi/Source
