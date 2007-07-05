@@ -4,9 +4,9 @@ Precompiler for Ambient Stochastic Pi Calculus procedures - call management.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2007/02/22 22:57:06 $
+		       	$Date: 2007/07/05 12:11:47 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.15 $
+			$Revision: 1.16 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/call.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -781,10 +781,15 @@ prime_macro_arguments(Primes, MacroedArguments, PrimedArguments, Variables) :-
       Variables = PrimedArguments? |
 	prime_local_channels(Primes, MacroedArguments, PrimedArguments);
 
+    MacroedArguments =?= unrecognised_macro_call :
+      Primes = _,
+      PrimedArguments = MacroedArguments,
+      Variables = [];
+
     MacroedArguments =?= _(_) :
       Primes = _,
       PrimedArguments = MacroedArguments,
-      Variables = [].      
+      Variables = [].
 
 
 prime_local_channels(Primes, Arguments, Primed) :-

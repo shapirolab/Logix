@@ -4,9 +4,9 @@ Precompiler for Stochastic Pi Calculus procedures - servers.
 Bill Silverman, December 1999.
 
 Last update by		$Author: bill $
-		       	$Date: 2006/06/27 04:43:10 $
+		       	$Date: 2007/07/05 12:11:47 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.8 $
+			$Revision: 1.9 $
 			$Source: /home/qiana/Repository/Aspic/BioSpi/biospi/servers.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -101,10 +101,10 @@ serve_empty_scope(In, Controls, Exports, Ambients, Generated, Optimize, Errors)
       AddRef ! lookup_functor(Functor, CallType, CallDefinition) |
 	self;
 
-    In ? process(PiLHS, LHSS, NewChannelList, ProcessScope),
+    In ? process(PiLHS, LHSS, Descriptors, ProcessScope),
     Controls =?= {Exported, Parameters, ParameterNames, WeightRate} |
 	make_process_scope(PiLHS, WeightRate, ProcessScope, [], ParameterNames,
-				NewChannelList, In'', In'?,
+				Descriptors, In'', In'?,
 		NewDefinition?, ProcessDefinition, Errors, Errors'?),
 	export_process(ProcessDefinition?, Exported, Export,
 				Exports, Exports'?),
@@ -434,11 +434,11 @@ serve_process_scope(In, ProcessDefinition, WeightRate, Notes,
 	list_to_string(DL, Id),
 	self;
 
-    In ? process(PiLHS, PLHSS, NewChannelList, ProcessScope),
+    In ? process(PiLHS, PLHSS, Descriptors, ProcessScope),
     ProcessDefinition =?= {_Name, _Arity, ChannelNames, _LHSS, _CodeTuple} |
 	utilities#concatenate_lists([Privates, ChannelNames], ParameterNames),
 	make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
-				ParameterNames, NewChannelList,
+				ParameterNames, Descriptors,
 		In'', In'?, NewDefinition?, NewDefinition, Errors, Errors'?),
 	add_process_definition(NewDefinition?, PLHSS, Progeny, Progeny'),
 	self;
@@ -677,7 +677,7 @@ search_progeny(Functor, Progeny, CallType, CallDefinition, Out, NextOut) :-
 */
 
 make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
-		PublicNames, NewChannelList1, Out, NextOut,
+		PublicNames, Descriptors, Out, NextOut,
 		NewDefinition, ProcessDefinition, Errors, NextErrors) :-
 
     true :
@@ -685,7 +685,7 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
       LHSS = {OuterLHS?, InnerLHS?},
       Notes ! variables(Parameters?) |
 	parse_lhs(PiLHS, WeightRate, Name, Arity,
-			ParamList, ChannelList, NewChannelList,
+			Descriptors, ParamList, ChannelList, InitializeList,
 				Errors, Errors'?),
 	diagnose_duplicates(ParamList?, ParamList1,
 			Name?, duplicate_parameter,
@@ -693,7 +693,7 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
 	utilities#sort_out_duplicates([ChannelList?], ChannelList1, DChs),
 	diagnose_replies(DChs?, Name?, duplicate_channel,
 				Errors'', Errors'''?),
-	utilities#sort_out_duplicates([NewChannelList?], NewChannelList1, _),
+	utilities#sort_out_duplicates([InitializeList?], InitializeList1, _),
 	utilities#concatenate_lists([ParamList1?, ChannelList1?], PrivateList),
 	diagnose_duplicates(PrivateList?, PrivateList1,
 			Name?, channel_duplicates_parameter,
@@ -703,7 +703,7 @@ make_process_scope(PiLHS, WeightRate, ProcessScope, ParameterNames,
 	remove_ambient_channel(ParameterNames, ParameterNames1),
 	make_lhs_tuples(Name?, ParamList1?, ParameterNames1, ChannelList2?,
 				ChannelNames, OuterLHS, InnerLHS),
-	extract_parameters(NewChannelList1?, Parameters, ParameterNameList),
+	extract_parameters(InitializeList1?, Parameters, ParameterNameList),
 	defined_names(OuterLHS, PublicNames, DefinedNames),
 	utilities#subtract_list(ParameterNameList, DefinedNames, Undeclared),
 	diagnose_replies(Undeclared, Name, undeclared_parameter,
@@ -918,41 +918,44 @@ extract_parameters(Declarations, Parameters, Names) :-
       Names = NextNames.
 
 
-parse_lhs(PiLHS, WeightRate, Name, Arity, ParamList,
-		ChannelList, NewChannelList, Errors, NextErrors) :-
+parse_lhs(PiLHS, WeightRate, Name, Arity, Initializers, ParamList, 
+		ChannelList, InitializeList, Errors, NextErrors) :-
 
     PiLHS =?= `Functor, string(Functor), Functor =\= EMPTY :
       WeightRate = _,
       Name = Functor, Arity = 0,
+      Initializers = [],
       ParamList = [],
       Errors = NextErrors |
 	unify_without_failure(ChannelList, []),
-	unify_without_failure(NewChannelList, []);
+	unify_without_failure(InitializeList, []);
 
     PiLHS = PiLHS' + Channels,
     PiLHS' =\= (_ + _) :
+      Initializers' = _,
       ChannelList' = ChannelList?,
-      NewChannelList' = NewChannelList? |
-	utilities#untuple_predicate_list(',', Channels, Channels'),
-	extract_channel_list(Channels', WeightRate, ChannelList,
-				NewChannelList,	Errors, Errors'),
+      InitializeList' = InitializeList? |
+	utilities#untuple_predicate_list(',', Channels, Initializers),
+	extract_channel_list(Initializers, WeightRate, ChannelList,
+				InitializeList, Errors, Errors'),
 	self;
 
     arg(1, PiLHS, `Functor), string(Functor), Functor =\= EMPTY,
     arity(PiLHS, A), A-- :
+      Initializers = [],
       WeightRate = _,
       Name = Functor,
       Arity = A' |
-	extract_arglist(PiLHS, ParamList, Errors, NextErrors),
+	extract_paramlist(PiLHS, ParamList, Errors, NextErrors),
 	unify_without_failure(ChannelList, []),
-	unify_without_failure(NewChannelList, []);
+	unify_without_failure(InitializeList, []);
 
     otherwise :
       Errors ! improperly_formed_left_hand_side(PiLHS),
       PiLHS' = BIO_NULL |
 	self.
 
-extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
+extract_channel_list(Channels, WeightRate, ChannelList, InitializeList,
 			Errors, NextErrors) :-
 
     Channels ? ChannelName,
@@ -961,7 +964,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     CHAR_a =< C, C =< CHAR_z,
     WeightRate =?= SPI_DEFAULT_WEIGHT_NAME(BaseRate) :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate) |
+      InitializeList ! ChannelName(BaseRate) |
 	self;
 
     Channels ? ChannelName,
@@ -971,15 +974,14 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     WeightRate = Weighter(BaseRate),
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate, WeightRate) |
+      InitializeList ! ChannelName(BaseRate, WeightRate) |
 	self;
 
     Channels ? `VariableName,
     nth_char(1, VariableName, C),
-    CHAR_A =< C, C =< CHAR_Z,
-    string(VariableName), VariableName =\= NULL, VariableName =\= EMPTY :
+    CHAR_A =< C, C =< CHAR_Z :
       ChannelList ! VariableName,
-      NewChannelList ! VariableName |
+      InitializeList ! VariableName |
 	self;
 
     Channels ? ChannelName(BaseRate),
@@ -989,7 +991,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     number(BaseRate), BaseRate >= 0,
     WeightRate = SPI_DEFAULT_WEIGHT_NAME(_BaseRate) :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate) |
+      InitializeList ! ChannelName(BaseRate) |
 	self;
 
     Channels ? ChannelName(BaseRate),
@@ -1000,7 +1002,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     WeightRate = Weighter(_BaseRate),
     Weighter =\= SPI_DEFAULT_WEIGHT_NAME :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate, Weighter) |
+      InitializeList ! ChannelName(BaseRate, Weighter) |
 	self;
 
     Channels ? ChannelName(BaseRate),
@@ -1009,7 +1011,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     CHAR_a =< C, C =< CHAR_z,
     BaseRate =?= infinite :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate) |
+      InitializeList ! ChannelName(BaseRate) |
 	self;
 
     Channels ? ChannelName(BaseRate),
@@ -1018,7 +1020,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     CHAR_a =< C, C =< CHAR_z,
     BaseRate =?= `_ :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate) |
+      InitializeList ! ChannelName(BaseRate) |
 	self;
 
     Channels ? ChannelName(BaseRate, Weighter),
@@ -1027,7 +1029,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     CHAR_a =< C, C =< CHAR_z,
     number(BaseRate), BaseRate >= 0 :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
+      InitializeList ! ChannelName(BaseRate, NewWeighter?) |
 	validate_new_weighter(Weighter, NewWeighter, Errors, Errors'?),
 	self;
 
@@ -1037,7 +1039,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     CHAR_a =< C, C =< CHAR_z,
     BaseRate = `_ :
       ChannelList ! ChannelName,
-      NewChannelList ! ChannelName(BaseRate, NewWeighter?) |
+      InitializeList ! ChannelName(BaseRate, NewWeighter?) |
 	validate_new_weighter(Weighter, NewWeighter, Errors, Errors'?),
 	self;
 
@@ -1049,7 +1051,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
     Channels =?= [] :
       WeightRate = _,
       ChannelList = [],
-      NewChannelList = [],
+      InitializeList = [],
       Errors = NextErrors.
 
   validate_new_weighter(Weighter, NewWeighter, Errors, NextErrors) :-
@@ -1100,7 +1102,7 @@ extract_channel_list(Channels, WeightRate, ChannelList, NewChannelList,
       Params = [],
       Errors = NextErrors.
 
-extract_arglist(PiLHS, ParamList, Errors, NextErrors) + 
+extract_paramlist(PiLHS, ParamList, Errors, NextErrors) + 
 			(Index = 2) :-
     arity(PiLHS) < Index :
       ParamList = [],
@@ -1113,9 +1115,9 @@ extract_arglist(PiLHS, ParamList, Errors, NextErrors) +
 	self;
 
     arity(PiLHS) >= Index,
-    arg(Index, PiLHS, `ChannelName), Index++,
-    string(ChannelName), ChannelName =\= EMPTY :
-      ParamList ! ChannelName |
+    arg(Index, PiLHS, `VariableName), Index++,
+    string(VariableName), VariableName =\= EMPTY :
+      ParamList ! VariableName |
 	self;
 
     otherwise,

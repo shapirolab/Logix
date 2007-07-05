@@ -4,9 +4,9 @@ Transformer for Stochastic Psi Calculus procedures.
 Bill Silverman, June 2000.
 
 Last update by		$Author: bill $
-		       	$Date: 2007/02/22 10:43:13 $
+		       	$Date: 2007/07/05 12:07:15 $
 Currently locked by 	$Locker:  $
-			$Revision: 1.9 $
+			$Revision: 1.10 $
 			$Source: /home/qiana/Repository/Aspic/spifcp/self.cp,v $
 
 Copyright (C) 1999, Weizmann Institute of Science - Rehovot, ISRAEL
@@ -602,10 +602,10 @@ validate_public_weighter_params(Args, Params,
 process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
     Source ? (SpiLHS :- RHSS) :
-      Scope ! process(SpiLHS, LHSS, NewChannelList, ProcessScope) |
+      Scope ! process(SpiLHS, LHSS, Descriptors, ProcessScope) |
 	process_definitions(Processes, [], Nested, Nested'?,
 				ProcessScope, ProcessScope'?),
-	process(LHSS, RHSS, NewChannelList, ProcessScope', Process, Nested'),
+	process(LHSS, RHSS, Descriptors, ProcessScope', Process, Nested'),
 	nested_procedures(Process, Nested?, Terms, Terms'?),
 	self;
 
@@ -621,27 +621,27 @@ process_definitions(Source, Processes, Terms, NextTerms, Scope, NextScope) :-
 
 /************************* Process Transformations ***************************/
 
-process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
+process(LHSS, RHSS, Descriptors, Scope, Process, Nested) :-
 
     LHSS = [] :
       RHSS = _,
-      NewChannelList = _,
+      Descriptors = _,
       Scope = [],
       Process = [],
       Nested = [];
 
     LHSS = {OuterLHS, InnerLHS},
-    NewChannelList =\= [] :
+    Descriptors =\= [] :
       Nested ! outer(OuterLHS, Initializer?, []),
       /* This process needs access to the scheduler. */
       Scope ! logix_variables(["Scheduler."]),
-      NewChannelList' = [] |
+      Descriptors' = [] |
 	arg(1, InnerLHS, Name),
-	initialize_channels(Name, NewChannelList, Initializer),
+	initialize_parameters(Name, Descriptors, Initializer),
 	self;
 
     LHSS = {_OuterLHS, InnerLHS},
-    NewChannelList =?= [],
+    Descriptors =?= [],
     RHSS =\= (_|_), RHSS =\= (_;_)  :
       Scope ! code(no_guard, [], []),
       Process = no_guard(InnerLHS, RHSS'?, []) |
@@ -649,34 +649,34 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
 
     LHSS = {_OuterLHS, InnerLHS},
     otherwise :
-      NewChannelList = _,
+      Descriptors = _,
       Process = _Type(InnerLHS, RHSS'?, _Action) |
 	guarded_clauses(RHSS, RHSS', Process, Nested, Scope).
 
-  initialize_channels(Name, NewChannelList, Initializer) +
-		(AskList = Asks?, Asks, MakeList = Make?, Make) :-
+  initialize_parameters(Name, Descriptors, Initializer) +
+		(AskList = Asks?, Asks, TellList = Tells?, Tells) :-
 
-    NewChannelList ? Descriptor |
-	make_and_name_channel(Name, Descriptor, Asks, Asks'?, Make, Make'),
+    Descriptors ? Descriptor |
+	make_and_name_parameter(Name, Descriptor, Asks, Asks'?, Tells, Tells'),
 	self;
 
-    NewChannelList = [] :
+    Descriptors = [] :
       Name = _,
       Asks = [],
-      Make = [],
+      Tells = [],
       Initializer = (Ask? : Tell? | Name) |
 	utilities#make_predicate_list(',', AskList?, Ask),
-	utilities#make_predicate_list(',', MakeList?, Tell).
+	utilities#make_predicate_list(',', TellList?, Tell).
 
-  make_and_name_channel(Name, Descriptor, Asks, NextAsks, Make, NextMake) :-
+  make_and_name_parameter(Name, Descriptor, Asks, NextAsks, Tells, NextTells) :-
 
     Descriptor = ChannelName(BaseRate),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      Make = [write_channel(
+      Tells = [write_channel(
 		new_channel(ChannelId, `ChannelName, BaseRate),
 				`"Scheduler.") |
-	      NextMake],
+	      NextTells],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	parameters_to_asks([BaseRate], [known], Asks, NextAsks);
@@ -685,10 +685,10 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
     string(ComputeWeight),
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      Make = [write_channel(
+      Tells = [write_channel(
 		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
-	      NextMake],
+	       NextTells],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	parameters_to_asks([BaseRate], [number], Asks, NextAsks);
@@ -697,10 +697,10 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
     tuple(ComputeWeight), ComputeWeight =?= `_,
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      Make = [write_channel(
+      Tells = [write_channel(
 		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
-	      NextMake],
+	      NextTells],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
 	parameters_to_asks([BaseRate, ComputeWeight], [number, string],
@@ -710,10 +710,10 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
     tuple(ComputeWeight), ComputeWeight =\= `_,
     string_to_dlist(ChannelName, Suffix, []),
     string_to_dlist(Name, PH, PS) :
-      Make = [write_channel(
+      Tells = [write_channel(
 		new_channel(ChannelId, `ChannelName, ComputeWeight, BaseRate),
 				`"Scheduler.") |
-	      NextMake],
+	      NextTells],
       Ops = [known | Ops],
       PS = Suffix |
 	list_to_string(PH, ChannelId),
@@ -724,7 +724,7 @@ process(LHSS, RHSS, NewChannelList, Scope, Process, Nested) :-
     string(Descriptor) |
       Name = _,
       Asks = NextAsks,
-      Make = [(`Descriptor = `"_") | NextMake].
+      Tells = [(`Descriptor = `"_") | NextTells].
 
   parameters_to_asks(List, Ops, Asks, NextAsks) :-
 
