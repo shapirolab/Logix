@@ -1,0 +1,2 @@
+#! /bin/sh
+exec /home/bill/Efcp-release/Logix/EMULATOR/fcp $* /home/bill/Efcp-release/Logix/saved_spifcp
