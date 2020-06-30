@@ -1,14 +1,44 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.h,v 1.4 2004/10/21 15:52:43 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Avraham Houri
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
+
 /*
  **	fcp.h  -  defines data structures, machine word format
  **		  and various macros
+ **
  **	NOTE when changing macros, to leave things as single occurence.
  **
- **	Last update by 	     $Author: bill $
- **		       	     $Date: 2004/10/21 15:52:43 $
- **	Currently locked by  $Locker:  $
- **			     $Revision: 1.4 $
- **			     $Source: /home/qiana/Repository/FcpEmulator/fcp.h,v $
  */
 
 #define False	 0
@@ -87,7 +117,7 @@ typedef trailT	*trailP;
 
 #define Null	((heapP) 0)
   
-#define ended_heap(P)  ( ((heapP) (P) < CurHeapLimit) ? False : heap_ended(P) )
+#define ended_heap(P)  ( ((heapP) (P) < CurHeapLimit) ? False : heap_ended((heapP) (P)) )
 #define	heap_space(UnitSize)	(((CurHeapLimit - HP)*sizeof(heapT))/UnitSize)
 #define in_current_heap(P)	((P >= CurHeap) && (P < CurHeapEnd))
 

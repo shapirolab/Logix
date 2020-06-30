@@ -1,12 +1,39 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/externs.c,v 1.8 2006/03/23 12:43:20 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Avraham Houri
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
+
 /*
  **	extern.c  -  errors handling, and reporting procedures.
  **
- **	Last update by 	     $Author: bill $
- **		       	     $Date: 2006/03/23 12:43:20 $
- **	Currently locked by  $Locker:  $
- **			     $Revision: 1.8 $
- **			     $Source: /home/qiana/Repository/FcpEmulator/externs.c,v $
  */
 
 #include	<stdio.h>
@@ -43,16 +70,16 @@ int Type, Value;
   case NORMAL:
     break;
   case MACHINE:
-    fprintf(DbgFile, "%s : ", (Constants[Type]+2));
+    fprintf(DbgFile, "%s : ", (char *) (Constants[Type]+2));
     switch(Value) {
     case ErHPOVFL:
     case ErUDFDCD:
     case ErINVLDOBJ:
     case ErEXITREQ:
-      fprintf(DbgFile, "%s\n", (Constants[Value]+2));
+      fprintf(DbgFile, "%s\n", (char *) (Constants[Value]+2));
       break;
     case ErTRLSOVFL:
-      fprintf(DbgFile, "%s\n", (Constants[Value]+2));
+      fprintf(DbgFile, "%s\n", (char *) (Constants[Value]+2));
       {
 	extern int TrlsSize;
 
@@ -62,7 +89,7 @@ int Type, Value;
       }
       break;
     case ErTBLSOVFL:
-      fprintf(DbgFile, "%s\n", (Constants[Value]+2));
+      fprintf(DbgFile, "%s\n", (char *) (Constants[Value]+2));
       {
 	extern int TblsSize;
 
@@ -80,7 +107,8 @@ int Type, Value;
 #ifndef CYGWIN
     if (DbgFile != stderr) {
 #endif
-      fprintf(DbgFile, "%s: Signal No. = %d\n", (Constants[Type]+2), Value);
+      fprintf(DbgFile, "%s: Signal No. = %d\n", 
+	      (char *) (Constants[Type]+2), Value);
 #ifndef CYGWIN
     }
     psignal(Value, (char *) (Constants[Type]+2));
@@ -88,7 +116,8 @@ int Type, Value;
     break;
   case SYSTEM:
     if (DbgFile != stderr) {
-      fprintf(DbgFile, "%s: Error No. = %d\n", (Constants[Type]+2), Value);
+      fprintf(DbgFile, "%s: Error No. = %d\n",
+	      (char *) (Constants[Type]+2), Value);
     }
     {
       int tmp_errno = errno;

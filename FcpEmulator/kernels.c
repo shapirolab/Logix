@@ -1,12 +1,38 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/kernels.c,v 1.6 2007/02/21 16:18:42 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Avraham Houri
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
+
 /*
 **	kernels.c  -  kernel predicates.
-**
-**	Last update by:	     $Author: bill $
-**		       	     $Date: 2007/02/21 16:18:42 $
-**	Currently locked by: $Locker:  $
-**			     $Revision: 1.6 $
-**			     $Source: /home/qiana/Repository/FcpEmulator/kernels.c,v $
 */
 
 #include	<stdio.h>
@@ -174,20 +200,28 @@ do_cnv_to_string(Arg)
     {
       register char *PChar = (char *) (HP+2);
       register int StrLen;
+      double RVal;
 
       KOutA = Ref_Word(HP);
-      sprintf(PChar, "%f", real_val((Pa+1)));
-
+      RVal = real_val((Pa+1));
       {
-	register char *NZChar = PChar;
+	register char *P = PChar;
 
-	while (*PChar != '\0') {
-	  if (*PChar != '0') {
-	    NZChar = PChar;
+        PChar += sprintf(PChar, "%.14G", RVal);
+	while (*P != '\0') {
+	  if ((*P == 'E') || (*P == '.')) {
+	    break;
 	  }
-	  PChar++;
+	  P++;
 	}
-	PChar = NZChar + ((*NZChar == '.') ? 2 : 1);
+	/*
+	  if the string does not include a decimal point or an exponent
+	   add ".0" to the end
+	*/
+	if (*P == '\0') {
+	  *PChar++ = '.';
+	  *PChar++ = '0';
+	}
       }
 
       StrLen = PChar - (char *) (HP+2);
@@ -726,7 +760,9 @@ do_exceptions()
 	  else {
 #ifndef LINUX
 #ifndef MACINTOSH
+#ifndef CYGWIN
 	    extern char *sys_siglist[];
+#endif
 #endif
 #endif
 

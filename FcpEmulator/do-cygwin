@@ -1,4 +1,4 @@
 #!/bin/sh
 ./mkmk cygwin_nt_5d1 concatenate ctl file freeze_term \
-interface math timer tty ultrix posix short $@
+interface math timer tty ultrix posix short spi $@
 

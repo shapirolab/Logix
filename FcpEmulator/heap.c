@@ -1,4 +1,36 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/heap.c,v 1.3 2001/11/29 11:19:58 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+   Copyright 2007 Avraham Houri
+   Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+
+** 
+**     Free Software Foundation, Inc.
+**     51 Franklin Street, Fifth Floor
+**     Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+*/
+
 /*
 **	heap.c  -  kernel predicates dealing with the entire heap
 **
@@ -7,13 +39,8 @@
 **
 **	Called By:	emulate()  via  kernel_fns function table
 **
-**	Avshalom Houri		21 Sivan 5745, 10 Jun 1985
+**	21 Sivan 5745, 10 Jun 1985
 **
-**	Last update by:	     $Author: bill $
-**		       	     $Date: 2001/11/29 11:19:58 $
-**	Currently locked by: $Locker:  $
-**			     $Revision: 1.3 $
-**			     $Source: /home/qiana/Repository/FcpEmulator/heap.c,v $
 */
 
 #include	<stdio.h>
@@ -703,7 +730,7 @@ save_vars()
   *HP++ = (heapT) SQF;
   *HP++ = (heapT) SQB;
 
-  HP += memcopy(FLs, HP, (FLsSize)*sizeof(heapP));
+  HP += memcopy((heapP) FLs, HP, (FLsSize)*sizeof(heapP));
 
   *HP++ = (heapT) CP;
 
@@ -716,7 +743,7 @@ save_vars()
 
   *HP++ = (heapT) Nil;
   *HP++ = (heapT) SVRMarker;
-  HP += memcopy(Constants, HP, (ConstSize)*sizeof(heapP));
+  HP += memcopy((heapP) Constants, HP, (ConstSize)*sizeof(heapP));
 
   *HP++ = (heapT) (Creations - Terminations);		/* Creations */
 
@@ -747,7 +774,7 @@ rstr_vars()
   SQF = (heapP) *HP++;
   SQB = (heapP) *HP++;
 
-  HP += memcopy(HP, FLs, (FLsSize)*sizeof(heapP));
+  HP += memcopy(HP, (heapP) FLs, (FLsSize)*sizeof(heapP));
 
   CP = (heapP) *HP++;
 
@@ -770,7 +797,7 @@ rstr_vars()
 
   Nil = (heapP) *HP++;
   SVRMarker = (heapP) *HP++;
-  HP += memcopy(HP, Constants, (ConstSize)*sizeof(heapP));
+  HP += memcopy(HP, (heapP) Constants, (ConstSize)*sizeof(heapP));
 
   Creations = (int) *HP++;
   Suspensions = (int) *HP++;

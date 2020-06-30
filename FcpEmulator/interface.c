@@ -1,14 +1,39 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/interface.c,v 1.10 2007/02/21 16:18:42 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+   Copyright 2007 Michael Hirsch, William Silverman 
+   Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+** 
+**     Free Software Foundation, Inc.
+**     51 Franklin Street, Fifth Floor
+**     Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+*/
+
 /*
 **	interface.c - unix interface functions.
 **
-**	Michael Hirsch and Bill Silverman		February 1986
-**
-**	Last update by:	     $Author: bill $
-**		       	     $Date: 2007/02/21 16:18:42 $
-**	Currently locked by: $Locker:  $
-**			     $Revision: 1.10 $
-**			     $Source: /home/qiana/Repository/FcpEmulator/interface.c,v $
+**	February 1986
 **
 */
 
@@ -34,12 +59,20 @@ Interface accepts the following commands:
 				for the emulator process.
 	getenv(Name, Value)	returns the value for the environment
 				variable Name. [] if does not exist.
+	sprint(Format?, Value?, Formed^)
+				returns a formatted string for Value,
+				a constant, which agrees in type with
+				the Format specification (see "The C
+				Programming Language, ANSI C, pps.
+				243-245).
+				
 /**********************************************************************/
 
 #define		PROG_ID		"interface"
 
 #include	<pwd.h>
 #include	<errno.h>
+#include	<math.h>
 #include	<netdb.h>
 #include	<stdio.h>
 #include	<stdlib.h>
@@ -107,6 +140,19 @@ extern FILE *OutFile;
     }							\
   }
 
+#define const_var(T_Save, T)				\
+  {							\
+    heapT P;						\
+    T_Save  = (T);					\
+    deref_ptr(T_Save);					\
+    P = *(T_Save);				        \
+    if (!IsInt(P) && !IsReal(P) && !IsStr(P)) {		\
+        if (IsVar(P)) {					\
+          sus_tbl_add(T_Save);				\
+        }						\
+      return(False);					\
+    }							\
+  }
 
 /*
 **  INTERFACE -- distribute call to UNIX interface
@@ -153,18 +199,148 @@ interface(T)
       else
 	return(False);
     case 's' :
+      if (!strcmp(op, "sprint")  &&  (Arity == 4)) {
+	heapP Format, Value, Output, PStr;
+	int Result;
+	char *Pch, *Fch, C;
+	int params[4] = {0, 0, 0, 0}, type;
+
+	string_var(Format, ++T);
+
+	Value = (++T);
+	deref_ptr(Value);
+
+	writable(Output, ++T);
+
+	Fch = (char *)(Format + StrHdrWords);
+
+/*printf("verify\n"); /*debugging */
+
+	if ((type = verify_format(Fch, params)) < 0) {
+/*printf("unverified\n"); /*debugging */
+	  return(False);
+	}
+/*printf("type = '%c', params = %i{%i, %i}, count = %i\n", type, 
+  params[0], params[1], params[2], params[3]); /*debugging*/
+
+	Pch = (char *)(HP + StrHdrWords);
+	{
+	  int wrap = 2*sizeof(heapT) + params[3];
+
+	  /* measure the content of the field and convert if enough room */
+	  if (IsInt(*Value) && ((type == 0) || (type == '%'))) {
+	    if (heap_space(sizeof(heapT)) < (params[1] + wrap)) {
+/*  printf("character output about to overflow heap\n"); /* debugging */
+	      err_tbl_add(MACHINE, ErHPSPACE);
+	      return(False);
+	    }
+	    Result = sprintf(Pch, Fch, Int_Val(*Value));
+	  }
+	  else {
+	    if (IsStr(*Value) && (type == 's')) {
+	      unsigned int length = Str_Length((char *)(Value + StrHdrWords));
+	      unsigned int max = params[1];
+
+	      switch (params[0])
+		{
+		case 2:
+		  if (params[2] < length) {
+		    length = params[2];
+		  }
+		case 1:
+		  if (max > length) {
+		    break;
+		  }
+		case 0:
+		  max = length;
+		}
+	      if (heap_space(sizeof(heapT) < (max + wrap))) {
+/*  printf("string output about to overflow heap\n"); /* debugging */
+		err_tbl_add(MACHINE, ErHPSPACE);
+		return(False);
+	      }
+
+	      Result = sprintf(Pch, Fch, (char *)(Value + StrHdrWords));
+	    }
+	    else if (IsInt(*Value) && (type == 'i')) {
+	      int val = abs(Int_Val((int) *Value));
+	      int intfield = (val ? floor(log10(val)) : 0) + 1;
+	      
+	      if (intfield < params[1]) {
+		intfield = params[1];
+	      }
+	      if (intfield < params[2]) {
+		intfield = params[2];
+	      }
+
+	      if (heap_space(sizeof(heapT)) < (intfield + wrap)) {
+/*  printf("integer output about to overflow heap\n"); /* debugging */
+		err_tbl_add(MACHINE, ErHPSPACE);
+		return(False);
+	      }
+	      Result = sprintf(Pch, Fch, Int_Val((int) *Value));
+	    }
+	    else if (IsReal(*Value) && ('e' <= type) && (type <= 'g')) {
+	      double val = fabs(real_val((Value+1)));
+	      int intfield = floor(log10(val)) + 1;
+
+	      switch (params[0])
+		{
+		case 2:
+		  if (60 > params[2]) {
+		    wrap += params[2] - 60;
+		  }
+		case 1:
+		  if (params[1] > intfield) {
+		    intfield = params[1];
+		  }
+		case 0:
+		  wrap += intfield + 60; /***** magic number *****/
+		}
+
+	      if (heap_space(sizeof(heapT)) < wrap) {
+/*  printf("real output about to overflow heap\n"); /* debugging */
+		err_tbl_add(MACHINE, ErHPSPACE);
+		return(False);
+	      }
+	      Result = sprintf(Pch, Fch, real_val((Value+1)));
+	    }
+	    else {
+	      if (IsVar(*Value)) {
+		sus_tbl_add(Value);
+	      }
+	      return(False);
+	    }
+	  }
+	}
+
+	PStr = HP;
+	*HP++ = Str_Hdr1(CharType, 0);
+	*HP++ = Str_Hdr2(hash(Pch, Result), Result);
+	Pch = ((char *)HP) + Result;
+	HP += Str_Words(PStr);
+
+	/* Fill last word of string with nulls */
+	while (Pch < (char *) HP) {
+	  *Pch++ = '\0';
+	}
+
+	asgn(*Output, Output, Ref_Word(PStr));
+	return(True);
+      }
+      else
       {
 	heapP command_line;
+	int system_reply;
 
 	if ((!strcmp(op, "system"))  &&  (Arity == 2)) {
 	  string_var(command_line, ++T);
-	  system((char *) (command_line+2));
+	  system_reply = system((char *) (command_line+2));
 	  return(True);
 	}
 	if ((!strcmp(op, "system"))  &&  (Arity == 4)) {
 	  heapP terminate_code;
 	  heapP error_number;
-	  int system_reply;
 
 	  string_var(command_line, ++T);
 	  writable(terminate_code, ++T);
@@ -249,7 +425,7 @@ interface(T)
 	if (!(strcmp(op, "gmtime")) && (Arity == 2)) {
 	  writable(DateTime, ++T);
 	  gettimeofday(&tval,&tzone);
-	  sprintf ((char *) (HP+2), "%12d.%06d\'0'",
+	  sprintf ((char *) (HP+2), "%12ld.%06ld\'0'",
 		   tval.tv_sec, tval.tv_usec);
 	  *HP++ = Str_Hdr1(CharType, 0);
 	  *HP++ = Str_Hdr2(hash((char *) (PStr + 2), 19), 19);
@@ -261,7 +437,7 @@ interface(T)
 	  string_var(GmTime, ++T);
 	  if ( (Str_Length(GmTime) != 19) ||
 	      (((char *)(GmTime+2))[12] != '.') ||
-	      (sscanf((char *) (GmTime+2), "%d.%d\0",
+	      (sscanf((char *) (GmTime+2), "%ld.%ld\0",
 		      &(tval.tv_sec), &(tval.tv_usec)) != 2) )
 	    return(False);
 	  writable(DateTime, ++T);
@@ -461,4 +637,125 @@ unpackdate(String, time)
   }
   time->tm_wday = 1;
   time->tm_yday = 0;
+}
+
+
+int verify_format(Fch, params)
+     char *Fch;
+     int params[4];
+{
+  char *F;
+  unsigned int px = 0, type;
+
+/* Scan format up to conversion spec */
+
+  for(F = Fch; *F; F++) {
+    if (*F == '%') {
+/*printf("found %% \n"); /* debugging */
+      ++F;
+      if (*F == '%') {
+/*printf("found %%%%\n"); /* debugging */
+	continue;
+      }
+
+/* Scan to first non-modifier */
+
+      while (*F) {
+	switch (*F) 
+	  {
+	  case '+': case '-': case ' ': case '0': case '#':
+	    break;
+	  default :
+	    goto notmod;
+	  }
+	++F;
+      }
+    notmod:
+/*printf("done mods\n"); /* debugging */
+
+/* modifications may be followed by parameters
+   scan and convert parameter 
+*/
+      while (*F) {
+	if (('0' > *F || *F > '9') && (*F != '.')) {
+	  break;
+	}
+	else {
+	  if (*F == '.') {
+	    px = 2;
+	    params[2] = 0;
+	  }
+	  else {
+	    if (!px) {
+	      px = 1;
+	    }
+	    params[px] = params[px]*10 + (*F - '0');
+	  }
+	}
+	++F;
+      }
+      params[0] = px;
+/*printf("done px = %i - [%i,%i]\n", px, params[0], params[1]); /* debugging */
+
+/* 'h' or 'l' or 'L'  may precede the conversion letter */ 
+
+      while (*F) {
+	if ((*F != 'h') && (*F != 'l') && (*F != 'L')) {
+	  break;
+	}
+	++F;
+      }
+
+/* Check for legitimate conversion characters - otherwise none!? */
+
+      switch (*F)
+	{
+	case 'd': case 'D': case 'i': case 'I':case 'o': case 'O': 
+	case 'u': case 'U': case 'x': case 'X':
+	  type = 'i';
+	  break;
+	case 'e': case 'E': case 'g': case 'G':
+	  type = 'e';
+	  break;
+	case 'f': case 'F':
+	  type = 'f';
+	  break;
+	case 's': case 'S':
+	  type = 's';
+	  break;
+	case 'n': case 'N': case 'p': case 'P': case '*':
+	  return(-1);
+	case 'a': case 'A': case 'b': case 'B': case 'c': case 'C': case 'H':
+	case 'j': case 'J': case 'k': case 'K': case 'm': case 'M': case 'Q':
+	case 'r': case 'R': case 'T': case 'w': case 'W': case 'y': case 'Y':
+	case 'Z': case '`': case '~': case '!': case '@': case '$': case '%':
+	case '^': case '&': case '(': case ')': case '_': case '=': case '[':
+	case ']': case '{': case '}': case '\\': case '|': case ';': case ':':
+	case '"': case '<': case '>': case '?':
+	  type = '%';
+	  break;
+	default:
+	  type = 0;
+	}
+/*printf("conversion type * %c *\n", *F); /* debugging */
+      ++F;
+
+/* exclude trailing '%' (but not "%%") - count trailing characters */
+
+      while (*F) {
+	if (*F == '%') {
+	  ++F;
+	  if (*F != '%') {
+	    return(-1);
+	  }
+	}
+	++params[3];
+	++F;
+      }
+/*printf("verified\n"); /* debugging */
+      return(type);
+    }
+    ++params[3];
+  }
+  return(type);
 }

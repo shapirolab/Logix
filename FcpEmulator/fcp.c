@@ -1,4 +1,36 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/fcp.c,v 1.9 2007/02/21 16:18:42 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Avraham Houri
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
+
 /*
 **  fcp.c  -  emulator startup
 */
@@ -44,7 +76,11 @@ int	ReductionsDebug = 0;
 int	GCDebug = 0;
 #endif
 
+#if (defined LINUX)
 extern char *malloc(size_t);
+#else
+extern void *malloc(size_t);
+#endif
 
 fcp(argc, argv)
      int	argc;
@@ -298,7 +334,7 @@ fcp(argc, argv)
     if ((Base < PMem) || ((Base+LinkSize) > MemEnd)) {
       fprintf(DbgFile,
 	 "fcp: restoring link to different location(0x%x,0x%x,0x%x,0x%x)\n",
-	      Base, PMem, Base+LinkSize, MemEnd);
+	      (unsigned int) Base, (unsigned int) PMem, (unsigned int) Base+LinkSize, (unsigned int) MemEnd);
       close(Fd);
       return(False);
     }
@@ -307,7 +343,7 @@ fcp(argc, argv)
     read(Fd, &Size, sizeof(Size)); /* Size of Saved Link */
     if (read(Fd, LinkBase, Size) != Size) {
       fprintf(DbgFile, "fcp: file %s is not in correct format(%u)\n",
-	      Size, FileName);
+	      (char *) Size, (unsigned int) FileName);
       close(Fd);
       return(False);
     }
@@ -316,7 +352,7 @@ fcp(argc, argv)
     if ((Base < ((char *) LinkEnd)) || ((Base+HeapSize) > MemEnd)) {
       fprintf(DbgFile,
 	 "fcp: restoring heap to different location(0x%x,0x%x,0x%x,0x%x)\n",
-	      Base, LinkEnd, Base+HeapSize, MemEnd);
+	      (unsigned int) Base,  (unsigned int)LinkEnd, (unsigned int) (Base+HeapSize), (unsigned int) MemEnd);
       close(Fd);
       return(False);
     }
@@ -343,8 +379,8 @@ fcp(argc, argv)
     OtherHeapEnd = HeapEnd;
     read(Fd, &Size, sizeof(Size)); /* Size of actually Saved Heap */
     if (HeapBase + (Size / sizeof(heapT)) > CurHeapLimit) {
-      fprintf(DbgFile, "fcp: heap smaller then saved(%i,%1)\n",
-	      Size/sizeof(heapT), CurHeapLimit);
+      fprintf(DbgFile, "fcp: heap smaller then saved(%i,%i)\n",
+	      Size/sizeof(heapT), (int) CurHeapLimit);
       close(Fd);
       
       return(False);
@@ -682,15 +718,15 @@ void display_memory(char *Title)
 	  RsrvSize, LinkSize, HeapSize);
   if ( PMem < ((char *) LinkBase) ) {
     fprintf(DbgFile, "PreRsrv = 0x%x, PreRsrvEnd = 0x%x\n",
-	    PMem, LinkBase);
+	    (unsigned int) PMem, (unsigned int) LinkBase);
   }
   fprintf(DbgFile, "LinkBase = 0x%x, LinkEnd = 0x%x\n",
-	  LinkBase, LinkEnd);
+	  (unsigned int) LinkBase, (unsigned int) LinkEnd);
   fprintf(DbgFile, "HeapBase = 0x%x, HeapEnd = 0x%x, HOByte = 0x%x\n",
-	  HeapBase, HeapEnd, HOByte);
+	  (unsigned int) HeapBase, (unsigned int) HeapEnd, HOByte);
   if ( ((char *) HeapEnd) < MemEnd ) {
     fprintf(DbgFile, "PostRsrv = 0x%x, PostRsrvEnd = 0x%x\n",
-	    LinkEnd, MemEnd);
+	    (unsigned int) LinkEnd, (unsigned int) MemEnd);
   }
   if ( BootType != WarmBoot ) {
     fprintf(DbgFile, "\n");

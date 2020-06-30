@@ -1,3 +1,36 @@
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Yossi Goldberg, William Silverman
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
+
 #include        <stdio.h>
 #include        <stdlib.h>
 #include        <math.h>
@@ -7,116 +40,7 @@
 #include	"macros.h"
 #include	"emulate.h"
 #include	"opcodes.h"
-
-/* Requests */
-
-#define SPI_POST            1
-#define SPI_CLOSE           2
-#define SPI_STEP            3
-#define SPI_INDEX           4
-#define SPI_RATE            5
-
-/* Sub-Channel Indices */
-
-#define SPI_BLOCKED	    1	// TRUE iff non-empty queue and
-				// no transmission is possible
-#define SPI_CHANNEL_TYPE    2	// see below
-#define SPI_CHANNEL_RATE    3	// Real
-#define SPI_CHANNEL_REFS    4	// Reference counter
-#define SPI_SEND_ANCHOR     5	// Head of SendQueue
-#define SPI_DIMER_ANCHOR    5	// Head of DimerQueue
-#define SPI_SEND_WEIGHT     6	// Sum of Send Multipliers
-#define SPI_DIMER_WEIGHT    6	// Sum of Dimer Multipliers
-#define SPI_RECEIVE_ANCHOR  7	// Head of ReceiveQueue
-#define SPI_RECEIVE_WEIGHT  8	// Sum of Receive Multipliers
-#define SPI_WEIGHT_TUPLE    9	// (constant) Weight computation parameters
-#define SPI_NEXT_CHANNEL   10	// (circular) Channel list
-#define SPI_PREV_CHANNEL   11	// (circular) Channel list
-#define SPI_CHANNEL_NAME   12	// (constant) Created Channel name
-
-#define CHANNEL_SIZE       12
-
-/* Channel Types */
-
-#define SPI_CHANNEL_ANCHOR	 0
-#define SPI_UNKNOWN		 1
-#define SPI_BIMOLECULAR		 2
-#define SPI_HOMODIMERIZED	 3
-#define SPI_INSTANTANEOUS	 4
-#define SPI_SINK		 5
-#define SPI_UNKNOWN_PRIME	 9
-#define SPI_BIMOLECULAR_PRIME	10
-#define SPI_HOMODIMERIZED_PRIME	11
-
-#define SPI_TYPE_MASK		 7
-#define SPI_PRIME_FLAG		 8
-#define SPI_PRIME_MASK		15
-#define SPI_RANDOM_FLAG		16
-
-/* Weight Index Computation Values */
-
-#define SPI_DEFAULT_WEIGHT_INDEX 0
-#define SPI_DEFAULT_WEIGHT_NAME "default"
-
-/* Message Types */
-
-#define SPI_MESSAGE_ANCHOR  0
-#define SPI_SEND            1
-#define SPI_RECEIVE         2
-#define SPI_DIMER           3
-
-/* Listed Operation tuple (1-5/6), Queued message tuple (1-9) */
-
-#define SPI_MS_TYPE         1		/* One of Message Types */
-#define SPI_MS_CID          2
-#define SPI_MS_CHANNEL      3
-#define SPI_MS_MULTIPLIER   4		/* Positive Integer */
-#define SPI_MS_TAGS         5
-#define SPI_MS_SIZE         5         /* if not biospi */
-#define SPI_MS_AMBIENT      6         /* NIL or ambient channel */
-#define SPI_AMBIENT_MS_SIZE 6         /* biospi */
-#define SPI_SEND_TAG        5
-#define SPI_RECEIVE_TAG     6
-#define SPI_MS_COMMON       7		/* {PId, MsList, Value^, Chosen^} */
-#define SPI_MESSAGE_LINKS   8		/* (circular) stored fcp 2-vector */
-#define SPI_AMBIENT_CHANNEL 9         /* FCP channel or [] */
-#define SPI_MESSAGE_SIZE    9
-
-/* Links within SPI_MESSAGE_LINKS */
-
-#define SPI_NEXT_MS         1
-#define SPI_PREVIOUS_MS     2
-
-/* Transmission common tuple (1-4) */
-
-#define SPI_OP_PID          1
-#define SPI_OP_MSLIST       2
-#define SPI_OP_VALUE        3
-#define SPI_OP_CHOSEN       4
-
-#define SPI_COMMON_SIZE     4
-
-#define QUEUE               2
-#define BLOCKED             3
-
-/* Index Request */
-
-#define SPI_WEIGHTER_NAME   1
-#define SPI_WEIGHTER_INDEX  2
-
-/* Internal named values */
-
-#define TUPLE               1
-#define STRING              2 
-#define LIST                3
-heapP cdr_down_list();
-
-/* Object definitions */
-
-#define OBJECT_ARITY        2
-#define OBJECT_VALUES       1
-#define OBJECT_REQUESTS     2
-
+#include	"spicomm.h"
 
 dump_channel(heapP ChP) {
   
@@ -303,7 +227,12 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
                   if (!(MsType==SPI_DIMER))
 		    return
 		      set_reply_to("Error - Wrong Message Type",Reply);
-		  break; 
+		  break;
+	  case SPI_DELAY:
+		  if (!(MsType==SPI_RECEIVE))
+		    return
+		      set_reply_to("Error - Wrong Message Type",Reply);
+		  break;
           case SPI_SINK: 
 	          break;
           default:
@@ -411,6 +340,7 @@ spi_post( PId ,OpList ,Value ,Chosen ,Reply)
  } 
  deref(KOutA,ComShTpl);
  OpList=Pb;
+
  while(!IsNil(*OpList))     /* Pass 2 */
    {
      OpEntry=set_opentry(OpList);
@@ -596,6 +526,40 @@ int set_reply_trans(heapP SendPId, heapP SendCId, heapP SendCh,
   return(True);
 }
 
+int set_reply_delay(heapP ReceivePId, heapP ReceiveCId, heapP ReceiveCh,
+		    heapP Reply)
+{
+  heapP P;
+ 
+  deref_ptr(ReceivePId);
+  deref_ptr(ReceiveCId);
+  deref_ptr(ReceiveCh);
+  
+  if (!do_make_tuple(Word(4,IntTag))){
+    return(False);
+  }
+  deref(KOutA,P);
+  
+  built_fcp_str("true");
+      
+  if (!unify(Ref_Word((++P)),KOutA)){
+    return(False);
+  }
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceivePId))){
+    return(False);
+  }
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceiveCId))){
+    return(False);
+  }
+  if (!unify(Ref_Word((++P)),Ref_Word(ReceiveCh))){
+    return(False);
+  }
+  if (!unify(Ref_Word(Reply),Ref_Word(P-4))){
+    return(False);  
+  }
+  return(True);
+}
+
 //********************************************************************
 
 set_reply_to(Arg,Reply)
@@ -745,11 +709,11 @@ heapP OpEntry, Channel, PId, Value, Chosen ,Reply; int ChType;
 	 }
        	 if (!unify(Ref_Word(CmVal),Ref_Word(Value))){
 	   /*fprintf(stderr,"transmit 11\n");*/
-          return(False);
+           return(False);
 	 }
        	 if (!unify(Ref_Word(Chosen),Ref_Word(OpEntry+SPI_MS_TAGS))) {
 	   /*fprintf(stderr,"transmit 12\n");*/
-          return(False);
+           return(False);
 	 }
 	 if (!discount(Common+SPI_OP_MSLIST)){
 	   /*fprintf(stderr,"transmit 13\n");*/
@@ -1373,6 +1337,7 @@ heapP Now ,Anchor ,NowP ,Reply ;
        }
        switch(ChannelType & SPI_TYPE_MASK)
 	 {     
+	 case SPI_DELAY :
 	 case SPI_BIMOLECULAR :
 	   if (!get_sum_weight(ChP, ChannelType, &Result, Reply))
 	     return(False);
@@ -1425,7 +1390,8 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	   return(False);
 	 }
 	 BasicType = ChannelType & SPI_TYPE_MASK;
-	 if (BasicType == SPI_BIMOLECULAR || BasicType == SPI_HOMODIMERIZED) {
+	 if (BasicType == SPI_BIMOLECULAR || BasicType == SPI_HOMODIMERIZED ||
+	     BasicType == SPI_DELAY) {
 	   if (!get_selector(ChP, BasicType, &Result))
 	     return(False);
 	   Selector -= Result;
@@ -1435,6 +1401,11 @@ heapP Now ,Anchor ,NowP ,Reply ;
 	       Uniform2 = random()/2147483647.0;
 	       Ret = transmit_biomolecular(ChP, Random, Uniform1, Uniform2,
 					   Reply);
+	       TranS = True;
+	     }
+	     else if(BasicType == SPI_DELAY) {
+	       Uniform2 = random()/2147483647.0;
+	       Ret = transmit_delay(ChP, Random, Reply);
 	       TranS = True;
 	     }
 	     else if (more_than_one_ms(ChP)) {
@@ -1539,7 +1510,7 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
   heapP Pa;
   int argn;
   double argv[100];
-  
+
   if (!do_read_vector(Word(SPI_CHANNEL_RATE,IntTag),Ref_Word(ChP))){
     return(False);
   }
@@ -1548,24 +1519,31 @@ int get_sum_weight(heapP ChP, int Type, double *Result, heapP Reply)
     set_reply_to("Error - Base Rate not a Positive Real Number",Reply);
     return(False);
   }
-  if (!do_read_vector(Word(SPI_SEND_WEIGHT,IntTag),Ref_Word(ChP))){
+ if ((Type & SPI_TYPE_MASK) == SPI_DELAY) {
+    SendWeight = 1 ;
+  }
+  else {
+    if (!do_read_vector(Word(SPI_SEND_WEIGHT,IntTag),Ref_Word(ChP)))
+      return(False);
+    deref_val(KOutA);
+    if (!IsInt(KOutA)||(SendWeight=Int_Val(KOutA))<0) {
+      set_reply_to("Error - Send Weight not a Non-negative Integer",Reply);
+      return(False);
+    }
+  }
+  if (!validate_weighter(ChP, &argn, argv)) {
     return(False);
   }
-  deref_val(KOutA);
-  if (!IsInt(KOutA)||(SendWeight=Int_Val(KOutA))<0) {
-    set_reply_to("Error - Send Weight not a Positive Integer",Reply);
-    return(False);
-  }
-  if (!validate_weighter(ChP, &argn, argv))
-    return(False);
   if (!IsInt(KOutA) || (WeightIndex=Int_Val(KOutA)) < 0)
     return set_reply_to("Error - Invalid Weight Index", Reply);
   if (SendWeight > 0)
     switch (Type & SPI_TYPE_MASK)
       {
+      case SPI_DELAY:
       case SPI_BIMOLECULAR:
-	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
+	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP))) {
 	  return(False);
+	}
 	deref_val(KOutA);
 	if (!IsInt(KOutA) || (ReceiveWeight = Int_Val(KOutA))<0)
 	  return set_reply_to("Error - Receive Weight not a Positive Integer",
@@ -1609,10 +1587,15 @@ int get_selector(heapP ChP, int BasicType, double *Result)
     return(False);
   deref(KOutA,Pa);
   BaseRate=real_val((Pa+1));
-  if (!do_read_vector(Word(SPI_SEND_WEIGHT,IntTag),Ref_Word(ChP)))
-    return(False);
-  deref_val(KOutA);
-  SendWeight=Int_Val(KOutA); 
+  if(BasicType == SPI_DELAY)
+    SendWeight = 1;
+  else {
+    if (!do_read_vector(Word(SPI_SEND_WEIGHT,IntTag),Ref_Word(ChP)))
+      return(False);
+    deref_val(KOutA);
+    SendWeight=Int_Val(KOutA); 
+  }
+
   if (SendWeight > 0) {
     if (!validate_weighter(ChP, &argn, argv))
       return(False);
@@ -1620,6 +1603,7 @@ int get_selector(heapP ChP, int BasicType, double *Result)
 
     switch (BasicType)
       {
+      case SPI_DELAY:
       case SPI_BIMOLECULAR: 
 	if (!do_read_vector(Word(SPI_RECEIVE_WEIGHT,IntTag),Ref_Word(ChP)))
 	  return(False);
@@ -1998,6 +1982,88 @@ double Uniform1, Uniform2;
   return(BLOCKED);
 }
 
+//********************************************************************
+
+transmit_delay(ChP, Random, Reply)
+heapP ChP, Reply;
+{
+  heapP RMsAnchor,ReceiveMessage,RMs,RCommon,RComValue,RComChos,RMsList,
+	Pa;
+  heapP ReceiveStart,SendStart;
+
+  heapP ReceiveAmbient, SendAmbient;
+
+  if (!do_read_vector(Word(SPI_RECEIVE_ANCHOR,IntTag),Ref_Word(ChP))){
+    return(False);
+  }
+  deref(KOutA,RMsAnchor);
+  if(!IsTpl(*RMsAnchor)){
+    return(False);
+  }
+  Pa = RMsAnchor+SPI_MS_TYPE;
+  deref_ptr(Pa);
+  if ((Int_Val(*Pa) != SPI_MESSAGE_ANCHOR)){
+    return(False);
+  }
+
+  ReceiveStart = RMsAnchor;
+  ReceiveMessage = ReceiveStart;
+
+  do {
+    if (ReceiveMessage != RMsAnchor) {
+     RMs=ReceiveMessage;
+     RCommon=RMs+SPI_MS_COMMON;
+     deref_ptr(RCommon);
+     if (!IsTpl(*RCommon)){
+       return(False);
+     }
+     RComValue=RCommon+SPI_OP_VALUE;
+     deref_ptr(RComValue);
+     if (!IsWrt(*RComValue)){
+       return(False);
+     }
+     RComChos=RCommon+SPI_OP_CHOSEN;
+     deref_ptr(RComChos);
+     if (!IsWrt(*RComChos)){
+       return(False);
+     }
+
+     ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
+     deref_ptr(ReceiveAmbient);
+
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
+      return(False);
+    }
+    deref(KOutA,ReceiveMessage);
+     ReceiveAmbient = ReceiveMessage+SPI_AMBIENT_CHANNEL;
+     deref_ptr(ReceiveAmbient);
+
+     RMsList=RCommon+SPI_OP_MSLIST;
+     deref_ptr(RMsList);
+     if (!IsList(*RMsList))
+       return(False);
+     if (!unify(Ref_Word(RComChos),Ref_Word(RMs+SPI_RECEIVE_TAG)))
+       return(False);
+     if (!unify(Ref_Word(RComValue),Word(0,NilTag)))
+       return(False);
+     if (!discount(RMsList))
+       return(False);
+     return
+       set_reply_delay(RCommon+SPI_OP_PID,
+                       RMs+SPI_MS_CID,
+                       RMs+SPI_MS_CHANNEL,
+       Reply);
+    }
+    if (!do_read_vector(Word(SPI_NEXT_MS,IntTag),
+			Ref_Word(ReceiveMessage+SPI_MESSAGE_LINKS))){
+      return(False);
+    }
+    deref(KOutA,ReceiveMessage);
+  } while (ReceiveMessage != ReceiveStart);
+  return (BLOCKED);
+}  
+
 //*************************** Index Action ************************************
 
 int spi_index(Name, Index, Reply)
@@ -2147,7 +2213,7 @@ double *argv;
     KOutA = Pi;
   }
 if (!IsInt(KOutA)) {
-  fprintf(stderr, "*** KOutA = %x\n");
+  /*fprintf(stderr, "*** KOutA = %x\n", KOutA);*/
 }
   *argnr = argn;
   return True;

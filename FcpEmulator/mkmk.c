@@ -1,4 +1,35 @@
-/* $Header: /home/qiana/Repository/FcpEmulator/mkmk.c,v 1.15 2007/06/25 06:28:18 bill Exp $ */
+/*
+** This module is part of EFCP.
+**
+
+     Copyright 2007 Avraham Houri, William Silverman
+     Weizmann Institute of Science, Rehovot, Israel
+
+** EFCP is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation; either version 2 of the License, or
+** (at your option) any later version.
+** 
+** EFCP is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+** GNU General Public License for more details.
+** 
+** You should have received a copy of the GNU General Public License
+** along with EFCP; if not, see:
+
+       http://www.gnu.org/licenses
+
+** or write to:
+
+       Free Software Foundation, Inc.
+       51 Franklin Street, Fifth Floor
+       Boston, MA 02110-1301 USA
+
+       contact: bill@wisdom.weizmann.ac.il
+
+**
+*/
 
 /*
 ** Creates makefile and static_link.h according to the following flags:
@@ -30,7 +61,7 @@
    interface:
      foreign function - operating system interface
    linux:
-     builds makefile for linux kernel 2.2.12, redhat 6.1
+     builds makefile for linux redhat 6.1 or ubuntu
    long:
      build version for 64-bit word platform
    maci386:
@@ -100,7 +131,7 @@ static char *fileS = "file";
 static char *freeze_termS = "freeze_term";
 static char *interfaceS = "interface";
 static char *hpux_9d05S = "hppa1d1_hpux_9d05";
-static char *linux_6d1S = "linux_2d2d12_redhat_6d1";
+static char *linux_variantD = "linux";
 static char *longS = "-m64";
 static char *longwordS = "-DLONGWORD";
 static char *maci386S = "maci386_BSD";
@@ -139,7 +170,7 @@ static char *freeze_termV = "";
 static char *hpux_9d05V = "";
 static char *interfaceV = "";
 static char *libsV = "";
-static char *linux_6d1V = "";
+static char *linux_variantV = "";
 static char *longV = "";
 static char *longwordV = "";
 static char *maci386V = "";
@@ -258,12 +289,16 @@ main(argc, argv)
 	continue;
       case 'o':
 	/* doors */
+# if defined DOORSOK
 	doorsV = LinkFunc[LinkFuncNum] = doorsS;
 	LinkFuncNum++;
 	if (LinkFuncNum == MaxLinkFunc) {
 	  printf("mkmk: Too many foreign functions\n");
 	  exit(1);
 	}
+#else
+	printf("mkmk: doors is not currently implemented\n");
+#endif
 	continue;
       default:
 	printf("mkmk: Unknown option %s\n", *argv);
@@ -317,8 +352,8 @@ main(argc, argv)
 	  libsV = "-lnsl";
 	  continue;
 	case 'n':
-	  /* linux_2d2d12_redhat_6d1 */
-	  linux_6d1V = linux_6d1S;
+	  /* linux */
+	  linux_variantV = linux_variantD;
 	  cnvV = cnvS;
 	  continue;
 	default:
@@ -410,6 +445,11 @@ main(argc, argv)
       /* posix */
       posixV = posixS;
       continue;
+    case 'r':
+      /* redhat */
+      linux_variantV = linux_variantD;
+      cnvV = cnvS;
+      continue;
     case 's':
       /* sgi_irix_5d2 */
       /* sun4_solaris_2d3 */
@@ -485,12 +525,24 @@ main(argc, argv)
       }
       continue;
     case 'u':
-      /* ultrix */
-      ultrixV = ultrixS;
-      cnvV = cnvS;
+      switch (*S++) {
+      case 'b':
+	/* ubuntu */
+	linux_variantV = linux_variantD;
+	cnvV = cnvS;
+	continue;
+      case 'l':
+	/* ultrix */
+	ultrixV = ultrixS;
+	cnvV = cnvS;
+	continue;
+      default:
+	printf("mkmk: Unknown option %s\n", *argv);
+	exit(1);
+      }
       continue;
     default:
-      printf("mkmk: Unknown option %c\n", *argv);
+      printf("mkmk: Unknown option %s\n", *argv);
       exit(1);
     }
   }
@@ -526,7 +578,7 @@ main(argc, argv)
   fclose(LinkFd);
 
   fprintf(MakeFd, "# fcp make\n");
-  fprintf(MakeFd, "SHELL = /bin/csh\n");
+  fprintf(MakeFd, "SHELL = /bin/sh\n");
   fprintf(MakeFd, "GCC = gcc %s%s\n", archV, longV);
   Pos = fprintf(MakeFd, "CFLAGS = -c");
   Pos = cond_print(MakeFd, longwordV, "", "", Pos);
@@ -542,7 +594,7 @@ main(argc, argv)
   if (strcmp(hpux_9d05V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DHPUX", "", "", Pos);
   }
-  if (strcmp(linux_6d1V, NullS) != 0) {
+  if (strcmp(linux_variantV, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);
   }
   if (strcmp(maci386V, NullS) != 0) {
@@ -680,139 +732,139 @@ main(argc, argv)
 
   if (strcmp(cnvV, NullS) != 0) {
     fprintf(MakeFd, "cnv.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH) emulate.h opcodes.h\n");
+    fprintf(MakeFd, "	$(BASICH) emulate.h opcodes.h cnv.c \n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(LOWOPT) $(INCLUDES) cnv.c\n");
   }
 
   if (strcmp(concatenateV, NullS) != 0) {
     fprintf(MakeFd, "concatenate.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) concatenate.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) concatenate.c\n");
   }
 
   if (strcmp(ctlV, NullS) != 0) {
     fprintf(MakeFd, "ctl.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) ctl.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) ctl.c\n");
   }
 
   fprintf(MakeFd, "dist.o: \\\n");
-  fprintf(MakeFd, "	$(BASICH)\n");
+  fprintf(MakeFd, "	$(BASICH) dist.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) dist.c\n");
 
   if (strcmp(doorsV, NullS) != 0) {
     fprintf(MakeFd, "doorsfcp.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH) doorsfcp.h\n");
+    fprintf(MakeFd, "	$(BASICH) doorsfcp.h doorsfcp.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) doorsfcp.c\n");
 
     fprintf(MakeFd, "drsfcptc.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH) doorsfcp.h doorsvar.h\n");
+    fprintf(MakeFd, "	$(BASICH) doorsfcp.h doorsvar.h drsfcptc.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) drsfcptc.c\n");
 
     fprintf(MakeFd, "drsctfcp.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH) doorsfcp.h doorsvar.h\n");
+    fprintf(MakeFd, "	$(BASICH) doorsfcp.h doorsvar.h drsctfcp.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) drsctfcp.c\n");
   }
 
   fprintf(MakeFd, "emulate.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) opcodes.h emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) opcodes.h emulate.h emulate.c\n");
   fprintf(MakeFd,
 	  "	$(GCC) $(CFLAGS) $(LOWOPT) $(INCLUDES) emulate.c\n");
 
   fprintf(MakeFd, "externs.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) opcodes.h\n");
+  fprintf(MakeFd, "	$(BASICH) opcodes.h externs.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) externs.c\n");
 
   fprintf(MakeFd, "fcp.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h fcp.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) fcp.c\n");
 
   if (strcmp(fileV, NullS) != 0) {
     fprintf(MakeFd, "file.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) file.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) file.c\n");
   }
 
   if (strcmp(freeze_termV, NullS) != 0) {
     fprintf(MakeFd, "freeze_term.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) freeze_term.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) freeze_term.c\n");
   }
 
   fprintf(MakeFd, "freezer.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h freezer.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) freezer.c\n");
 
   fprintf(MakeFd, "global.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h global.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) global.c\n");
 
   fprintf(MakeFd, "heap.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h heap.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) heap.c\n");
 
   if (strcmp(interfaceV, NullS) != 0) {
     fprintf(MakeFd, "interface.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) interface.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) interface.c\n");
   }
 
   fprintf(MakeFd, "kernels.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h kernels.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) kernels.c\n");
 
   fprintf(MakeFd, "link_static.o: \\\n");
-  fprintf(MakeFd, "	$(BASICH) link_static.h\n");
+  fprintf(MakeFd, "	$(BASICH) link_static.h link_static.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) link_static.c\n");
 
   fprintf(MakeFd, "logix.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h logix.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) logix.c\n");
 
   if (strcmp(mathV, NullS) != 0) {
     fprintf(MakeFd, "math.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) math.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) math.c\n");
   }
 
   fprintf(MakeFd, "notify.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH)\n");
+  fprintf(MakeFd, "	$(BASICH) notify.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) notify.c\n");
 
   if (strcmp(spiV, NullS) != 0) {
     fprintf(MakeFd, "spicomm.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) spicomm.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) spicomm.c\n");
   }
 
   if (strcmp(spiwV, NullS) != 0) {
     fprintf(MakeFd, "spiweight.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) spiweight.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) spiweight.c\n");
   }
 
   fprintf(MakeFd, "streams.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h streams.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) streams.c\n");
 
   if (strcmp(timerV, NullS) != 0) {
     fprintf(MakeFd, "timer.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) timer.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) timer.c\n");
   }
 
   if (strcmp(ttyV, NullS) != 0) {
     fprintf(MakeFd, "tty.o: \\\n");
-    fprintf(MakeFd, "	$(BASICH)\n");
+    fprintf(MakeFd, "	$(BASICH) tty.c\n");
     fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) tty.c\n");
   }
 
   fprintf(MakeFd, "unify.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH) emulate.h unify.h\n");
+  fprintf(MakeFd, "	$(BASICH) emulate.h unify.h unify.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) unify.c\n");
 
   fprintf(MakeFd, "utility.o : \\\n");
-  fprintf(MakeFd, "	$(BASICH)\n");
+  fprintf(MakeFd, "	$(BASICH) utility.c\n");
   fprintf(MakeFd, "	$(GCC) $(CFLAGS) $(OPT) $(INCLUDES) utility.c\n");
 
   fprintf(MakeFd, "\n");
