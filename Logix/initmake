@@ -1,0 +1,6 @@
+to_context(reserved_text#string(ResText))
+cd(system#compile)
+to_context(string(ResText,[],_^))
+unbind(ResText)
+cd(super#"..")
+input(makeall)
