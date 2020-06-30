@@ -2,7 +2,7 @@
 ** This module is part of EFCP.
 **
 
-     Copyright 2007 Avraham Houri, Marilyn Safran
+     Copyright 2007 Avshalom Houri, Marilyn Safran
      Weizmann Institute of Science, Rehovot, Israel
 
 ** EFCP is free software; you can redistribute it and/or modify

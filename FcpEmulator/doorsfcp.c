@@ -2,7 +2,7 @@
 ** This module is part of EFCP.
 **
 
-     Copyright 2007 Avraham Houri, Alon Kleinman
+     Copyright 2007 Avshalom Houri, Alon Kleinman
      Weizmann Institute of Science, Rehovot, Israel
 
 ** EFCP is free software; you can redistribute it and/or modify
