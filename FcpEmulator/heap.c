@@ -759,24 +759,30 @@ rstr_vars()
   extern int SpecDevsTime;
 
   HP--;
-  HP = (heapP) *HP;
+  HP = (heapP) FixHighBytesP(*HP);
 
-  LP = (linkP) *HP++;
+  LP = (linkP) FixHighBytesP(*HP++);
 
-  HP = (heapP) *HP;
+  HP = (heapP) FixHighBytesP(*HP);
   HP++;
-  HB = (heapP) *HP++;
+  HB = (heapP) FixHighBytesP(*HP++);
 
-  QF = (heapP) *HP++;
-  HQB = (heapP) *HP++;
-  QB = (heapP) *HP++;
+  QF = (heapP) FixHighBytesP(*HP++);
+  HQB = (heapP) FixHighBytesP(*HP++);
+  QB = (heapP) FixHighBytesP(*HP++);
 
-  SQF = (heapP) *HP++;
-  SQB = (heapP) *HP++;
+  SQF = (heapP) FixHighBytesP(*HP++);
+  SQB = (heapP) FixHighBytesP(*HP++);
 
   HP += memcopy(HP, (heapP) FLs, (FLsSize)*sizeof(heapP));
+  {
+    int size = FLsSize;
+    for (; size > 0; size--) {
+      FLs[size-1] = FixHighBytesP(FLs[size-1]);
+    }
+  }
 
-  CP = (heapP) *HP++;
+  CP = (heapP) FixHighBytesP(*HP++);
 
   if (SpecTime) {
     HP++;
@@ -791,18 +797,24 @@ rstr_vars()
     DevsTime = (int) *HP++;
   }
 
-  McnInP = (heapP) *HP++;
-  McnOutP = (heapP) *HP++;
-  McnOutM = (int) *HP++;
+  McnInP = (heapP) FixHighBytesP(*HP++);
+  McnOutP = (heapP) FixHighBytesP(*HP++);
+  McnOutM = (int) FixHighBytesP(*HP++);
 
-  Nil = (heapP) *HP++;
-  SVRMarker = (heapP) *HP++;
+  Nil = (heapP) FixHighBytesP(*HP++);
+  SVRMarker = (heapP) FixHighBytesP(*HP++);
   HP += memcopy(HP, (heapP) Constants, (ConstSize)*sizeof(heapP));
-
+  {
+    int size = ConstSize;
+    for (; size > 0; size--) {
+      Constants[size-1] = FixHighBytesP(Constants[size-1]);
+    }
+  }
+  
   Creations = (int) *HP++;
   Suspensions = (int) *HP++;
 
-  HP = (heapP) *HP;
+  HP = (heapP) FixHighBytesP(*HP);
 }
 
 int

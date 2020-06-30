@@ -69,9 +69,16 @@
 #define SPI_UNKNOWN		 1
 #define SPI_BIMOLECULAR		 2
 #define SPI_HOMODIMERIZED	 3
+/*
 #define SPI_DELAY		 4
 #define SPI_INSTANTANEOUS	 6
 #define SPI_SINK		 7
+*/
+/**/
+#define SPI_DELAY		32
+#define SPI_INSTANTANEOUS	 4
+#define SPI_SINK		 5
+/**/
 #define SPI_UNKNOWN_PRIME	 9
 #define SPI_BIMOLECULAR_PRIME	10
 #define SPI_HOMODIMERIZED_PRIME	11

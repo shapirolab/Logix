@@ -57,7 +57,7 @@
 typedef	char	linkT;		/* link "cell" */
 typedef	linkT	*linkP;		/* pointer to link "cell" */
 
-typedef	unsigned int	heapT;		/* heap word */
+typedef	unsigned int	heapT;	/* heap word */
 typedef	heapT		*heapP;		/* pointer to heap word */
 
 typedef	unsigned short	opcodeT;	/* code word */
@@ -191,8 +191,17 @@ typedef trailT	*trailP;
 ** References
 */
 
+// AH - fix high bytes
+#ifdef MAC64OSX
+#define FixHighBytesP(P) (heapP) (((unsigned long) P & 0x0fffffff) | (HOByte64Bits | HOByte))
+#else
+#define FixHighBytesP(P) (heapP) (P)
+#endif
+
+
 #define IsRef(V)        (Flag_of(V) == RefFlag)
-#define Ref_Val(V)	((heapP) (V))
+#define Ref_Val(V)	((heapP) FixHighBytesP(V))
+
 #define Ref_Word(V)	((heapT) (V))
 
 /*
@@ -212,10 +221,23 @@ typedef trailT	*trailP;
 
 #define HOByteMask	0xf0000000
 
+#ifdef MAC64OSX
+#define HOByteMask64Bits 0xffffffff00000000 // AH
+#endif
+
 unsigned int HOByte;
+
+#ifdef MAC64OSX
+unsigned long HOByte64Bits;
+#endif
+
 #define	HOPage	0x10000000
 
+#ifdef MAC64OSX
+#define Var_Val(V)	((heapP) FixHighBytesP((((V) >> VarShift) & VarValMask)))
+#else
 #define Var_Val(V)	((heapP) ((((V) >> VarShift) & VarValMask) | HOByte))
+#endif
 
 #define IsZeroed(V)	(((V) & VarValBits) == 0x0)
 
@@ -333,7 +355,7 @@ unsigned int HOByte;
 #define IsL_Int(V)	(Tag_of(V) == L_IntTag)
 #define IsL_Nil(V)	(Tag_of(V) == L_NilTag)
 
-#define L_Ref_Val(V)	((heapP) Off_List(V))
+#define L_Ref_Val(V)	((heapP) FixHighBytesP(Off_List(V)))
 #define L_Ref_Word(V)	(((heapT) (V)) | L_RefFlag)
 
 #define	Set_List(V)	((V) | ListFlag)
@@ -448,14 +470,13 @@ unsigned int HOByte;
 
 #define PR_Header	3
 
-#define	Prcdr_PR(Process)	(Process + 1)
-#define	Next_PR(Process)	(Process + 2)
-#define	Args_PR(Process)	(Process + 3)
+#define	Prcdr_PR(Process)	(heapP) FixHighBytesP((Process + 1))
+#define	Next_PR(Process)	(heapP) FixHighBytesP((Process + 2))
+#define	Args_PR(Process)	(heapP) FixHighBytesP((Process + 3))
 #define Index_PR(Process)	Args_PR(Process)
-#define Native_Args_PR(Process)	(Process + 4)
+#define Native_Args_PR(Process)	(heapP) FixHighBytesP((Process + 4))
 
-#define ArgsNo_PR(Process)	(Arity_of(*Process) - (PR_Header-1))
-
+#define ArgsNo_PR(Process)	(Arity_of(*((heapP) FixHighBytesP(Process))) - (PR_Header-1))
 
 /*
 **  Suspension records and queues

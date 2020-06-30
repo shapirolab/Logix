@@ -553,7 +553,7 @@ add_to_device_stream(SelectType, Entry, Element)
   }
 }
 
-int next_select_token(SelectType, Entry)
+void next_select_token(SelectType, Entry)
      int SelectType, Entry;
 {
   switch (SelectType) {
@@ -1000,7 +1000,7 @@ set_signals_masks()
 
 static struct sigaction SignalVctr[unsignedbits];
 
-int signal_event();
+void signal_event();
 
 init_signals()
 {
@@ -1045,7 +1045,7 @@ init_signals()
   }
 }
 
-int signal_event(Sig)
+void signal_event(Sig)
      int Sig;
 {
   if (SignalDevs[Sig].Active == True) {

@@ -1,0 +1,3 @@
+#!/bin/sh
+./mkmk mac64osx concatenate ctl file freeze_term \
+interface math timer tty posix spi ultrix $@

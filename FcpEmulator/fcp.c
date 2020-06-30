@@ -100,7 +100,7 @@ fcp(argc, argv)
 #endif
 
   void display_memory(char *);
-
+ 
   DbgFile = stderr;
   OutFile = stdout;
 
@@ -172,6 +172,10 @@ fcp(argc, argv)
     }
 #endif
 
+#ifdef MAC64OSX
+    HOByte64Bits = HOByteMask64Bits & ((unsigned long) PMem); // AH
+#endif
+
     LinkBase = (linkP) (PMem+RsrvSize);
     LinkEnd = LinkBase + (LinkSize / sizeof(linkT));
     HeapBase = (heapP) LinkEnd;
@@ -179,6 +183,7 @@ fcp(argc, argv)
     MemEnd = (char *) HeapEnd;
 
     HOByte = HOByteMask & ((int) HeapBase);
+
     if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
       fprintf(DbgFile, "fcp: Working storage too large.\n");
       display_memory("Cold");
@@ -328,13 +333,20 @@ fcp(argc, argv)
     }
 #endif
 
+#ifdef MAC64OSX
+    HOByte64Bits = (HOByteMask64Bits | HOByteMask) & ((unsigned long) PMem); // AH
+    HOByte = HOByteMask & ((int) PMem);
+#endif
+
     MemEnd = PMem + (RsrvSize+LinkSize+HeapSize);
     /* Load Link */
     read(Fd, &Base, sizeof(Base)); /* Saved LinkBase */
+
+    Base = FixHighBytesP(Base); // AH
     if ((Base < PMem) || ((Base+LinkSize) > MemEnd)) {
       fprintf(DbgFile,
-	 "fcp: restoring link to different location(0x%x,0x%x,0x%x,0x%x)\n",
-	      (unsigned int) Base, (unsigned int) PMem, (unsigned int) Base+LinkSize, (unsigned int) MemEnd);
+	 "fcp: restoring link to different location(0x%lx,0x%lx,0x%lx,0x%lx)\n",
+	      Base, PMem, (Base+LinkSize), MemEnd);
       close(Fd);
       return(False);
     }
@@ -349,17 +361,20 @@ fcp(argc, argv)
     }
     /* Load Heap */
     read(Fd, &Base, sizeof(Base)); /* Saved HeapBase */
+    Base = FixHighBytesP(Base); // AH
     if ((Base < ((char *) LinkEnd)) || ((Base+HeapSize) > MemEnd)) {
       fprintf(DbgFile,
-	 "fcp: restoring heap to different location(0x%x,0x%x,0x%x,0x%x)\n",
-	      (unsigned int) Base,  (unsigned int)LinkEnd, (unsigned int) (Base+HeapSize), (unsigned int) MemEnd);
+	 "fcp: restoring heap to different location(0x%lx,0x%lx,0x%lx,0x%lx)\n",
+	      Base, LinkEnd, (Base+HeapSize), MemEnd);
       close(Fd);
       return(False);
     }
     HeapBase = (heapP) Base;
 
-    HOByte = HOByteMask & ((int) HeapBase);
-
+#ifndef MAC64OSX
+  	HOByte = HOByteMask & ((int) HeapBase);
+#endif
+  
     HeapEnd = HeapBase + (HeapSize / sizeof(heapT));
     if (((((int) HeapEnd) & HOByteMask) != HOByte)) {
       fprintf(DbgFile, "fcp: Working storage too large.\n");
@@ -372,7 +387,9 @@ fcp(argc, argv)
     }
 
     read(Fd, &HeapStart, sizeof(HeapStart));  /* Saved HeapStart */
+    HeapStart = FixHighBytesP(HeapStart); // AH
     read(Fd, &CurHeap, sizeof(CurHeap));  /* Saved CurHeap */
+    CurHeap = FixHighBytesP(CurHeap); // AH
     CurHeapEnd = CurHeap + (HeapEnd - CurHeap)/2;
     CurHeapLimit = CurHeapEnd - Heap_TH;
     OtherHeap = CurHeapEnd;
@@ -733,7 +750,7 @@ void display_memory(char *Title)
   }
 }
 
-#if defined(MACINTOSH)
+#if defined(MACINTOSHOLD) /* AH - Not needed for Catalina as it has posix_memalign? */
 int posix_memalign(void **memptr, int alignment, int size)
 {
   char *lowptr;

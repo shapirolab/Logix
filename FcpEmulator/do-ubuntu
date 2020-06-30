@@ -1,3 +1,4 @@
 #!/bin/sh
+cp -f ./Permanent/ubuntu/*.o .
 ./mkmk ubuntu concatenate ctl file freeze_term \
 interface math timer tty ultrix short posix spi $@

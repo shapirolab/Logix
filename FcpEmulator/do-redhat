@@ -1,3 +1,4 @@
 #!/bin/sh
+cp -f ./Permanent/linux/*.o .
 ./mkmk linux_2d2d12_redhat_6d1 concatenate ctl file freeze_term \
 interface math timer tty ultrix short posix spi $@

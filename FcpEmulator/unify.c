@@ -46,7 +46,6 @@
 
 #include	"unify.h"
 
-
 unify(V0, V1)
 register heapT V0, V1;
 {

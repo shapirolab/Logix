@@ -64,6 +64,8 @@
      builds makefile for linux redhat 6.1 or ubuntu
    long:
      build version for 64-bit word platform
+   mac64osx:
+     builds for mac 64 bit intel architecture
    maci386:
      builds makefile for architecture i386 BSD kernel
    macosx:
@@ -134,6 +136,7 @@ static char *hpux_9d05S = "hppa1d1_hpux_9d05";
 static char *linux_variantD = "linux";
 static char *longS = "-m64";
 static char *longwordS = "-DLONGWORD";
+static char *mac64osx = "mac64osx";
 static char *maci386S = "maci386_BSD";
 static char *macosx_8d4S = "macosx_BSD_8d4";
 static char *mathS = "math";
@@ -174,6 +177,7 @@ static char *linux_variantV = "";
 static char *longV = "";
 static char *longwordV = "";
 static char *maci386V = "";
+static char *mac64osxV = "";
 static char *macosx_8d4V = "";
 static char *mathV = "";
 static char *optV = "";
@@ -189,7 +193,30 @@ static char *timerV = "";
 static char *ttyV = "";
 static char *ultrixV = "";
 
-main(argc, argv)
+int
+cond_print(FileFd, String, Prefix, Suffix, Position)
+     FILE *FileFd;
+     char *String, *Prefix, *Suffix;
+     int Position;
+{
+  if (strcmp(String, NullS) != 0) {
+    if ((Position + strlen(Prefix) + strlen(String) + strlen(Suffix) + 3) >
+	LineLength) {
+      fprintf(FileFd, " \\\n");
+      Position = TabSize * fprintf(FileFd, "	");
+    }
+    Position += fprintf(FileFd, " %s%s%s", Prefix, String, Suffix);
+    if (Position >= LineLength) {
+      fprintf(FileFd, "\\\n");
+      Position = TabSize * fprintf(FileFd, "	");
+    }
+  }
+  return(Position);
+}
+
+ 
+
+int main(argc, argv)
      int	argc;
      char	*argv[];
 {
@@ -376,6 +403,10 @@ main(argc, argv)
 	switch (*S++) {
 	case 'c': {
 	  switch (*S++) {
+    case ('6'):
+	    /* mac64osx */
+	    mac64osxV = mac64osx;
+	    continue;
 	  case ('i'):
 	    /* maci386 */
 	    maci386V = maci386S;
@@ -596,6 +627,9 @@ main(argc, argv)
   }
   if (strcmp(linux_variantV, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DLINUX", "", "", Pos);
+  }
+    if (strcmp(mac64osxV, NullS) != 0) {
+    Pos = cond_print(MakeFd, "-DMACINTOSH -DMAC64OSX", "", "", Pos);
   }
   if (strcmp(maci386V, NullS) != 0) {
     Pos = cond_print(MakeFd, "-DMACINTOSH", "", "", Pos);
@@ -871,25 +905,4 @@ main(argc, argv)
   fclose(MakeFd);
 }
 
-int
-cond_print(FileFd, String, Prefix, Suffix, Position)
-     FILE *FileFd;
-     char *String, *Prefix, *Suffix;
-     int Position;
-{
-  if (strcmp(String, NullS) != 0) {
-    if ((Position + strlen(Prefix) + strlen(String) + strlen(Suffix) + 3) >
-	LineLength) {
-      fprintf(FileFd, " \\\n");
-      Position = TabSize * fprintf(FileFd, "	");
-    }
-    Position += fprintf(FileFd, " %s%s%s", Prefix, String, Suffix);
-    if (Position >= LineLength) {
-      fprintf(FileFd, "\\\n");
-      Position = TabSize * fprintf(FileFd, "	");
-    }
-  }
-  return(Position);
-}
-
-      
+     

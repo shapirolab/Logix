@@ -58,7 +58,7 @@ extern	FILE *DbgFile;
 
 /* Machine Input  Routines */
 
-handle_mcn_input()
+void handle_mcn_input()
 {
   register heapP P = McnInP, Request;
 
@@ -271,7 +271,7 @@ answer_request(Answer)
 
 /* Machine OutPut Routines */
 
-mcn_output(Event)
+void mcn_output(Event)
      int Event;
 {
   if ((Event < 0) || (Event > 31) || !((0x1 << Event) & McnOutM)) {

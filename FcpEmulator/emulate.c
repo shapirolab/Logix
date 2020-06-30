@@ -56,6 +56,7 @@ emulate(Prcdr, W)
   register opcodeP PC;	/* Program Counter */
 
   /* heapT is unsigned */
+
   register heapT Va;
   register heapP Pa;
   register heapT Vb;
@@ -92,17 +93,19 @@ emulate(Prcdr, W)
     switch (BootType) {
     case EmulationBoot:
       {
-	register heapP P;
+	      register heapP P;
+  
+        FLs_allocate((PR_Header + 2), P, HP); // AH@@@only in new emulator why?
       
-	FLs_allocate((PR_Header + 2), P, HP);
-	pr_init(2, P);
-	*(Prcdr_PR(P)) = Prcdr;
-	pr_enqueue(P, False);
-	P = Args_PR(P);
-	Creations++;
-	*P++ = Ref_Word(HP);
-	*HP++ = ZeroedWrt;
-	*P = Ref_Word(HP);
+        pr_init(2, P);
+
+        *(Prcdr_PR(P)) = Prcdr;
+        pr_enqueue(P, False);
+        P = Args_PR(P);
+        Creations++;
+        *P++ = Ref_Word(HP);
+        *HP++ = ZeroedWrt;
+        *P = Ref_Word(HP);
       }
       *HP++ = ZeroedWrt;
       McnInP = HP;
@@ -217,23 +220,24 @@ emulate(Prcdr, W)
     Va = L_Ref_Word(Suspender);
     do {
       Pa = Sus_Address(STP);
+      Pa = (heapP) FixHighBytesP(Pa);
       Vb = *Pa;
       if (IsWrt(Vb)) {
-	if (IsZeroed(Vb)) {
-	  *Pa = Var_Word(HP, WrtTag);
-	  Vb = *HP = Var_Word(Pa, RoTag);
-	  Pa = HP++;
-	}
-	else {
-	  Pa = Var_Val(Vb);
-	  Vb = *Pa;
-	}
+	      if (IsZeroed(Vb)) {
+	        *Pa = Var_Word(HP, WrtTag);
+	        Vb = *HP = Var_Word(Pa, RoTag);
+	        Pa = HP++;
+	      }
+	      else {
+          Pa = Var_Val(Vb);
+          Vb = *Pa;
+	      }
       }
-      if (*Ref_SR(Var_Val(Vb)) != Va) {
-	FLs_allocate(SR_Size, Pb, HP);
-	*(Ref_SR(Pb)) = Va;
-	*(Next_SR(Pb)) = Ref_Word(Var_Val(Vb));
-	*Pa = Var_Word(Pb, RoTag);
+      if (*((heapP) Ref_SR(Var_Val(Vb))) != Va) {
+        FLs_allocate(SR_Size, Pb, HP);
+        *(Ref_SR(Pb)) = Va;
+        *(Next_SR(Pb)) = Ref_Word(Var_Val(Vb));
+        *Pa = Var_Word(Pb, RoTag);
       }
     }
     while ((--STP) != SusTbl);
@@ -292,8 +296,8 @@ emulate(Prcdr, W)
   /* Instructions Switch */
 
  next_instr_label:
+  PC = (opcodeP) FixHighBytesP(PC);
   switch (*PC++) {
-
   case 0:
     fprintf(DbgFile, "Instructions Opcode has a value of 0!\n");
     return(456);
@@ -314,8 +318,8 @@ emulate(Prcdr, W)
     Va = pc_reg_offset();
     Vb = reg(Va);
     if (IsRef(Vb)) {
-      deref_ref(Vb, Pb);
-      reg(Va) = Ref_Word(Pb);
+     deref_ref(Vb, Pb);
+     reg(Va) = Ref_Word(Pb);
     }
     pc_reg() = Vb;
     next_instr();
@@ -3256,7 +3260,7 @@ emulate(Prcdr, W)
       CP = Nil;
 #ifdef	DEBUG
       if (Debug) {
-	unset_debug_flags();
+      	unset_debug_flags();
       }
 #endif
       pr_dequeue();
@@ -3293,7 +3297,7 @@ emulate(Prcdr, W)
       CP = Nil;
 #ifdef	DEBUG
       if (Debug) {
-	unset_debug_flags();
+	      unset_debug_flags();
       }
 #endif
       pr_dequeue();
@@ -6424,7 +6428,7 @@ commited_asgn(Ptr, NewVal)
   V = *Ptr;
   *Ptr = NewVal;
   if (IsZeroed(V)) {
-    return;
+    return 0;
   }
   Ptr = Var_Val(V);
   V = *Ptr;

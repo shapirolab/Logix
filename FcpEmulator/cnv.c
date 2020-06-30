@@ -31,7 +31,7 @@
 */
 
 #include	"codes.h"
-#include        "opcodes.h"
+#include  "opcodes.h"
 #include	"fcp.h"
 #include	"global.h"
 #include	"macros.h"
@@ -39,6 +39,7 @@
 
 /* Import convertor */
 
+int
 imp_convert(PString)                    /* main, convert module */
      register heapP PString;
 {

@@ -489,16 +489,19 @@
   /* Load Process Arguments */ \
   I = ArgsNo_PR(CP); \
   P = Args_PR(CP) + I - 1; \
+  P = (heapP) FixHighBytesP(P); \
   for (; I > 0; I--) { \
     X[I] = *P--; \
   } \
 }
+
 
 #define	store_pr_args(I, P) \
 { \
   /* Store Process Arguments */ \
   I = ArgsNo_PR(CP); \
   P = Args_PR(CP) + I - 1; \
+  P = (heapP) FixHighBytesP(P); \
   for (; I > 0; I--) { \
     *P-- = X[I]; \
   } \

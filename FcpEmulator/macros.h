@@ -50,13 +50,14 @@
 #define deref_val(V) \
 { \
   while (IsRef(V)) { \
-    V = *(Ref_Val(V)); \
+    V = *((heapP) Ref_Val(V)); \
   } \
 }
 
 #define deref_ptr(P) \
 { \
   while (IsRef(*P)) { \
+    P = (heapP) FixHighBytesP(P); \
     P = Ref_Val(*P); \
   } \
 }
@@ -74,7 +75,7 @@
 
 #define trls_overflow_check(Ptr0, Ptr1) \
 { \
-  if ((Ptr0 + Trls_TH) >= Ptr1) { \
+  if ((FixHighBytesP(Ptr0) + Trls_TH) >= (heapP) FixHighBytesP(Ptr1)) { \
     do_exit("", MACHINE, ErTRLSOVFL, False); \
   } \
 }
@@ -139,7 +140,7 @@
 
 #define tbls_overflow_check(Ptr0, Ptr1) \
 { \
-  if ((Ptr0 + Tbls_TH) >= Ptr1) { \
+  if (((heapP) FixHighBytesP(Ptr0) + Tbls_TH) >= (heapP) FixHighBytesP(Ptr1)) { \
     do_exit("", MACHINE, ErTBLSOVFL, False); \
   } \
 }
@@ -160,12 +161,13 @@
     
 #define sus_tbl_add(Address) \
 { \
-  if (Address < HB) { \
+  register heapP Address8 = (heapP) FixHighBytesP(Address); \
+  if (Address8 < HB) { \
     *(++STP) = (heapT) Address; \
   } \
   else { \
-    if (IsRo(*(Address)) && (Var_Val(*(Address)) < HB)) { \
-      *(++STP) = (heapT) Var_Val(*(Address)); \
+    if (IsRo(*Address8) && (Var_Val(*(Address8)) < HB)) { \
+      *(++STP) = (heapT) Var_Val(*Address8); \
     } \
     else { \
       TempSus = True; \
@@ -195,6 +197,8 @@
 }
 
 /* Convertor macros */
+
+/* AH - do not change pointer to 8 bytes here */
 
 /* switch a double */
 #define cnv_d(P) \

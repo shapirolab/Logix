@@ -428,7 +428,7 @@ int	OUTPORT;
     }
     else {
       *HP++ = ft;
-      return;
+      return 0;
     }
   }
   fp = HP;
